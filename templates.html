@@ -17,6 +17,13 @@
     :root{ --bg:#fff; --bg2:#f5f6f8; --fg:#1b1f24; --fg2:#5a626d; --rule:#e6e8ec; --accent:#5b34d6; }
     body{ background:var(--bg); color:var(--fg); }
   </style>
+  <script>
+    // Single source of truth for the accent. The reader persists the user's chosen accent to
+    // localStorage['eo_accent'] (curAccent/setAccent in app.dc.js); this panel is same-origin,
+    // so it reads that one key rather than carrying its own copy — recolor the accent in the
+    // reader and this panel follows. Falls back to the shared default above if unset.
+    try { var a = localStorage.getItem('eo_accent'); if (a) document.documentElement.style.setProperty('--accent', a); } catch (e) {}
+  </script>
   <style>
     body { margin: 0; }
     .wrap { max-width: 920px; margin: 0 auto; padding: 18px 20px 64px; }
