@@ -398,26 +398,13 @@
               <!-- THE REGISTER SWITCH: auto / grounded / creative — how the next answers are written;
                    every answer is badged with the register it ACTUALLY used. Cycles on click. -->
               <button onclick="{{ onCycleAnswerMode }}" title="{{ answerModeTitle }}" style="{{ answerModeStyle }}" style-hover="border-color:var(--accline)"><span style="font-family:'Phosphor';font-size:13px;line-height:1;margin-right:5px;">{{ answerModeIcon }}</span>{{ answerModeLabel }}</button>
-              <!-- THE OUTPUT PICKER — ONE split control, not two toggles. The accent LEFT half
-                   (pen-nib) writes what's selected; the RIGHT half shows the current format+kind and
-                   opens the menu — an accordion of formats (Essay wired; Report/Summary/Poem
-                   scaffolds) → their kinds (organs/out/*, essay-types.js). Rows arrive pre-flattened
-                   as outputMenuRows so the view needs no nested sc-for. Phosphor icons throughout. -->
+              <!-- THE RESEARCH CONTROL — deep research replaced the essay output picker. The
+                   accent half runs grounded deep research on the box text; the neutral half opens
+                   the SURFACE: the live report panel (src/research/surface.js) over the session's
+                   append-only research log, which keeps populating as research is asked in chat. -->
               <span style="position:relative;flex:0 0 auto;display:inline-flex;align-items:stretch;">
                 <button onclick="{{ onOutputGo }}" title="{{ outputGoTitle }}" style="{{ outputGoStyle }}" style-hover="background:var(--acc);color:#fff"><span style="font-family:'Phosphor';font-size:13px;line-height:1;">{{ outputGoIcon }}</span>{{ outputWriteLabel }}</button>
-                <button onclick="{{ onOutputMenu }}" title="{{ outputMenuTitle }}" style="{{ outputChooserStyle }}" style-hover="background:var(--accbg);color:var(--acc)"><span style="font-family:'Phosphor';font-size:13px;line-height:1;">{{ outputCurrentIcon }}</span>{{ outputCurrentLabel }} ▾</button>
-                <sc-if value="{{ outputMenuOpen }}" hint-placeholder-val="{{ false }}">
-                  <div style="position:absolute;bottom:calc(100% + 6px);right:0;z-index:80;background:var(--card);border:1px solid var(--line2);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.18);padding:6px;display:flex;flex-direction:column;gap:1px;min-width:280px;">
-                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);padding:4px 10px 6px;">Write — pick a format &amp; kind</div>
-                    <sc-for list="{{ outputMenuRows }}" as="r" hint-placeholder-count="6">
-                      <div onclick="{{ r.onClick }}" title="{{ r.title }}" style="{{ r.style }}" style-hover="background:var(--accbg)">
-                        <span style="{{ r.iconStyle }}">{{ r.icon }}</span>
-                        <span style="flex:1;min-width:0;">{{ r.label }}<span style="{{ r.subStyle }}">{{ r.sub }}</span></span>
-                        <span style="flex:0 0 auto;color:var(--ink3);font-size:11px;width:12px;text-align:center;">{{ r.caret }}</span>
-                      </div>
-                    </sc-for>
-                  </div>
-                </sc-if>
+                <button onclick="{{ onOutputMenu }}" title="{{ outputMenuTitle }}" style="{{ outputChooserStyle }}" style-hover="background:var(--accbg);color:var(--acc)">{{ outputCurrentLabel }} ▸</button>
               </span>
               <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
             </div>
@@ -1202,26 +1189,13 @@
               <!-- THE REGISTER SWITCH: auto / grounded / creative — how the next answers are written;
                    every answer is badged with the register it ACTUALLY used. Cycles on click. -->
               <button onclick="{{ onCycleAnswerMode }}" title="{{ answerModeTitle }}" style="{{ answerModeStyle }}" style-hover="border-color:var(--accline)"><span style="font-family:'Phosphor';font-size:13px;line-height:1;margin-right:5px;">{{ answerModeIcon }}</span>{{ answerModeLabel }}</button>
-            <!-- THE OUTPUT PICKER — ONE split control, not two toggles. The accent LEFT half
-                 (pen-nib) writes what's selected; the RIGHT half shows the current format+kind and
-                 opens the menu — an accordion of formats (Essay wired; Report/Summary/Poem
-                 scaffolds) → their kinds (organs/out/*, essay-types.js). Rows arrive pre-flattened
-                 as outputMenuRows so the view needs no nested sc-for. Phosphor icons throughout. -->
+            <!-- THE RESEARCH CONTROL — deep research replaced the essay output picker. The
+                 accent half runs grounded deep research on the box text; the neutral half opens
+                 the SURFACE: the live report panel (src/research/surface.js) over the session's
+                 append-only research log, which keeps populating as research is asked in chat. -->
             <span style="position:relative;flex:0 0 auto;display:inline-flex;align-items:stretch;">
               <button onclick="{{ onOutputGo }}" title="{{ outputGoTitle }}" style="{{ outputGoStyle }}" style-hover="background:var(--acc);color:#fff"><span style="font-family:'Phosphor';font-size:13px;line-height:1;">{{ outputGoIcon }}</span>{{ outputWriteLabel }}</button>
-              <button onclick="{{ onOutputMenu }}" title="{{ outputMenuTitle }}" style="{{ outputChooserStyle }}" style-hover="background:var(--accbg);color:var(--acc)"><span style="font-family:'Phosphor';font-size:13px;line-height:1;">{{ outputCurrentIcon }}</span>{{ outputCurrentLabel }} ▾</button>
-              <sc-if value="{{ outputMenuOpen }}" hint-placeholder-val="{{ false }}">
-                <div style="position:absolute;bottom:calc(100% + 6px);right:0;z-index:80;background:var(--card);border:1px solid var(--line2);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.18);padding:6px;display:flex;flex-direction:column;gap:1px;min-width:280px;">
-                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);padding:4px 10px 6px;">Write — pick a format &amp; kind</div>
-                  <sc-for list="{{ outputMenuRows }}" as="r" hint-placeholder-count="6">
-                    <div onclick="{{ r.onClick }}" title="{{ r.title }}" style="{{ r.style }}" style-hover="background:var(--accbg)">
-                      <span style="{{ r.iconStyle }}">{{ r.icon }}</span>
-                      <span style="flex:1;min-width:0;">{{ r.label }}<span style="{{ r.subStyle }}">{{ r.sub }}</span></span>
-                      <span style="flex:0 0 auto;color:var(--ink3);font-size:11px;width:12px;text-align:center;">{{ r.caret }}</span>
-                    </div>
-                  </sc-for>
-                </div>
-              </sc-if>
+              <button onclick="{{ onOutputMenu }}" title="{{ outputMenuTitle }}" style="{{ outputChooserStyle }}" style-hover="background:var(--accbg);color:var(--acc)">{{ outputCurrentLabel }} ▸</button>
             </span>
             <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
           </div>

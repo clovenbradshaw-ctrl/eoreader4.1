@@ -121,9 +121,12 @@ for (const page of ['src/reader/app.dc.js', 'index.html']) {
     assert.match(src, /this\._continuesCompose\(q,\s*fold,\s*read\)/, `${page} does not wire the fork through _continuesCompose`);
     assert.doesNotMatch(src, /fold\.stance==='compose'&&!this\._researchIntent\(q\)&&!this\._switchesFromCompose\(q\)/,
       `${page} still decides the compose fork with the inline _switchesFromCompose regex`);
-    // The compose + essay continuation paths REUSE the discourse bubble (and the read already taken).
+    // The compose + research continuation paths REUSE the discourse bubble (and the read already
+    // taken). The essay organ is gone (docs/deep-research-log.md): a thread whose last piece was a
+    // deep-research turn continues as research into the SAME bubble and the same session log.
     assert.match(src, /this\.composeArtifact\(q,\s*fold,\s*\{reuseId:id\}\)/, `${page} does not reuse the bubble for composeArtifact`);
-    assert.match(src, /this\.runOrganEssay\(q,\s*undefined,\s*\{reuseId:id,\s*read\}\)/, `${page} does not reuse the bubble/read for runOrganEssay`);
+    assert.match(src, /this\._deepResearch\(id,\s*q,\s*cur,\s*\{\}\)/, `${page} does not continue a research thread into the same bubble`);
+    assert.doesNotMatch(src, /runOrganEssay/, `${page} still routes to the removed essay organ`);
   });
 
   test(`${page}: _continuesCompose — a warm read decides on its settled route`, () => {
