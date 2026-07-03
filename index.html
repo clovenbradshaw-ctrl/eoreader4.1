@@ -3275,6 +3275,54 @@ class Component extends DCLogic {
     this._webLibP=import(new URL('src/turn/web.js',document.baseURI).href);
     return this._webLibP;
   }
+  // THE WALK ENGINE — the modular curiosity walk + facet planner (src/turn/research.js,
+  // deep-research.js), loaded by baseURI like _drLib. runCuriousResearch/runDeepResearch are the
+  // one shared walk; modelPlanner/planQueries are the one shared facet brain. Merged into one lib
+  // object so the reader has a single handle to the engine's gather primitives.
+  async _walkLib(){
+    if(this._walkLibP)return this._walkLibP;
+    this._walkLibP=(async()=>{
+      const base=document.baseURI;
+      const [research,deep]=await Promise.all([
+        import(new URL('src/turn/research.js',base).href),
+        import(new URL('src/turn/deep-research.js',base).href),
+      ]);
+      return {...research,...deep};
+    })();
+    return this._walkLibP;
+  }
+  // _planFacets(subject,seed,cur) → the BATTERY of angle QUERIES to open the walk from — the shared
+  // engine facet brain (modelPlanner + planQueries, turn/deep-research.js) in place of the old fixed
+  // ['overview','analysis','history'…] list. modelPlanner is discourse-aware: it writes DISTINCT
+  // angles that each keep the subject, resolving references against the conversation. Returns full
+  // queries (not bare facet words). A simple lookup gets no battery; a "do more" continuation still
+  // leads with the doc's own salient threads. Guarded: no engine / no model / a refusal → the neutral
+  // facets, so the walk always has a battery and behavior never regresses.
+  async _planFacets(subject,seed,cur){
+    const cfg=this._depthCfg();
+    // A lookup wants one fast answer — no fan-out (the same guard _researchBattery applied).
+    if(!(seed&&seed.derived)&&this._isSimpleLookup(subject))return [];
+    const out=[],seen=new Set([this.norm(subject).toLowerCase()]);
+    const push=(q)=>{q=this.norm(String(q||'')).trim();const k=q.toLowerCase();if(q&&!seen.has(k)){seen.add(k);out.push(q);}};
+    // (1) A continuation deepens THIS chat: the salient threads the in-scope reading already raised,
+    // sharpened by the subject (real entities/themes of the document, via the walk's own lead ranking).
+    if(seed&&seed.derived)for(const t of this._seedLeadsFromRead(subject,this.chatSourcesOf(cur),3))push(this._nextQuery(subject,t));
+    // (2) The engine's LLM angle planner — the same discipline as formulateSearchQuery, discourse-aware.
+    try{
+      const {modelPlanner,planQueries}=await this._walkLib();
+      const guard=this._stallGuard();let model=null;
+      try{model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);}catch(e){model=null;}
+      guard.clear();
+      const history=((cur&&cur.messages)||[]).filter(m=>m&&m.role==='user'&&m.text).slice(-6).map(m=>({role:'user',content:String(m.text)}));
+      const plan=modelPlanner(model,{history,question:subject});
+      const planned=await planQueries(subject,{plan,max:cfg.facets+1});   // facet 0 is the subject itself — dropped below
+      const subjKey=this.norm(subject).toLowerCase();
+      for(const f of planned)if(this.norm(String(f)).toLowerCase()!==subjKey)push(f);
+    }catch(e){/* fall through to the neutral battery */}
+    // (3) Neutral fallback so there is always a battery, even offline / with no model.
+    if(!out.length)for(const f of ['overview','analysis','history','significance','criticism']){if(out.length>=cfg.facets)break;push(this._nextQuery(subject,f));}
+    return out.slice(0,cfg.facets);
+  }
   // _formulateSubject(topic,cur) → a clean web-search subject. formulateSearchQuery (turn/web.js) is
   // an LLM, discourse-aware rewrite: it resolves references and strips filler/typos, turning "dophins
   // very deeply, especially the fresh water kind" into "freshwater dolphins". Fed the discourse-ROUTED
@@ -3362,9 +3410,9 @@ class Component extends DCLogic {
     if(webOn&&!covered&&!opts.noWalk){
       this._beat(id,'start','Deep research on “'+subject+'” — reading the web first, then projecting the grounded report from pinned spans.');
       this._busy=true;this.setState({busy:true});
-      const extraSeeds=seed.focus?[]:this._researchBattery(subject,seed.derived,existing);
+      const extraSeeds=seed.focus?[]:await this._planFacets(subject,seed,cur);
       let walk={readUrls:[],hops:[]};
-      try{walk=await this._curiosityWalk(subject,anchor,(k,t)=>this._beat(id,k,t),{extraSeeds});}
+      try{walk=await this._curiosityWalk(subject,anchor,(k,t)=>this._beat(id,k,t),{facetQueries:extraSeeds});}
       catch(e){this._beat(id,'warn','Research stopped — '+((e&&e.message)||e));}
       this._busy=false;this.setState({busy:false});
       if(this._stopGen)return;
@@ -4527,16 +4575,17 @@ class Component extends DCLogic {
     // A "go find/read this WORK" turn focuses on the ONE work: read it — its actual text when a
     // Project Gutenberg edition exists — and its context, but do NOT fan out into a battery of facet
     // angles (overview/analysis/history…) that wander off the book. Follow the thread; don't spider.
-    const extraSeeds=seed.focus?[]:this._researchBattery(formulated,seed.derived,this.chatSourcesOf(cur));
+    const extraSeeds=seed.focus?[]:await this._planFacets(formulated,seed,cur);
     // The discourse read seeds the walk: MISSING ANCHORS first (the half of the question the
-    // reading can't ground — the exact thing to go read), then the metacognition's novel leads.
-    // The metacognition deposits mass on the frontier; it never formulates the queries.
+    // reading can't ground — the exact thing to go read), then the metacognition's novel leads —
+    // each sharpened with the anchor into a standalone query, so a bare term never matches a
+    // namesake. The metacognition deposits mass on the frontier; it never formulates the queries.
     if(pre&&pre.meta&&!seed.focus&&!lookup){
       const want=[...(((pre.meta.anchorGap||{}).missing)||[]),...((pre.meta.leads)||[])];
-      for(const w of want){const t=this.norm(w);
-        if(t&&extraSeeds.length<5&&!extraSeeds.some(x=>String(x).toLowerCase()===t.toLowerCase()))extraSeeds.unshift(t);}
+      for(const w of want){const q=this._nextQuery(useAnchor,this.norm(w));
+        if(q&&extraSeeds.length<5&&!extraSeeds.some(x=>String(x).toLowerCase()===q.toLowerCase()))extraSeeds.unshift(q);}
     }
-    const angles=extraSeeds.map(t=>'“'+this._nextQuery(useAnchor,t)+'”').join(', ');
+    const angles=extraSeeds.map(q=>'“'+q+'”').join(', ');
     const startText=seed.derived
       ? ('Picking up this chat — researching “'+formulated+'”'+(angles?(' across '+angles):'')+'. Starting from Wikipedia, then following its cited sources.')
       : live
@@ -4582,7 +4631,7 @@ class Component extends DCLogic {
       }catch(e){pushStep('warn','Couldn’t reach Project Gutenberg — reading about it from the web instead.');}
     }
     let walk={readUrls:[],hops:[]};
-    try{walk=await this._curiosityWalk(live?(formulated+' '+today):formulated,useAnchor,pushStep,{extraSeeds,lookup,primaryUrl,live});}
+    try{walk=await this._curiosityWalk(live?(formulated+' '+today):formulated,useAnchor,pushStep,{facetQueries:extraSeeds,lookup,primaryUrl,live});}
     catch(e){pushStep('warn','Research stopped — '+((e&&e.message)||e));}
     this._busy=false;this.setState({busy:false});
     // Stopped mid-walk — stopGeneration already finalized the bubble; don't push a "done" step or
@@ -4949,8 +4998,13 @@ class Component extends DCLogic {
     // EXTRA SEEDS — the battery: a few more ENTRY POINTS for the subject (the salient threads the
     // reading already raised, plus neutral facets), each its own Wikipedia search, so the walk opens
     // the topic from several angles instead of chaining off one.
-    const extra=(opts&&opts.extraSeeds)||[];
-    for(const t of extra){const tt=String(t||'').trim();if(tt&&!chased.has(tt)){chased.add(tt);frontier.push({query:this._nextQuery(anchor,tt),term:tt});}}
+    // Facet battery: full angle QUERIES (from _planFacets — the engine's discourse-aware planner)
+    // are seeded VERBATIM (each already keeps the subject); the legacy `extraSeeds` path (bare terms)
+    // is still supported and sharpened with the anchor, so any other caller keeps working.
+    const facetQ=(opts&&opts.facetQueries)||null;
+    if(facetQ){for(const q of facetQ){const qq=String(q||'').trim();const key=qq.toLowerCase();if(qq&&!chased.has(key)){chased.add(key);frontier.push({query:qq,term:null});}}}
+    else{const extra=(opts&&opts.extraSeeds)||[];
+      for(const t of extra){const tt=String(t||'').trim();if(tt&&!chased.has(tt)){chased.add(tt);frontier.push({query:this._nextQuery(anchor,tt),term:tt});}}}
     // PRIMARY TEXT — a Project Gutenberg full-text edition, read FIRST and directly so the BOOK
     // itself (not an article about it) anchors the walk: its own characters and places become the
     // referent set the relevance leash then checks every later page against.
