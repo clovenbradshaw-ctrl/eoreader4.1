@@ -8,7 +8,22 @@
   <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <link rel="stylesheet" href="src/ui/styles.css">
+  <!-- Self-contained theme. src/ui/styles.css supplied these variables in 4.0, but that
+       holon was dropped in the 4.1 migration (see MIGRATION-POINTER.md), so the link 404'd
+       on every load. Define them inline instead, using the reader shell's light palette
+       (view.xdc.html :root) so this panel is coherent inside the reader's white templates
+       modal. Every var() below still carries its own fallback if this block is ever stripped. -->
+  <style>
+    :root{ --bg:#fff; --bg2:#f5f6f8; --fg:#1b1f24; --fg2:#5a626d; --rule:#e6e8ec; --accent:#5b34d6; }
+    body{ background:var(--bg); color:var(--fg); }
+  </style>
+  <script>
+    // Single source of truth for the accent. The reader persists the user's chosen accent to
+    // localStorage['eo_accent'] (curAccent/setAccent in app.dc.js); this panel is same-origin,
+    // so it reads that one key rather than carrying its own copy — recolor the accent in the
+    // reader and this panel follows. Falls back to the shared default above if unset.
+    try { var a = localStorage.getItem('eo_accent'); if (a) document.documentElement.style.setProperty('--accent', a); } catch (e) {}
+  </script>
   <style>
     body { margin: 0; }
     .wrap { max-width: 920px; margin: 0 auto; padding: 18px 20px 64px; }
