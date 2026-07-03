@@ -5188,7 +5188,7 @@ class Component extends DCLogic {
     if((t.match(/[a-z][A-Z]/g)||[]).length>=2)return false;      // camelCase smash
     if(/[A-Za-z]#\d|\d[A-Za-z]{3,}|[a-z]\?[A-Z]/.test(t))return false; // letter/digit smash
     const words=t.trim().split(/\s+/); if(words.length<6)return false;
-    if(Math.max.apply(null,words.map(w=>w.length))>28)return false; // long spaceless run
+    if(words.some(w=>w.length>28))return false; // long spaceless run (short-circuits; never spreads a huge array onto the stack)
     if(!/[a-z]\s+[a-z]/i.test(t))return false;
     return true;
   }
