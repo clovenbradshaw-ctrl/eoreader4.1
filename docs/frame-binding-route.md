@@ -9,7 +9,8 @@
 
 Status: **Phase 0 + Phase 1 shipped.** Phases 2–3 proposed. This extends, does not replace,
 `docs/discourse-routing.md` (the measurement) and `docs/conversation-fold.md` (the carried
-stance).
+stance). Sequel: `docs/frame-holon.md` generalizes Phases 2–3 — the frame promoted from a
+cell to a stack over the shared interior holon (`src/frame/`, shipped as its Phase A).
 
 ---
 
