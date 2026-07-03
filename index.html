@@ -2354,17 +2354,26 @@ class Component extends DCLogic {
   toggleChorus(){this.setState(s=>{const open=!s.chorusOpen;let text=s.chorusText;if(open&&!text){const sel=this._selectedSentence&&this._selectedSentence();if(sel)text=sel;}return {chorusOpen:open,settingsOpen:false,chorusText:text};});}
   closeChorus(){this.setState({chorusOpen:false});}
   onChorusText(e){this.setState({chorusText:(e&&e.target?e.target.value:'')});}
+  // The shared MiniLM meaning organ (eo/embed.js), created ONCE and reused by both the chorus reader
+  // and the walk's semantic relevance channel — so warming downloads the model a single time. Warming
+  // itself stays opt-in (embed() self-warms on first use); this only hands back the one instance.
+  async _getEmbedder(){
+    if(this._embedderP)return this._embedderP;
+    const R=(typeof window!=='undefined'&&window.__resources)||{};
+    this._embedderP=import(R.eoEmbed||new URL('src/reader/eo/embed.js',document.baseURI).href)
+      .then(m=>m.createMiniLMEmbedder());
+    return this._embedderP;
+  }
   // The chorus reader, built once and cached: the MiniLM meaning organ (eo/embed.js)
   // + the installed 27 centroids + the chorus holon (eo/chorus.js). Warmed lazily —
   // this is the ONE place the reader loads a model, and only on an explicit read.
   async _chorusReader(){
     if(this._chorus)return this._chorus;
     const R=(typeof window!=='undefined'&&window.__resources)||{};
-    const embMod=await import(R.eoEmbed||new URL('src/reader/eo/embed.js',document.baseURI).href);
     const chMod=await import(R.eoChorus||new URL('src/reader/eo/chorus.js',document.baseURI).href);
     const cenUrl=R.eoCentroids||new URL('src/reader/eo/centroids-27.json',document.baseURI).href;
     const centroids=await (await fetch(cenUrl)).json();
-    const embedder=embMod.createMiniLMEmbedder();
+    const embedder=await this._getEmbedder();
     this._chorus=chMod.createChorusReader({centroids,embedder});
     return this._chorus;
   }
@@ -4969,6 +4978,19 @@ class Component extends DCLogic {
     // dominate, enriched once by the first page actually read, then frozen.
     const topic=new Map();for(const t of this._researchTerms(anchor))topic.set(t,(topic.get(t)||0)+3);
     let baseline=0,topicFrozen=false,stray=0;
+    // SEMANTIC recall floor (best-effort, opt-in): active only when a real meaning organ is ALREADY
+    // warm. If it isn't, kick a non-blocking warm so LATER turns gain it, and run this turn on the
+    // word-leash alone — the walk never blocks on a model download. `intentVec` embeds the denoised
+    // subject (the anchor is already the formulateSearchQuery-cleaned query); `semBaseline` is filled
+    // from the seed page's own intent-similarity at calibration, so the floor self-calibrates.
+    let emb=null,intentVec=null,semBaseline=0;
+    try{
+      const e=await this._getEmbedder();
+      if(e&&e.measuresMeaning){
+        if(e.isWarm()){const iv=await e.embed(this.norm(String(anchor||'')).slice(0,300));if(iv){emb=e;intentVec=iv;}}
+        else e.warm().catch(()=>{});   // background — available on a later turn, never blocks this one
+      }
+    }catch(_){/* no meaning organ → the walk runs on the word-leash alone */}
     // The SUBJECT's identifying company — the FIGURES (graph entities) co-present with the
     // anchor in the calibrating page's fold, the anchor's own figures excluded. Cosine saliency
     // alone is too generous a leash: "World War I", "Nuclear War: A Scenario" and "Democratic
@@ -5078,6 +5100,9 @@ class Component extends DCLogic {
             if(!(isUrl&&node.via==='gutenberg')&&!this._aboutAnchor(url,anchorWords,arrival)){
               this.tossPage(url);step('warn','Set aside '+this.short(url)+' — not about “'+anchor+'”, so it can’t anchor the research');continue;}
             baseline=sal;for(const t of arrival.keys())topic.set(t,(topic.get(t)||0)+1);
+            // The seed page's own intent-similarity calibrates the semantic floor (the meaning-space
+            // analogue of `baseline=sal`): later pages are judged on-meaning relative to THIS.
+            if(emb&&intentVec){const s0=await this._semPageSim(emb,url,res.title,intentVec);if(s0!=null&&s0>0)semBaseline=s0;}
             // Seed the subject's figure neighborhood from the calibrating fold: every proper
             // figure co-present with the anchor, the anchor's own figures dropped (else every
             // "war"/"peace" page would trivially "share" it).
@@ -5085,7 +5110,19 @@ class Component extends DCLogic {
             for(const fid of this._pageFigures(url).keys()){if(!A.has(fid)&&this._properFigure(fid))subjectFigures.add(fid);}
             topicFrozen=true;}
           else{
-            if(baseline>0&&sal<0.34*baseline){this.tossPage(url);step('warn','Set aside '+this.short(url)+' — drifting off “'+anchor+'”');continue;}
+            if(baseline>0&&sal<0.34*baseline){
+              // The WORD-leash says this page drifted. Before setting it aside, ask the MEANING organ
+              // (when warm): is it on the intent even though it's off the words? A reprieve keeps it;
+              // otherwise the toss stands. Semantic can only RESCUE here, never toss — so the figure
+              // gate below is still the precision authority and namesakes are still caught.
+              let rescued=false;
+              if(emb&&intentVec&&semBaseline>0){
+                const s=await this._semPageSim(emb,url,res.title,intentVec);
+                rescued=this._semReprieve(s,semBaseline);
+                if(rescued)step('lead','Kept '+this.short(url)+' — off the words but on the meaning of “'+anchor+'”');
+              }
+              if(!rescued){this.tossPage(url);step('warn','Set aside '+this.short(url)+' — drifting off “'+anchor+'”');continue;}
+            }
             // NAMESAKE leash, on the graph: known subject, but this page's fold touches NONE of
             // its figures — same topic words, different subject. Coupling is through the graph's
             // merged identity (a page mentioning Pierre folds INTO the Pierre figure), so this
@@ -5426,6 +5463,45 @@ class Component extends DCLogic {
     for(const [k,w] of topic){tb+=w*w;dot+=w*(arrival.get(k)||0);}
     for(const a of arrival.values())ta+=a*a;
     return (ta&&tb)?dot/Math.sqrt(ta*tb):0;
+  }
+  // ── SEMANTIC RELEVANCE — the meaning organ's recall floor ────────────────────────────────────
+  // The saliency leash above reads WORD overlap; it under-scores a page that means the question but
+  // says it in other words ("cetacean echolocation" for "dolphin sounds"). When a real meaning organ
+  // is warm (MiniLM — measuresMeaning), the walk gets a second, semantic channel: embed the denoised
+  // INTENT (the anchor is already the formulateSearchQuery-cleaned subject) and the page's ABOUTNESS,
+  // and read the cosine in that space — a meaning-distance, not a bag of words. It is used ONLY to
+  // RESCUE a page the word-leash would drop (a recall floor), never to toss one — precision stays with
+  // the figure gate — and it self-calibrates against the seed page's own intent-similarity, exactly
+  // like the word-leash calibrates against the seed's saliency. Cheap-first: it is consulted only on a
+  // page the word-leash is about to set aside, so at most one embed per borderline page.
+  //
+  // SEM_RATIO/SEM_ABS: a page is on-MEANING if its intent-cosine clears BOTH a share of the seed's
+  // (relative, self-calibrating) AND an absolute floor (so a weak seed can't lower the bar to noise).
+  // Deliberately conservative — a rescue, not a flood. Tuned by smoke-test (the MiniLM path can't run
+  // in Node), so they live as named constants.
+  _cosine(a,b){if(!a||!b||a.length!==b.length)return 0;let d=0;for(let i=0;i<a.length;i++)d+=a[i]*b[i];return d;}   // MiniLM vectors are L2-normalised → dot = cosine
+  // The DECISION, factored out pure so it is unit-testable without the model: is `sim` close enough to
+  // the seed baseline (and above the absolute floor) to reprieve a word-leash toss?
+  _semReprieve(sim,baseline){
+    const SEM_RATIO=0.72,SEM_ABS=0.34;
+    if(!(sim>0)||!(baseline>0))return false;
+    return sim>=SEM_ABS&&sim>=SEM_RATIO*baseline;
+  }
+  // The page's ABOUTNESS as a short digest — title + its lead prose, not the whole page (a long
+  // article's mean vector washes out; the lede is what it's ABOUT). Capped so the embed is cheap.
+  _pageAboutness(url,title){
+    const lead=this.norm(this._pageText(url)).slice(0,500);
+    return (this.norm(String(title||''))+'. '+lead).trim().slice(0,600);
+  }
+  // The intent-cosine of a page: embed its aboutness (the embedder caches by text, so a repeat is
+  // free) and dot it with the pre-embedded intent vector. Best-effort — any embed fault → null, and a
+  // null never rescues (the word-leash toss stands), so a cold/broken organ only ever means "no help".
+  async _semPageSim(emb,url,title,intentVec){
+    try{
+      if(!emb||!intentVec)return null;
+      const v=await emb.embed(this._pageAboutness(url,title));
+      return this._cosine(intentVec,v);
+    }catch(e){return null;}
   }
   // CURIOSITY's leads: the most surprising real terms on a page — repeated, not seen before (or
   // far more here than in the prior), not already chased, not OCR/markup junk. Terms the engine
