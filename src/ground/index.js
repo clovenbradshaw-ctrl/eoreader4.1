@@ -12,6 +12,11 @@ export { bindAndVeto } from './section.js';
 // resort, named so the surface can raise it. A response can be a mix; the void-grounded
 // propositions are the ones a veto flags.
 export { classifyProvenance } from './provenance.js';
+// Per-SPAN provenance — the answer-grain projection of the type law. Every span the reader
+// hovers is grounded EITHER to a source (with the precise line it came from — the jumpable
+// "where") OR to the void (the model's own words). So "every span needs to be grounded" is
+// a projection, not a restriction: the reader always sees whether a span was read or said.
+export { groundSpans, groundSummary } from './spans.js';
 // The reflection: parse the model's OUTPUT back into EOT, compare each proposition with
 // the document graph, and judge the groundedness of what the graph holds — counting the
 // diverse, independent origins that witness each claim (docs/creative-grounded-modes.md).
