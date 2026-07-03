@@ -1760,8 +1760,9 @@ class Component extends DCLogic {
   // Render markdown-lite to HTML. `cites` (optional) is an idx→{u,label} registry: any
   // ⟦cN⟧ sentinel _citeAnnotate left in the text becomes an inline, clickable citation pill
   // (¶ source) bound to passage N. Clicks are caught by the bubble's onCite delegate (data-u).
-  _md(src,cites){
+  _md(src,cites,sreg){
     const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const att=s=>esc(String(s==null?'':s)).replace(/"/g,'&quot;');
     // A clean citation glyph — a bare superscript footnote number (no box). Numbered per passage;
     // hover shows the source name; click opens it (bubble onCite delegate, data-u).
     const pillStyle='color:var(--acc);font-weight:700;font-size:0.72em;vertical-align:super;line-height:0;cursor:pointer;padding:0 1px;';
@@ -1778,9 +1779,17 @@ class Component extends DCLogic {
       // The verbatim passage, source label and host ride along as data-* so the hover-card can show
       // the cited section and the click delegate can scroll the source to it (_goToPassage).
       .replace(/⟦c(\d+)⟧/g,(m,i)=>{const c=cites&&cites[i];if(!c)return '';
-        const att=s=>esc(String(s==null?'':s)).replace(/"/g,'&quot;');
         const u=String(c.u||'');const host=/^text:/i.test(u)?'':this.short(u);const quote=this.truncLabel(this.norm(c.text||''),300);
-        return '<span class="eo-cite" data-u="'+att(u)+'" data-quote="'+att(quote)+'" data-label="'+att(c.label||'source')+'" data-host="'+att(host)+'" title="'+att(c.label||'source')+'" style="'+pillStyle+'">'+(c.n||'•')+'</span>';});
+        return '<span class="eo-cite" data-kind="source" data-u="'+att(u)+'" data-quote="'+att(quote)+'" data-label="'+att(c.label||'source')+'" data-host="'+att(host)+'" title="'+att(c.label||'source')+'" style="'+pillStyle+'">'+(c.n||'•')+'</span>';})
+      // Per-SPAN provenance sentinels (_groundAnnotate). ⟦gK⟧…⟦/g⟧ wraps a whole span so EVERY
+      // span the reader hovers says whether it was READ (grounded to a source — the verbatim
+      // line + a jump ride along as data-*) or SAID (the model's own words, grounded to the void).
+      // This is the ground/spans.js projection at the surface: nothing is left un-annotated.
+      .replace(/⟦g(\d+)⟧/g,(m,i)=>{const s=sreg&&sreg[i];if(!s)return '';
+        if(s.kind==='source')return '<span class="eo-cite eo-prov eo-prov-source" data-kind="source" data-u="'+att(s.u)+'" data-quote="'+att(s.quote)+'" data-label="'+att(s.label)+'" data-host="'+att(s.host)+'" title="From a source — hover for the passage, click to go to it">';
+        const assert=s.role!=='connective';
+        return '<span class="eo-prov eo-prov-llm'+(assert?' eo-prov-assert':'')+'" data-kind="llm" data-role="'+att(s.role||'assertion')+'" title="'+(assert?'The model asserts this — from its own knowledge (its training), not a source you loaded':'The model’s own phrasing — joining the grounded points, asserting nothing a source needs to carry')+'">';})
+      .replace(/⟦\/g⟧/g,'</span>');
     const lines=String(src||'').replace(/\r/g,'').split('\n');
     const out=[];let list=null;
     const flush=()=>{if(list){out.push('<'+list.tag+' style="margin:6px 0;padding-left:20px;">'+list.items.join('')+'</'+list.tag+'>');list=null;}};
@@ -3093,41 +3102,72 @@ class Component extends DCLogic {
       return (r&&r.eot&&r.eot.length)?r:null;
     }catch(e){return null;}
   }
-  _citeAnnotate(text,passages){
-    const ps=(passages||[]).filter(p=>p&&p.text&&p.u!=null&&p.i!=null);
-    if(!ps.length)return {text:String(text||''),reg:null};
-    const ptok=ps.map(p=>({p,set:new Set(this._researchTerms(p.text))}));
-    const reg={};const SENT=/(?<=[.!?])\s+/;
+  // Per-SPAN provenance annotation — EVERY span of a settled answer marked, so the reader can
+  // see for each one whether it was READ or SAID. A span lifted from / grounded to a retrieved
+  // passage is a SOURCE span: it keeps the superscript footnote (⟦cN⟧, shared with the Sources
+  // list) and a hover with the verbatim line + a jump to it. A span nothing read carries is a
+  // VOID span — the model's own words, marked plainly. This tiles the whole answer (nothing left
+  // un-annotated): it is the ground/spans.js projection, mirrored in the render pass so provenance
+  // forms as soon as the answer settles, with no dependency on the async engine bundle. The
+  // classification floor (≥2 shared content terms, overlap ≥0.3) is the same one groundSpans pins.
+  // Returns { text (⟦gK⟧…⟦/g⟧ span wrappers + ⟦cN⟧ footnotes), reg (passage registry), sreg (span registry) }.
+  _groundAnnotate(text,passages){
+    const ps=(passages||[]).filter(p=>p&&p.text&&p.u!=null&&p.i!=null)
+      .map(p=>({p,set:new Set(this._researchTerms(p.text))}));
+    const reg={};const sreg={};let sn=0,nSource=0,nSpan=0;const SENT=/(?<=[.!?])\s+/;
+    // classify one span against the passages → the best-overlapping passage, or null (void).
+    const bestOf=(toks)=>{
+      const tset=new Set(toks);let best=null,bestScore=0;
+      for(const {p,set} of ps){
+        if(!set.size)continue;let hit=0;for(const t of tset)if(set.has(t))hit++;
+        const score=hit/tset.size;
+        if(hit>=2&&score>bestScore){bestScore=score;best=p;}
+      }
+      return (best&&bestScore>=0.3)?best:null;
+    };
+    // wrap one span in a hoverable provenance sentinel; a source span also carries its footnote.
+    // A void span is the model's own — role 'assertion' (a substantive claim it puts forward on
+    // its training, attributable) or 'connective' (scaffolding that asserts nothing). Mirrors
+    // ground/spans.js so the render pass needs no async engine round-trip.
+    const wrap=(sent)=>{
+      if(!sent)return sent;
+      const toks=this._researchTerms(sent);
+      const best=toks.length<3?null:bestOf(toks);const k=sn++;nSpan++;
+      if(best){
+        nSource++;
+        if(!reg[best.i]){
+          // A true footnote number per distinct PASSAGE (first-appearance order): the glyph ⟦cN⟧
+          // and the references list below share this number. The verbatim passage text rides in
+          // `text` so the references can preview the actual source line — the librarian apparatus.
+          const n=Object.keys(reg).length+1;
+          reg[best.i]={u:best.u,n,text:best.text,label:this.truncLabel((((this.pageOf(best.u)||{}).title)||(/^text:/i.test(best.u)?'text':this.short(best.u))),40)};
+        }
+        const host=/^text:/i.test(String(best.u||''))?'':this.short(best.u);
+        sreg[k]={kind:'source',u:String(best.u||''),quote:this.truncLabel(this.norm(best.text||''),300),label:reg[best.i].label||'source',host:host};
+        return '⟦g'+k+'⟧'+sent+'⟦c'+best.i+'⟧⟦/g⟧';
+      }
+      sreg[k]={kind:'llm',role:toks.length<3?'connective':'assertion'};
+      return '⟦g'+k+'⟧'+sent+'⟦/g⟧';
+    };
     const out=String(text||'').split('\n').map(line=>{
-      if(!line.trim()||/^\s*#{1,6}\s/.test(line))return line;           // blank or heading → no cite
-      return line.split(SENT).map(sent=>{
-        const toks=this._researchTerms(sent);
-        if(toks.length<3)return sent;                                    // too short to bind confidently
-        const tset=new Set(toks);let best=null,bestScore=0;
-        for(const {p,set} of ptok){
-          if(!set.size)continue;let hit=0;for(const t of tset)if(set.has(t))hit++;
-          const score=hit/tset.size;
-          if(hit>=2&&score>bestScore){bestScore=score;best=p;}
-        }
-        if(best&&bestScore>=0.3){
-          if(!reg[best.i]){
-            // A true footnote number per distinct PASSAGE (first-appearance order): the glyph ⟦cN⟧
-            // and the references list below share this number. The verbatim passage text rides in
-            // `text` so the references can preview the actual source line — the librarian apparatus.
-            const n=Object.keys(reg).length+1;
-            reg[best.i]={u:best.u,n,text:best.text,label:this.truncLabel((((this.pageOf(best.u)||{}).title)||(/^text:/i.test(best.u)?'text':this.short(best.u))),40)};
-          }
-          return sent+'⟦c'+best.i+'⟧';
-        }
-        return sent;
-      }).join(' ');
+      if(!line.trim())return line;                                       // blank → left as-is
+      // Keep any leading markdown block marker (heading / bullet / ordered) OUTSIDE the wrap so
+      // _md's block rules still match; wrap the sentences of the remaining body.
+      const pm=line.match(/^(\s*(?:#{1,6}\s+|[-*]\s+|\d+\.\s+))([\s\S]*)$/);
+      const prefix=pm?pm[1]:'';const body=pm?pm[2]:line;
+      if(!body.trim())return line;
+      return prefix+body.split(SENT).map(wrap).join(' ');
     }).join('\n');
-    return {text:out,reg:Object.keys(reg).length?reg:null};
+    // allModel: every span is the model's own — the "just the model" answer, which the register
+    // must EXPRESS rather than let a green grounded chip imply a source that isn't there.
+    return {text:out,reg:Object.keys(reg).length?reg:null,sreg:Object.keys(sreg).length?sreg:null,
+      nSpan,nSource,allModel:nSpan>0&&nSource===0};
   }
-  // The bubble's click delegate: a citation pill (data-u) opens its source and scrolls to the
-  // cited section (data-quote). Other clicks inside the answer (markdown links carry their own
-  // href) fall through untouched.
-  _onCite(e){let el=e&&(e.target||e.srcElement);for(let d=0;el&&d<6;d++){if(el.getAttribute){const u=el.getAttribute('data-u');if(u){if(e.preventDefault)e.preventDefault();if(e.stopPropagation)e.stopPropagation();this._hideCiteCard(true);this._goToPassage(u,el.getAttribute('data-quote')||'');return;}}el=el.parentNode;}}
+  // The bubble's click delegate: a source span / citation pill (data-u) opens its source and
+  // scrolls to the cited section (data-quote). A real markdown link (its own href) is honoured
+  // first — a grounded span may wrap a link, and the link must win over the go-to-passage jump.
+  // A void (model's-own) span carries no data-u, so a click on it falls through untouched.
+  _onCite(e){let el=e&&(e.target||e.srcElement);for(let d=0;el&&d<6;d++){if(el.tagName==='A'&&el.getAttribute&&el.getAttribute('href'))return;if(el.getAttribute){const u=el.getAttribute('data-u');if(u){if(e.preventDefault)e.preventDefault();if(e.stopPropagation)e.stopPropagation();this._hideCiteCard(true);this._goToPassage(u,el.getAttribute('data-quote')||'');return;}}el=el.parentNode;}}
   // Open a cited source and scroll it to the exact passage the citation marks — "go to the
   // section of the page it's from". If the source is already open we just scroll; otherwise we
   // load it, then poll for the iframe to render before scrolling to the verbatim passage.
@@ -3155,7 +3195,10 @@ class Component extends DCLogic {
     document.addEventListener('mouseover',this._onCiteOver);
     document.addEventListener('mouseout',this._onCiteOut);
   }
-  _closestCite(el){for(let d=0;el&&el.getAttribute&&d<4;d++){if(el.classList&&el.classList.contains('eo-cite'))return el;el=el.parentNode;}return null;}
+  // The nearest provenance element under the cursor — a source citation/pill (eo-cite) OR a
+  // per-span provenance wrapper (eo-prov, which a void/model's-own span carries without eo-cite).
+  // Either floats the provenance card, so EVERY span is hoverable, not only the cited ones.
+  _closestCite(el){for(let d=0;el&&el.getAttribute&&d<4;d++){if(el.classList&&(el.classList.contains('eo-cite')||el.classList.contains('eo-prov')))return el;el=el.parentNode;}return null;}
   _citeCardEl(){
     if(this._citeCard)return this._citeCard;
     const el=document.createElement('div');
@@ -3167,8 +3210,29 @@ class Component extends DCLogic {
   }
   _showCiteCard(pill){
     const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const quote=pill.getAttribute('data-quote')||'',label=pill.getAttribute('data-label')||'source',host=pill.getAttribute('data-host')||'',u=pill.getAttribute('data-u')||'';
+    const kind=pill.getAttribute('data-kind')||'source';
     const card=this._citeCardEl();
+    if(kind==='llm'){
+      // A void span — the model's own words. The model is a provenance in its own right, grounded
+      // to its training (a real ground, not an absence). Name it plainly rather than implying a
+      // source. An ASSERTION is a real claim the model puts forward on its own knowledge — marked
+      // so the reader weighs it as the model's word; a CONNECTIVE is just the writer joining the
+      // grounded points. Either way: no "go to the section" — the ground is the model, not a page.
+      const role=pill.getAttribute('data-role')||'assertion';
+      const isAssert=role!=='connective';
+      const sub=isAssert?'The model asserts this':'The model’s own phrasing';
+      const body=isAssert
+        ? 'This is the model’s own knowledge — from its training, not from a source you loaded. Sometimes the model is the best to say a thing; it’s marked so you weigh it as the model’s assertion, not a page you can check.'
+        : 'The writer joining the grounded points in its own words — it asserts nothing a source would need to carry.';
+      card.innerHTML=
+        '<div style="display:flex;align-items:baseline;gap:7px;margin-bottom:7px;">'
+          +'<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#d0a54a;flex:0 0 auto;">Model</span>'
+          +'<span style="font-weight:700;color:#fff;">'+esc(sub)+'</span>'
+        +'</div>'
+        +'<div style="color:#cfd5de;border-left:2px solid #d0a54a;padding-left:9px;">'+esc(body)+'</div>';
+      this._positionCiteCard(pill);return;
+    }
+    const quote=pill.getAttribute('data-quote')||'',label=pill.getAttribute('data-label')||'source',host=pill.getAttribute('data-host')||'',u=pill.getAttribute('data-u')||'';
     card.innerHTML=
       '<div style="display:flex;align-items:baseline;gap:7px;margin-bottom:7px;">'
         +'<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#7c8696;flex:0 0 auto;">Source</span>'
@@ -3181,7 +3245,11 @@ class Component extends DCLogic {
       +'</div>';
     const go=card.querySelector('[data-cite-go]');
     if(go)go.onclick=(e)=>{e.preventDefault();e.stopPropagation();this._hideCiteCard(true);this._goToPassage(u,quote);};
-    // Position near the pill, flipping above and clamping horizontally to stay on-screen.
+    this._positionCiteCard(pill);
+  }
+  // Position the provenance card near its span, flipping above and clamping to stay on-screen.
+  _positionCiteCard(pill){
+    const card=this._citeCardEl();
     card.style.visibility='hidden';card.style.display='block';
     const r=pill.getBoundingClientRect(),cw=card.offsetWidth,ch=card.offsetHeight,vw=window.innerWidth,vh=window.innerHeight;
     const left=Math.min(Math.max(8,r.left),Math.max(8,vw-cw-8));
@@ -3411,12 +3479,14 @@ class Component extends DCLogic {
       // (matched lexically against its passages), so streaming stays cheap. `m.text` already carries
       // sentinels in the longform case, so it's passed straight through.
       const liveReg=(isMd&&m.cites&&Object.keys(m.cites).length)?m.cites:null;
-      const ann=(!liveReg&&isMd&&!m.pending&&(m.passages||[]).length)?this._citeAnnotate(m.text,m.passages):null;
+      // Per-span provenance on every settled model answer — even one with NO passages, so its
+      // spans are honestly marked as the model's own rather than left silently un-annotated.
+      const ann=(!liveReg&&isMd&&!m.pending)?this._groundAnnotate(m.text,m.passages||[]):null;
       // A LIMNER /svg render (docs/limner.md): the message carries finished SVG
       // markup on `m.svg`; show it as the bubble body verbatim (our own template's
       // output, every text node escaped at the source — render.js).
       const hasSvg=!isUser&&!!m.svg;
-      const bodyHtml=hasSvg?m.svg:(isMd?this._md((ann?ann.text:m.text),liveReg||(ann&&ann.reg)):'');
+      const bodyHtml=hasSvg?m.svg:(isMd?this._md((ann?ann.text:m.text),liveReg||(ann&&ann.reg),ann&&ann.sreg):'');
       // The numbered REFERENCES the inline footnotes point at — each previewing the verbatim source
       // line (the librarian apparatus, shown by default). When the binder found no inline match we
       // still list the passages the answer drew on, so the source text is always in view.
@@ -3438,19 +3508,30 @@ class Component extends DCLogic {
       // model's own words). Older/structural turns carry none — fall back to the matched look
       // when there are chips to show. The disclosure line rides alongside (opening / model).
       const groundKind=m.groundKind||((cites.length||entities.length)?'matched':null);
-      const disclosure=m.disclosure||'';
+      // "Just the model": the per-span pass found NO span lifted from / grounded to a source —
+      // the whole answer is the model's own. This must be EXPRESSED, not left under a green
+      // grounded chip that implies a source that isn't there (the user's rule).
+      const allModel=!!(ann&&ann.allModel);
+      const disclosure=m.disclosure||(allModel
+        ?'Every part of this answer is the model’s own — asserted from its training, not lifted from a source you loaded. Hover any span to see whether it asserts or just connects.'
+        :'');
       // THE REGISTER this turn wears (docs/creative-grounded-modes.md) — grounded (anchored to
       // sources, hoverable back to them) vs creative (the model writing freely, marked plainly
       // as invention). Explicit per-turn tag when the turn set one; older turns fall back to
       // the stance/groundKind they already carry. Icons are Phosphor by codepoint (anchor /
       // sparkle), the same convention as RICON below — never emoji.
-      const register=(!isUser&&!m.pending)?(m.register||(m.stance==='compose'?'creative'
+      let register=(!isUser&&!m.pending)?(m.register||(m.stance==='compose'?'creative'
         :(m.groundKind==='model'?'creative':(((m.passages||[]).length||m.groundKind)?'grounded':null)))):null;
+      // If every span is the model's own, wear the model register — never a grounded chip over an
+      // answer with no sourced span. The model is a real provenance (grounded to its training).
+      if(allModel&&register==='grounded')register='creative';
       const REGMETA={
         grounded:{icon:'\ue514',label:'grounded',fg:'#15803d',bg:'#e9f6ee',line:'#bfe3cc',edge:'#15803d',dash:'solid',
-          title:'Grounded — the claims are checked against sources; hover a citation to see where each one allegedly comes from.'},
-        creative:{icon:'\ue6a2',label:'creative',fg:'#6d28d9',bg:'#f1edfc',line:'#d8ccf7',edge:'#8b5cf6',dash:'dashed',
-          title:'Creative — written freely by the model, not tied to sources. Read it as invention, not record.'}};
+          title:'Grounded — every span is marked: hover any part of the answer to see whether it was read from a source (and exactly where) or is the model’s own words.'},
+        creative:{icon:'\ue6a2',label:(allModel?'model':'creative'),fg:'#6d28d9',bg:'#f1edfc',line:'#d8ccf7',edge:'#8b5cf6',dash:'dashed',
+          title:(allModel
+            ?'The model’s own — every span here is the model’s knowledge, from its training rather than a source you loaded. That can be the best answer available; it’s marked so you weigh it as the model’s word, not a page you can check. Hover a span to see if it asserts or just connects.'
+            :'Creative — the model’s own words, not tied to sources. Weigh it as the model’s word, not a source you can check.')}};
       const regMeta=register?REGMETA[register]:null;
       const regCount=(register==='grounded')?refs.length:0;
       // THE EOT REFLECTION panel — the answer parsed back into Existential-Operator Triples and

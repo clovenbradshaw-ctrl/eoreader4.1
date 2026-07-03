@@ -21,6 +21,21 @@
     ::-webkit-scrollbar{width:10px;height:10px}
     ::-webkit-scrollbar-thumb{background:#d4d8de;border-radius:6px;border:2px solid #fff}
     ::-webkit-scrollbar-track{background:transparent}
+    /* Per-span provenance in a grounded answer (ground/spans.js, _groundAnnotate): EVERY span
+       is marked — a solid green rule under text READ from a source (grounded to the page), a
+       faint dotted rule under the model's own words (grounded to the void). Hovering any span
+       floats its provenance card (_showCiteCard): where the source line is, or that it's the
+       model's own. Underlines sit just under the baseline so prose stays readable. */
+    .eo-prov{cursor:help;text-decoration:none;-webkit-text-decoration:none;text-underline-offset:3px;transition:background .12s ease;border-radius:2px;}
+    .eo-prov-source{border-bottom:1px solid rgba(21,128,61,.42);}
+    .eo-prov-source:hover{background:rgba(21,128,61,.10);border-bottom-color:rgba(21,128,61,.75);}
+    /* The model as its own provenance (grounded to its training). A model ASSERTION — a real
+       claim the model puts forward — gets an amber dotted rule so it reads as attributable, not
+       merely absent; a CONNECTIVE (the writer's own phrasing) gets a faint neutral dotted rule. */
+    .eo-prov-llm{border-bottom:1px dotted rgba(150,150,160,.55);}
+    .eo-prov-llm:hover{background:rgba(150,150,160,.13);border-bottom-color:rgba(150,150,160,.85);}
+    .eo-prov-assert{border-bottom:1px dotted rgba(208,165,74,.75);}
+    .eo-prov-assert:hover{background:rgba(208,165,74,.14);border-bottom-color:rgba(208,165,74,.95);}
     :root{ --app:#f5f6f8;--card:#fff;--line:#e6e8ec;--line2:#dde0e5;--ink:#1b1f24;--ink2:#5a626d;--ink3:#9aa1ab;
       --acc:#5b34d6;--accbg:#f1edfc;--accline:#d8ccf7;--web:#2563eb;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
   </style>

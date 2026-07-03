@@ -15,10 +15,15 @@
 // grounded turn.
 
 import { reflectAnswer } from '../ground/reflect.js';
+// The per-SPAN provenance projection (ground/spans.js): classify every span of a settled
+// answer as grounded to a SOURCE (with the precise line it came from — jumpable) or to the
+// VOID (the model's own words). The app calls this per grounded turn so every span the reader
+// hovers can say whether it was read or said, and where. Pure and DOM-free; the chat renders it.
+import { groundSpans, groundSummary } from '../ground/spans.js';
 
 if (typeof window !== 'undefined') {
-  window.eoGen = { reflectAnswer, version: 6 };
+  window.eoGen = { reflectAnswer, groundSpans, groundSummary, version: 7 };
   window.dispatchEvent(new Event('eogen-ready'));
 }
 
-export { reflectAnswer };
+export { reflectAnswer, groundSpans, groundSummary };
