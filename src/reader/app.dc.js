@@ -61,6 +61,10 @@ class Component extends DCLogic {
       // the model, gathering nothing. Every settled turn is BADGED with the register it
       // actually used, whichever was asked for. Persisted under eo_answermode.
       answerMode:(()=>{try{const m=localStorage.getItem('eo_answermode');return (m==='grounded'||m==='creative')?m:'auto';}catch(e){return 'auto';}})(),
+      // How span-provenance is shown on answers: 'hover' (clean — reveal a span's source/model on
+      // hover, no persistent marks) · 'lines' (always underline: green=source, dotted=model) · 'off'
+      // (no per-span marks at all). Default clean-on-hover; persisted under eo_provmode.
+      provMode:(()=>{try{const m=localStorage.getItem('eo_provmode');return (m==='lines'||m==='off')?m:'hover';}catch(e){return 'hover';}})(),
       auditMode:savedAudit==='1', auditCollapsed:false, auditCopied:false, provOpen:false, panelProvOpen:false,
       hoverCite:null, liveResearch:{on:false},
       // WEB AS BRAIN — on by default. A 3B chat model knows little, so by default a question it
@@ -2502,6 +2506,9 @@ class Component extends DCLogic {
   cycleResearchDepth(){const order=['shallow','deep','obsessive'];this.setState(s=>{const i=order.indexOf(s.researchDepth||'deep');const next=order[(i+1)%order.length];try{localStorage.setItem('eo_depth',next);}catch(e){}return {researchDepth:next};});}
   // THE REGISTER SWITCH — auto → grounded → creative, persisted (mirrors cycleResearchDepth).
   cycleAnswerMode(){const order=['auto','grounded','creative'];this.setState(s=>{const i=order.indexOf(s.answerMode||'auto');const next=order[(i+1)%order.length];try{localStorage.setItem('eo_answermode',next);}catch(e){}return {answerMode:next};});}
+  // Cycle how span provenance is shown on answers: hover → lines → off. Persisted; the root's
+  // data-prov attribute (and off-mode hover suppression) read it live, so it re-styles instantly.
+  cycleProvMode(){const order=['hover','lines','off'];this.setState(s=>{const i=order.indexOf(s.provMode||'hover');const next=order[(i+1)%order.length];try{localStorage.setItem('eo_provmode',next);}catch(e){}return {provMode:next};});}
   async chatResearch(q,pre){
     if(this._busy){
       // A walk is already running. A pre-created bubble (sendChat's discourse path) must not be
@@ -3102,6 +3109,27 @@ class Component extends DCLogic {
       return (r&&r.eot&&r.eot.length)?r:null;
     }catch(e){return null;}
   }
+  // A deep-research answer arrives already grounded: inline [N] markers in the summary plus a
+  // footnote block — "[N] “quote”" then "    — <url> · chars A–B". The inline [N] are literal text
+  // that link nowhere. This parses the footnotes and turns each INLINE [N] into a clickable
+  // superscript (⟦cN⟧) bound to its footnote's source + verbatim quote, so a click jumps to the
+  // passage (_goToPassage). The footnote definition lines are left as-is (their url is already a
+  // link). No per-span lexical layer runs on these — they carry their own authoritative provenance.
+  _researchCites(text){
+    const s=String(text||'');const lines=s.split('\n');const reg={};
+    const isDef=(l)=>/^\s*\[\d+\]\s+[“"]/.test(l);
+    for(let i=0;i<lines.length;i++){
+      const dm=lines[i].match(/^\s*\[(\d+)\]\s+[“"]([\s\S]*?)[”"]\s*$/);
+      if(!dm)continue;
+      const n=+dm[1];let u='';
+      const nm=(lines[i+1]||'').match(/—\s*(\S+)/);if(nm)u=nm[1].replace(/[.,;]+$/,'');
+      reg[n]={u,n,text:dm[2],label:this.truncLabel((((this.pageOf(u)||{}).title)||(/^text:/i.test(u)?'text':this.short(u))||'source'),40)};
+    }
+    if(!Object.keys(reg).length)return null;
+    // Convert inline [N] (anywhere but a footnote definition line) → clickable ⟦cN⟧ superscripts.
+    const out=lines.map(line=>isDef(line)?line:line.replace(/\[(\d+)\]/g,(mm,n)=>reg[+n]?('⟦c'+(+n)+'⟧'):mm)).join('\n');
+    return {text:out,reg};
+  }
   // Per-SPAN provenance annotation — EVERY span of a settled answer marked, so the reader can
   // see for each one whether it was READ or SAID. A span lifted from / grounded to a retrieved
   // passage is a SOURCE span: it keeps the superscript footnote (⟦cN⟧, shared with the Sources
@@ -3190,7 +3218,11 @@ class Component extends DCLogic {
   _initCiteHover(){
     if(this._citeHoverInit||typeof document==='undefined')return;
     this._citeHoverInit=true;
-    this._onCiteOver=(e)=>{const p=this._closestCite(e.target);if(p)this._showCiteCard(p);};
+    this._onCiteOver=(e)=>{const p=this._closestCite(e.target);if(!p)return;
+      // In 'off' mode the per-span provenance layer is inert — no hover card for eo-prov spans.
+      // Native citation pills (eo-cite without eo-prov — the [N] superscripts) still work in every mode.
+      if(this.state.provMode==='off'&&p.classList&&p.classList.contains('eo-prov'))return;
+      this._showCiteCard(p);};
     this._onCiteOut=(e)=>{const p=this._closestCite(e.target);if(!p)return;const to=e.relatedTarget;if(to&&this._citeCard&&this._citeCard.contains(to))return;this._hideCiteCard();};
     document.addEventListener('mouseover',this._onCiteOver);
     document.addEventListener('mouseout',this._onCiteOut);
@@ -3479,14 +3511,21 @@ class Component extends DCLogic {
       // (matched lexically against its passages), so streaming stays cheap. `m.text` already carries
       // sentinels in the longform case, so it's passed straight through.
       const liveReg=(isMd&&m.cites&&Object.keys(m.cites).length)?m.cites:null;
-      // Per-span provenance on every settled model answer — even one with NO passages, so its
-      // spans are honestly marked as the model's own rather than left silently un-annotated.
-      const ann=(!liveReg&&isMd&&!m.pending)?this._groundAnnotate(m.text,m.passages||[]):null;
+      // A DEEP-RESEARCH answer already carries its OWN authoritative provenance — inline [N] markers
+      // and a footnote block with exact spans. It must NOT be re-annotated lexically: that both
+      // clutters it (underlines over the footnotes) and mislabels it (the lexical pass fails on the
+      // pre-formatted text and reads "all model" over a grounded answer). Instead we only make its
+      // inline [N] clickable — jump-to-source — and leave the rest alone.
+      const isResearch=isMd&&!m.pending&&(m.kind==='research'||/(^|\n)\s*\[\d+\]\s+[“"]/.test(m.text||'')||/_VERIFY:/.test(m.text||''));
+      const rcites=(isResearch&&!liveReg)?this._researchCites(m.text):null;
+      // Per-span provenance on a settled PLAIN model answer (not research, not the streaming arc):
+      // every span marked so its source-or-model is legible. Skipped for research (above).
+      const ann=(!liveReg&&!isResearch&&isMd&&!m.pending)?this._groundAnnotate(m.text,m.passages||[]):null;
       // A LIMNER /svg render (docs/limner.md): the message carries finished SVG
       // markup on `m.svg`; show it as the bubble body verbatim (our own template's
       // output, every text node escaped at the source — render.js).
       const hasSvg=!isUser&&!!m.svg;
-      const bodyHtml=hasSvg?m.svg:(isMd?this._md((ann?ann.text:m.text),liveReg||(ann&&ann.reg),ann&&ann.sreg):'');
+      const bodyHtml=hasSvg?m.svg:(isMd?this._md((rcites?rcites.text:(ann?ann.text:m.text)),liveReg||(rcites?rcites.reg:(ann&&ann.reg)),ann&&ann.sreg):'');
       // The numbered REFERENCES the inline footnotes point at — each previewing the verbatim source
       // line (the librarian apparatus, shown by default). When the binder found no inline match we
       // still list the passages the answer drew on, so the source text is always in view.
@@ -3495,9 +3534,10 @@ class Component extends DCLogic {
       // stays tidy. Each ref also carries its source identity (favicon + domain) and a hasIcon flag.
       const refOf=(u,n,text)=>({n,label:titleForUrl(u),domain:this.short(u)||titleForUrl(u),
         preview:this.truncLabel(this.norm(text),300),onOpen:()=>this.goWeb(u)});
+      const bodyReg=liveReg||(rcites&&rcites.reg)||(ann&&ann.reg);
       let refs=[];
-      if(liveReg){
-        refs=Object.keys(liveReg).map(i=>liveReg[i]).sort((a,b)=>a.n-b.n).map(c=>refOf(c.u,c.n,c.text));
+      if(bodyReg){
+        refs=Object.keys(bodyReg).map(i=>bodyReg[i]).sort((a,b)=>a.n-b.n).map(c=>refOf(c.u,c.n,c.text));
       }else if(ann&&ann.reg){
         refs=Object.keys(ann.reg).map(i=>ann.reg[i]).sort((a,b)=>a.n-b.n).map(c=>refOf(c.u,c.n,c.text));
       }else if(!isUser&&!m.pending&&(m.passages||[]).length){
@@ -3508,10 +3548,10 @@ class Component extends DCLogic {
       // model's own words). Older/structural turns carry none — fall back to the matched look
       // when there are chips to show. The disclosure line rides alongside (opening / model).
       const groundKind=m.groundKind||((cites.length||entities.length)?'matched':null);
-      // "Just the model": the per-span pass found NO span lifted from / grounded to a source —
-      // the whole answer is the model's own. This must be EXPRESSED, not left under a green
-      // grounded chip that implies a source that isn't there (the user's rule).
-      const allModel=!!(ann&&ann.allModel);
+      // "Just the model": the whole answer is the model's own — expressed, not left under a green
+      // grounded chip. Only when there are genuinely NO passages: the lexical pass can under-match a
+      // truly grounded answer, so we never flip a passage-backed answer to model on its word alone.
+      const allModel=!!(ann&&ann.allModel&&!(m.passages||[]).length);
       const disclosure=m.disclosure||(allModel
         ?'Every part of this answer is the model’s own — asserted from its training, not lifted from a source you loaded. Hover any span to see whether it asserts or just connects.'
         :'');
@@ -6345,6 +6385,15 @@ class Component extends DCLogic {
       answerModeStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'
         +((this.state.answerMode==='grounded')?'color:#15803d;background:#e9f6ee;border:1px solid #bfe3cc;'
         :(this.state.answerMode==='creative')?'color:#6d28d9;background:#f1edfc;border:1px solid #d8ccf7;'
+        :'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
+      // The PROVENANCE display toggle — how per-span source/model marks are shown on answers.
+      onCycleProvMode:()=>this.cycleProvMode(),
+      provMode:(this.state.provMode||'hover'),
+      provModeLabel:'spans: '+(this.state.provMode||'hover'),
+      provModeTitle:'How each span’s provenance is shown on answers: hover (clean — reveal a span’s source or model on hover) · lines (always underline: green = from a source, dotted = the model’s own) · off (no per-span marks). Click to cycle. Citations still work in every mode.',
+      provModeStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'
+        +((this.state.provMode==='lines')?'color:#15803d;background:#e9f6ee;border:1px solid #bfe3cc;'
+        :(this.state.provMode==='off')?'color:var(--ink3);background:var(--app);border:1px solid var(--line2);'
         :'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
       onCycleDepth:()=>this.cycleResearchDepth(),
       depthBtnIcon:'\ue79e',depthBtnLabel:(this.state.researchDepth||'deep'),
