@@ -25,6 +25,7 @@ export {
 // task graph's grain-coherence. → grained.js
 export {
   predictGrained, gradeGrained, predictionTaskGraph,
+  predictionFrameLog, predictionFrameStack,
   prefixOverlap, phraseSimilarity, surpriseBoundaries,
 } from './grained.js';
 // Learned phrase segmentation — the SEG cut derived from the note grain's own

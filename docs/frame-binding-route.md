@@ -9,7 +9,10 @@
 
 Status: **Phase 0 + Phase 1 shipped.** Phases 2–3 proposed. This extends, does not replace,
 `docs/discourse-routing.md` (the measurement) and `docs/conversation-fold.md` (the carried
-stance).
+stance). Sequel: `docs/frame-holon.md` generalizes Phases 2–3 — the frame promoted from a
+cell to a stack over the shared interior holon (`src/frame/`), shipped through its Phase B:
+the fold carries the stack, the bind argmaxes over the path, and the reader records the
+push and enacts the pop ("back to the story") the single-frame router could not.
 
 ---
 

@@ -18,6 +18,21 @@
 //
 // This module owns stance + warm (the fold); scope lives in the app's answerScope,
 // which unions `warm` on top of its explicit base.
+//
+// PHASE B (docs/frame-holon.md): the fold also carries the FRAME STACK — the
+// interior holon's active path, projected from the same settled turns by the
+// SHARED projection (frame/project.js), so the discourse axis names the same
+// structure the generation axis (src/tasks/) runs on. `fold.frames` is the path
+// root → current leaf; `bindTurn` is the discourse bind — the coupling argmax
+// over that path (frame/bind.js), measured in the text term-space with the
+// engine's own tokenizer. Legacy fields (stance/focus/warm/stanceDesc) are
+// computed exactly as before — the stack is additive, and with no recorded
+// frame tags a thread projects to the flat single-activity stack (byte parity).
+
+import { openEvent, bindEvent } from '../frame/events.js';
+import { projectFrameStack } from '../frame/project.js';
+import { decideBind } from '../frame/bind.js';
+import { tok } from '../perceiver/parse/tokenize.js';
 
 // The compose grammar, kept in sync with app.dc.js's _CV()/_CK(). A creative
 // KIND (poem, story, song…) plus a compose VERB is an explicit compose marker;
@@ -124,20 +139,91 @@ function frameSig(frame, rules) {
 // function of the N−1 settled turns (§3).
 function turnsOf(events) {
   const out = [];
-  let lastUser = null;
+  let lastUser = null, lastUserFrame = null;
   for (const m of events || []) {
     if (!m || m.pending) continue;
-    if (m.role === 'user') { lastUser = String(m.text || ''); continue; }
+    if (m.role === 'user') { lastUser = String(m.text || ''); lastUserFrame = m.frame || null; continue; }
     if (m.role === 'asst' && m.stance) {
       out.push({
         stance: m.stance,
         user: lastUser,
         focus: m.focus || null,
         sources: Array.isArray(m.sources) ? m.sources : [],
+        // The enacted FRAME MOVE (push / return / refine), recorded by the router
+        // on the user turn that drove it (or on the enacted turn itself). Absent
+        // on legacy logs → the flat single-activity derivation below.
+        frame: m.frame || lastUserFrame,
       });
+      lastUserFrame = null;
     }
   }
   return out;
+}
+
+// ── the frame stack, derived from the settled turns (docs/frame-holon.md) ────
+// possessive-tolerant term normal (the salience.js trick): "buster's" → "buster".
+const normTerm = (t) => String(t).replace(/['’]s$/, '');
+
+// The props a turn contributes to the frame it binds to — the words it actually
+// used (the engine's one tokenizer) plus its enacted focus. CONFINEMENT falls out
+// of the assignment: a digression's props (and its fetched sources) accumulate on
+// the DIGRESSION frame, never the parent's, unless a return tag explicitly
+// carries them up (`frame.carry` — the SYN join).
+const turnProps = (turn) => {
+  const f = turn.focus || {};
+  return [...new Set([...tok(turn.user || ''), ...tok(f.kind || ''), ...tok(f.subject || '')].map(normTerm))];
+};
+
+// frameStackOf(turns) → { log, subjects, srcs, focusOf }: the shared holon's
+// event log for this thread, plus the per-frame accumulations the bind measures
+// over. The derivation is a pure fold of the turns:
+//
+//   frame tag `push`    open a child under the active leaf (a digression; the
+//                       parent is suspended by position, not closed)
+//   frame tag `return`  bind the tagged ancestor — the pop; `carry` props SYN up
+//   no tag, same act    bind the active leaf (continuation / refine)
+//   no tag, act differs open a SIBLING activity under the chat root — the flat
+//                       pre-stack behavior, byte-compatible for legacy logs
+function frameStackOf(turns) {
+  const log = [openEvent({ id: 'chat', goal: 'the conversation', t: 0 })];
+  const subjects = new Map([['chat', new Set()]]);
+  const srcs = new Map([['chat', new Set()]]);
+  const focusOf = new Map();
+  const acts = new Map([['chat', null]]);
+  const kids = new Map([['chat', 0]]);
+  let active = 'chat', t = 1;
+
+  const open = (parentId, act, subject) => {
+    const n = kids.get(parentId) || 0; kids.set(parentId, n + 1);
+    const id = `${parentId}.${n}`;
+    log.push(openEvent({ id, parentId, act, subject, depth: id.split('.').length - 1, t: t++ }));
+    subjects.set(id, new Set(subject)); srcs.set(id, new Set()); acts.set(id, act); kids.set(id, 0);
+    active = id;
+  };
+  const bind = (id, channel) => { log.push(bindEvent({ id, channel, t: t++ })); active = id; };
+
+  for (const turn of turns) {
+    const props = turnProps(turn);
+    const tag = turn.frame || null;
+    if (tag && tag.move === 'return' && acts.has(tag.target) && tag.target !== active) {
+      bind(tag.target, 'ancestor');
+      for (const c of tag.carry || []) subjects.get(tag.target).add(normTerm(String(c).toLowerCase()));
+    } else if (tag && tag.move === 'push') {
+      open(active, turn.stance ?? null, props);
+      bind(active, 'novelty');
+    } else if (active !== 'chat' && acts.get(active) === (turn.stance ?? null)) {
+      bind(active, 'leaf');
+    } else {
+      open('chat', turn.stance ?? null, props);
+      bind(active, 'novelty');
+    }
+    const s = subjects.get(active); for (const p of props) s.add(p);
+    const r = srcs.get(active); for (const x of turn.sources || []) if (x) r.add(x);
+    if (turn.focus && (turn.focus.kind || turn.focus.subject)) {
+      focusOf.set(active, { kind: turn.focus.kind || null, subject: turn.focus.subject ?? null });
+    }
+  }
+  return { log, subjects, srcs, focusOf };
 }
 
 function computeFold(events, rules) {
@@ -181,6 +267,29 @@ function computeFold(events, rules) {
 
   const fold = { stance, focus, warm };
   fold.stanceDesc = stanceDescOf(fold);
+
+  // THE FRAME STACK (docs/frame-holon.md, Phase B) — the same settled turns,
+  // projected through the SHARED interior holon. Additive: every legacy field
+  // above is untouched, and a legacy log (no frame tags) projects to the flat
+  // single-activity stack whose leaf act equals `stance`.
+  const fs = frameStackOf(turns);
+  const stack = projectFrameStack(fs.log);
+  const frameView = (id) => {
+    const node = stack.byId.get(id);
+    return {
+      id,
+      act: node ? node.act : null,
+      depth: node ? node.depth : 0,
+      subject: [...(fs.subjects.get(id) || [])],
+      sources: [...(fs.srcs.get(id) || [])],
+      focus: fs.focusOf.get(id) || null,
+    };
+  };
+  fold.stack = { activeId: stack.activeId, path: stack.path, suspended: stack.suspended };
+  fold.frames = stack.path.map(frameView);
+  // The parked frames a later bind can pop back into: open frames off the active
+  // path — bind-suspended digressions and switched-away sibling activities alike.
+  fold.offPath = [...stack.byId.keys()].filter((id) => !stack.path.includes(id)).map(frameView);
   return fold;
 }
 
@@ -206,6 +315,81 @@ export function projectFold(events, frame = {}) {
 }
 
 export function clearFoldMemo() { MEMO.clear(); }
+
+// ── the discourse bind (docs/frame-holon.md, Phase B) ─────────────────────────
+// bindTurn(message, fold, opts) → the frame-binding-route Phase-3 couplings,
+// generalized to the whole active path and decided by the SHARED holon's
+// decideBind (NUL-gated argmax, incumbent-as-resting-potential):
+//
+//   c_leaf     the message's overlap with the current leaf's subject-set → refine
+//   c_subj[i]  a leaf subject named directly                             → elaborate
+//   c_anc[k]   overlap with an ancestor frame (the composition a
+//              digression was pushed under)                              → return (pop)
+//   c_new      the unbound remainder — props landing on NO frame in scope → push
+//
+// The term-space is the engine's own: `tok` for the props, and the Level-1
+// hits/|props| overlap — the same overlap-equivalence that discovers octave
+// equivalence and phrase repeats (perceiver/equivalence.js, predict/grained.js),
+// possessive-tolerant like salience.js's figure channel. The discourse READ
+// (meta-route) is folded in as a SEED on channels that already clear NUL — it
+// informs, it does not decide (the relaxRoute discipline).
+//
+// Returns null when there is nothing to bind over (no stack beyond the chat
+// root, an empty message) — the caller's baseline routing is the fallback,
+// byte-identical to today. Otherwise { move, target, act, focus, channel,
+// couplings }: `return` + act 'compose' is the pop the single-frame router
+// could not do ("ok, back to the story").
+export function bindTurn(message, fold, { read = null, nul = 0.2, seed = 0.25 } = {}) {
+  const frames = (fold && fold.frames) || [];
+  if (frames.length < 2) return null;
+  const props = [...new Set(tok(message).map(normTerm))];
+  if (!props.length) return null;
+
+  const overlap = (subject) => {
+    if (!subject || !subject.length) return 0;
+    const S = new Set(subject.map(normTerm));
+    let hits = 0;
+    for (const p of props) if (S.has(p)) hits += 1;
+    return hits / props.length;
+  };
+
+  const leaf = frames[frames.length - 1];
+  const cLeaf = overlap(leaf.subject);
+  const ancestors = frames.slice(0, -1).map((f) => ({ id: f.id, w: overlap(f.subject) }));
+  const subjects = (leaf.subject || [])
+    .filter((s) => props.includes(normTerm(s)))
+    .map((s) => ({ subject: s, w: 1 / props.length }));
+  const union = new Set();
+  for (const f of frames) for (const s of f.subject || []) union.add(normTerm(s));
+  const novelty = props.filter((p) => !union.has(p)).length / props.length;
+
+  // The read's settled route seeds the matching channel — only where the raw
+  // coupling already clears NUL (a seed strengthens a live channel; it never
+  // resurrects a dead one). `research` re-speaks as a ground act.
+  const route = read && read.route && !read.abstained ? read.route : null;
+  const matches = (act) => act === route || (route === 'research' && act === 'ground');
+  const boost = (raw, on) => (on && raw > nul ? raw + seed : raw);
+  let ancRoute = null;
+  if (route && !matches(leaf.act)) {
+    ancRoute = [...frames.slice(0, -1)].reverse().find((f) => matches(f.act)) || null;
+  }
+
+  const d = decideBind({
+    path: frames.map((f) => f.id),
+    leaf: boost(cLeaf, route && matches(leaf.act)),
+    subjects,
+    ancestors: ancestors.map((a) => ({ id: a.id, w: boost(a.w, ancRoute && ancRoute.id === a.id) })),
+    novelty: boost(novelty, route && !matches(leaf.act) && !ancRoute),
+    nul,
+  });
+  const target = (d.target && frames.find((f) => f.id === d.target)) || null;
+  return {
+    ...d,
+    act: target ? target.act : null,
+    focus: target ? target.focus : null,
+    couplings: { leaf: cLeaf, ancestors, subjects, novelty },
+  };
+}
 
 // The §6 transition detector's verdict vocabulary.
 export const VERDICTS = ['CONTINUE', 'COMPOSE', 'GROUND', 'ISOLATE'];

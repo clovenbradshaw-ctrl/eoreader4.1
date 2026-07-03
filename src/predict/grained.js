@@ -36,6 +36,7 @@
 
 import { predictiveSequenceReading } from '../surfer/sequence.js';
 import { runTaskGraph, PATTERN } from '../tasks/index.js';
+import { openEvent, bindEvent, projectFrameStack } from '../frame/index.js';
 import { learnBoundariesFromSurprise } from './segment.js';
 
 const round = (x) => Math.round(x * 1000) / 1000;
@@ -251,6 +252,41 @@ export const predictionTaskGraph = async (doc, opts = {}) => {
   });
   return { prediction: pred, graph: res.graph, incoherent: res.incoherent };
 };
+
+// ── the reactive frame log (docs/frame-holon.md, Phase C) ─────────────────────
+// The SAME structure predictGrained walks — piece → phrases → note events — as
+// the interior frame holon's event log: the piece is the root frame, a SEG
+// boundary PUSHES a phrase frame (the 'novelty' bind, the cut segment.js derives
+// from the signal's own surprise), each within-phrase note BINDS the open phrase
+// (the 'leaf' bind), and the next boundary pops to the piece and pushes the next
+// phrase. A phrase frame's subject is its pitch-set — the props the phrase-repeat
+// overlap-equivalence measures, the same floor the discourse bind measures over.
+//
+// This is the eager ≡ reactive invariance pinned in CI: predictionTaskGraph
+// DECLARES this tree top-down (a planner's `decompose`), this log DISCOVERS it as
+// the stream arrives (`open` + `bind`), and the shared projection derives the
+// same nesting either way (tests/frame-predict.test.js).
+export const predictionFrameLog = ({ phrases }) => {
+  const log = [openEvent({ id: 'piece', goal: 'the piece', t: 0 })];
+  let t = 1, at = 0;
+  for (let i = 0; i < phrases.length; i++) {
+    if (i > 0) log.push(bindEvent({ id: 'piece', channel: 'ancestor', t: t++ }));   // phrase end → the piece (pop)
+    const id = `piece.${i}`;
+    log.push(openEvent({
+      id, parentId: 'piece', goal: `phrase ${i}`, depth: 1,
+      subject: [...new Set(phrases[i])], t: t++,
+    }));
+    for (let k = 0; k < phrases[i].length; k++, at++) {
+      // the boundary note lands on NOTHING in scope (c_new) — the push; the rest
+      // bind the open phrase (c_leaf).
+      log.push(bindEvent({ id, unit: at, channel: k === 0 ? 'novelty' : 'leaf', t: t++ }));
+    }
+  }
+  return log;
+};
+
+// The prediction's frame stack — the reactive projection of the walk above.
+export const predictionFrameStack = (pred) => projectFrameStack(predictionFrameLog(pred));
 
 // ── grading ───────────────────────────────────────────────────────────────────
 export const gradeGrained = (result) => {

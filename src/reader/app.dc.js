@@ -2460,8 +2460,9 @@ class Component extends DCLogic {
   }
 
   // The Conversation Fold for a chat — a pure projection of its turns that carries
-  // the enacted STANCE (compose|ground) forward (src/core/conversation-fold.js). The
-  // projector is self-contained and loaded lazily, memoized in the module on
+  // the enacted STANCE (compose|ground) forward AND the frame stack (the interior
+  // holon's active path — src/core/conversation-fold.js, docs/frame-holon.md).
+  // Loaded lazily (it imports the shared frame holon), memoized in the module on
   // (chatId, turn-count, decay-config). If it can't load, routing degrades to a
   // null-stance fold — today's behavior, never worse. See docs/conversation-fold.md.
   async _convFold(cur){
@@ -2593,6 +2594,21 @@ class Component extends DCLogic {
     // bare pleasantries (nothing to read); null on any failure — null means today's behavior.
     const read=contentful?await this._discourseRead(id,q,cur,fold):null;
     if(this._stopGen)return;
+    // THE POP (docs/frame-holon.md, Phase B): when a digression stands on the frame stack — a
+    // mid-compose question was PUSHED as a child frame, so the composition is a suspended
+    // ancestor, not a lost stance — a turn that binds BACK to that composing ancestor ("ok,
+    // back to the story", "where were we") pops the digression and re-enters the composition
+    // with its carried focus. The decision is the shared holon's coupling argmax over the
+    // fold's active path (conversation-fold bindTurn → frame/bind decideBind), NUL-gated, the
+    // incumbent digression as the resting potential; the read SEEDS it, never decides it. A
+    // flat stack / weak coupling / cold module → null → every path below runs unchanged.
+    const pop=(fold.stance!=='compose'&&!researchIntent)?await this._bindReturn(q,fold,read):null;
+    if(pop&&!this._stopGen){
+      this._tagUserFrame(id,{move:'return',target:pop.id});
+      const rfold={...fold,stance:'compose',focus:pop.focus||fold.focus};
+      if(pop.focus&&pop.focus.kind==='essay'&&this._essayOrganReady())return this.runOrganEssay(q,undefined,{reuseId:id,read});
+      return this.composeArtifact(q,rfold,{reuseId:id,focus:pop.focus||undefined});
+    }
     // CONTINUATION-BY-DEFAULT, now read off the BINDING (docs/frame-binding-route.md, Phase 1;
     // docs/conversation-fold.md §2,§5). "write me one", "do it", "now one about the city", "make
     // it shorter" have no intrinsic KIND — their stance is inherited from the thread, not read off
@@ -2614,6 +2630,11 @@ class Component extends DCLogic {
       if(lastEssay&&this._essayOrganReady())return this.runOrganEssay(q,undefined,{reuseId:id,read});
       return this.composeArtifact(q,fold,{reuseId:id});
     }
+    // THE PUSH (docs/frame-holon.md, Phase B): this turn LEAVES a composing thread — a genuine
+    // switch, or an explicit research ask. Record it as a pushed child frame on the user turn,
+    // so the fold's stack keeps the composition as a suspended ANCESTOR a later "back to the
+    // story" can pop to, instead of overwriting the stance and stranding the piece.
+    if(fold.stance==='compose')this._tagUserFrame(id,{move:'push'});
     const anchorGap=(!isolated&&contentful)?this._anchorGap(q,sources):null;
     if(anchorGap)this._beat(id,'warn','“'+anchorGap.missing.join('”, “')+'” '+(anchorGap.missing.length>1?'aren’t':'isn’t')+' in your reading — that part needs the web, or an honest absence.');
     const meta=(read||anchorGap)?{...(read||{researchDrive:0}),anchorGap}:null;
@@ -2975,6 +2996,32 @@ class Component extends DCLogic {
     if(read&&!read.abstained&&read.route)return read.route==='compose';
     return !this._switchesFromCompose(q);
   }
+  // THE POP DECISION (docs/frame-holon.md, Phase B): does this turn bind BACK to a composing
+  // frame standing above (or beside) the current one on the fold's frame stack? Pure delegation
+  // to conversation-fold's bindTurn — the shared holon's NUL-gated coupling argmax over the
+  // active path, read-seeded. Returns {id, focus} of the composing frame to re-enter, or null
+  // (flat stack, weak coupling, cold module — the fallback contract: today's routing, unchanged).
+  async _bindReturn(q,fold,read){
+    try{
+      if(!fold||!fold.frames||fold.frames.length<2)return null;
+      const F=this._FOLD||(this._FOLD=await import(new URL('src/core/conversation-fold.js',document.baseURI).href));
+      if(typeof F.bindTurn!=='function')return null;
+      const d=F.bindTurn(q,fold,{read});
+      if(d&&d.move==='return'&&d.act==='compose')return {id:d.target,focus:d.focus||null};
+      return null;
+    }catch(_){return null;}
+  }
+  // Record an enacted frame move (push / return) on the turn's USER message — the tag
+  // conversation-fold's frameStackOf replays when it projects the thread's frame stack.
+  // One writer: sendChat.
+  _tagUserFrame(id,frame){
+    this.setState(s=>({chats:s.chats.map(c=>{
+      if(c.id!==id)return c;
+      const m=c.messages.slice();
+      for(let i=m.length-1;i>=0;i--){if(m[i].role==='user'){m[i]={...m[i],frame};break;}}
+      return {...c,messages:m};
+    })}));
+  }
   // The KIND phrase, kept whole ("emily dickinson poem", "haiku"), length/style words peeled. Used
   // only to label the work ("Writing a haiku…"); the model gets the request itself, not this.
   _composeKind(q){
@@ -2990,8 +3037,11 @@ class Component extends DCLogic {
   async composeArtifact(q,fold,opts={}){
     // The enacted compose focus: the KIND that labels the work + the running SUBJECT.
     // A bare "write me one" / "make it shorter" borrows both from the carried fold so
-    // "Writing a haiku…" stays a haiku across the thread, not a default poem.
-    const focus=this._composeFocus(q,fold);
+    // "Writing a haiku…" stays a haiku across the thread, not a default poem. A POP
+    // (docs/frame-holon.md, Phase B) passes the suspended frame's carried focus in
+    // opts — "back to the story" must restore THE story, not re-derive a kind from a
+    // return utterance that names one without a compose verb (→ the poem default).
+    const focus=opts.focus||this._composeFocus(q,fold);
     const kind=focus.kind;
     const a=/^[aeiou]/i.test(kind)?'an':'a';
     // REUSE the discourse bubble when sendChat's frame-binding fork already created it (and took
