@@ -105,15 +105,17 @@ export const STRATEGIES = {
   breadth:  { sourcesMul: 1.6, perSourceMul: 0.6, follow: 'facet' },
   // narrow and deep: fewer sources, mine each, chase the surprising leads far
   depth:    { sourcesMul: 0.6, perSourceMul: 1.7, follow: 'lead' },
-  // spread across the cube's kinds of fact — a bit of every operator, seeded by
-  // the facets that tend to surface the operators the coverage grid still lacks
-  diagonal: { sourcesMul: 1.0, perSourceMul: 1.0, follow: 'coverage' },
+  // holonic — the topic as a holarchy: each facet a whole at its own scale,
+  // composing into the larger whole. Spread across the cube's kinds of fact (a
+  // bit of every operator), seeded by the cues that surface the kinds the
+  // coverage grid still lacks, so no aspect is left a stub.
+  holonic:  { sourcesMul: 1.0, perSourceMul: 1.0, follow: 'holonic' },
 };
 // Generic aspect words that pull a subject apart into different facets (breadth).
 const FACETS = ['overview', 'history', 'how it works', 'criticism', 'impact', 'types', 'examples', 'recent developments'];
 // The cube's operators mapped to query cues that tend to surface that KIND of
-// fact — the diagonal walk cycles these so the coverage grid fills along its
-// diagonal rather than piling more of the same operator.
+// fact — the holonic walk cycles these so the grid fills across every kind
+// (each a whole facet) rather than piling more of the same operator.
 const OP_FACETS = {
   INS: 'origin history founded',
   EVA: 'criticism assessment controversy',
@@ -131,7 +133,7 @@ const OP_FACETS = {
 export const resolveDepth = (opts = {}) => {
   const size = SIZE_PRESETS[opts.size] || (opts.size ? SIZE_PRESETS.standard : null);
   if (!size && opts.targetSources == null) return null;
-  const strat = STRATEGIES[opts.strategy] || STRATEGIES.diagonal;
+  const strat = STRATEGIES[opts.strategy] || STRATEGIES.holonic;
   const base = size || SIZE_PRESETS.standard;
   return {
     targetSources: opts.targetSources ?? Math.max(1, Math.round(base.sources * strat.sourcesMul)),
@@ -159,7 +161,7 @@ const gatherCorpus = async (q, subject, seed, search, { targetSources, maxRounds
   pushQ(q);
   const anchor = subject.join(' ') || q;
   if (follow === 'facet') for (const f of FACETS) pushQ(`${anchor} ${f}`);
-  if (follow === 'coverage') for (const cue of Object.values(OP_FACETS)) pushQ(`${anchor} ${cue.split(' ')[0]}`);
+  if (follow === 'holonic') for (const cue of Object.values(OP_FACETS)) pushQ(`${anchor} ${cue.split(' ')[0]}`);
   let prior = new Map();
   for (const s of corpus) prior = foldInto(prior, profileOf(s.text || ''));
   const need = () => corpus.length < targetSources;
@@ -182,7 +184,7 @@ const gatherCorpus = async (q, subject, seed, search, { targetSources, maxRounds
       seen.add(s);
       corpus.push(h);
       // Harvest the next queries from THIS page, shaped by the strategy.
-      if (follow === 'lead' || follow === 'coverage') {
+      if (follow === 'lead' || follow === 'holonic') {
         const arrival = profileOf(text);
         const { by } = curiosityOf(prior, arrival);
         prior = foldInto(prior, arrival);
@@ -256,7 +258,7 @@ export const runGroundedResearch = async (question, opts = {}) => {
   // Preliminary — the corpus must be a specified cell-region, not a vague string.
   // A size preset turns the single-shot fallback into a gather-to-target loop:
   // keep searching until there is enough grounded material for the requested
-  // size, shaped by the strategy (breadth / depth / diagonal).
+  // size, shaped by the strategy (breadth / depth / holonic).
   const depth = resolveDepth(opts);
   const perSourceCap = depth ? depth.perSource : maxSpansPerSource;
   let corpus = [...sources];

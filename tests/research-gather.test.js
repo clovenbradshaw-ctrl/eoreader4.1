@@ -49,7 +49,7 @@ test('resolveDepth maps size × strategy → a source & per-source target; no si
   const deepDepth = resolveDepth({ size: 'deep', strategy: 'depth' });
   assert.ok(deepBreadth.targetSources > deepDepth.targetSources, 'breadth aims wider than depth');
   assert.ok(deepDepth.perSource > deepBreadth.perSource, 'depth mines each source harder');
-  assert.equal(resolveDepth({ size: 'brief' }).follow, 'coverage', 'diagonal (the default shape) walks by cube coverage');
+  assert.equal(resolveDepth({ size: 'brief' }).follow, 'holonic', 'holonic (the default shape) walks the topic as a holarchy of cube kinds');
   assert.equal(resolveDepth({ targetSources: 4 }).targetSources, 4, 'an explicit target wins');
 });
 
@@ -85,7 +85,7 @@ test('no search injected → the corpus is exactly what was handed in (gather is
 });
 
 test('the gathered survey renders an honest, multi-source chat reply', async () => {
-  const { report, log } = await runGroundedResearch('dolphins', { size: 'standard', strategy: 'diagonal', search: fakeSearch });
+  const { report, log } = await runGroundedResearch('dolphins', { size: 'standard', strategy: 'holonic', search: fakeSearch });
   const rootId = log.find((e) => e.kind === 'open').id;
   const reply = formatChatReply(report, rootId);
   assert.match(reply, /\d+ sources/, 'the footer reports a multi-source gather, not "1 source"');
