@@ -24,7 +24,7 @@ class Component extends DCLogic {
     // whatever's decoding; `_stopGen` latches a user stop until the next turn starts.
     this._activeGuards=new Set(); this._stopGen=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
-    this.state={ ready:false, engineErr:null, pages:[], selId:null, query:'', url:'', busy:false, feed:[],
+    this.state={ ready:false, engineErr:null, pages:[], selId:null, siteView:null, sitesDir:false, query:'', url:'', busy:false, feed:[],
       // In-flight imports — a file starts here THE MOMENT it's picked, so it shows in the
       // Sources panel instantly (with a live "what it's doing" status) instead of only
       // appearing once the slow extractor — whisper, pdf.js, Tesseract — has finished. Each:
@@ -86,19 +86,11 @@ class Component extends DCLogic {
       // has been read; answers are built from the read graph/sentences (no LLM; an
       // LLM refines them only if window.claude is present). Chats live in the left panel.
       chats:[], activeChat:null, chatInput:'', chatBusy:false, groundOpen:{},
-      // THE OUTPUT PICKER on the composer: the selected output FORMAT (essay is wired; report/
-      // summary/poem are scaffolds) and, within a format, its KIND. `essayType` is the kind under
-      // the essay format (a template that LEARNS — organs/out/essay-types.js). All persisted like
-      // the other toggles. `outputExpanded` is which format's kinds are open in the menu accordion
-      // (null → the selected format expands by default).
-      outputType:(()=>{try{return localStorage.getItem('eo_output_type')||'essay';}catch(e){return 'essay';}})(),
-      // The Write control is a TOGGLE, not a one-shot: armed, every sent turn is composed as the
-      // selected essay (the box text is the topic), so you type a prompt and hit Enter like any chat
-      // rather than reaching for a separate button each time. Persisted so the mode survives reloads.
-      essayArmed:(()=>{try{return !!localStorage.getItem('eo_essay_armed');}catch(e){return false;}})(),
-      outputExpanded:null,
-      essayType:(()=>{try{return localStorage.getItem('eo_essay_type')||'argument';}catch(e){return 'argument';}})(),
-      essayMenuOpen:false,
+      // DEEP RESEARCH replaced the essay output picker (docs/deep-research-log.md):
+      // the composer's Research control runs the grounded projection, and the
+      // Surface button opens the live report panel. drHasLog marks that the
+      // session's research log has content (the Surface button reads it).
+      drHasLog:false,
       // Project Gutenberg — "a source of sources". A non-URL query searches the catalog;
       // a chosen book is fetched and READ FULLY before it joins the sources (and so can
       // be chatted with). gutenReading holds the id while a book is being read.
@@ -970,7 +962,7 @@ class Component extends DCLogic {
     // not silently grounded in the whole library.
     const sources=scopeUrl?[scopeUrl]:[];
     this._chatTab(id);
-    this.setState(s=>({chats:[{id,title,sources,scopeAll:false,messages:[],ts:Date.now()},...s.chats],activeChat:id,viewUrl:null,selId:null,chatInput:'',chatAddOpen:false,rightOpen:true,newTabOpen:false,histRev:(s.histRev||0)+1}));
+    this.setState(s=>({chats:[{id,title,sources,scopeAll:false,messages:[],ts:Date.now()},...s.chats],activeChat:id,viewUrl:null,selId:null,siteView:null,sitesDir:false,chatInput:'',chatAddOpen:false,rightOpen:true,newTabOpen:false,histRev:(s.histRev||0)+1}));
     return id;
   }
   // The sources a chat is ABOUT, as a URL list. Tolerates the older single-`scope` shape
@@ -1138,7 +1130,7 @@ class Component extends DCLogic {
   // communication" (a refinement of the thread) but NOT "the relationship between fission and fusion
   // in energy" (a genuine switch). The stop set drops essay-framing and generic connectors so two
   // subjects aren't judged the same merely for both mentioning "essay" or "relationship". Used by
-  // runOrganEssay to tell a subject CHANGE from a continuation (docs/discourse-routing.md).
+  // the research/compose continuations to tell a subject CHANGE from a continuation (docs/discourse-routing.md).
   _subjectsOverlap(a,b){
     const STOP=/^(?:essay|essays|report|article|overview|piece|guide|write|about|thing|things|topic|please|between|relationship|relationships|kind|sort|version|something|anything|everything)$/;
     const words=s=>new Set((String(s||'').toLowerCase().match(/[a-z][a-z'’-]{3,}/g)||[])
@@ -1335,173 +1327,156 @@ class Component extends DCLogic {
       if(idxs.length)return {spans:idxs.map(span),entities:a.entities||[],sources:[...used],relevant:false};
     }
     return {spans:[],entities:a.entities||[],sources:[],relevant:false};}
-  // ── The generation pipeline as the essay path (src/reader/eo-gen.js) ──────────
-  // On unless explicitly disabled — persisted like the other composer toggles.
-  _essayPipelineOn(){try{return localStorage.getItem('eo_essay_pipeline')!=='0';}catch(e){return true;}}
-  toggleEssayPipeline(){let on=true;try{on=!this._essayPipelineOn();localStorage.setItem('eo_essay_pipeline',on?'1':'0');}catch(e){}this.setState(s=>({essayPipeline:on}));}
-  // A RICH ground for the arc: many in-scope sentences scored by keyword overlap (answerQuestion
-  // keeps only the top 3 — too thin to develop). Returns up to `n` spans {i,score,text,u}, the
-  // shape eo-gen.toGround consumes. Prose only; segmentation artifacts skipped. Falls back to the
-  // source's opening prose when the keyword match is thin, so the arc always has body to walk.
-  _essaySpans(q,sources,n=28){
-    if(!this.master||!this.master.sentences.length)return [];
-    const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
-    const qwords=String(q||'').toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2&&!this.STOP.has(w));
-    const inScope=i=>!scope.length||scope.includes(this.master.sentenceSource[i]);
-    const scored=[];
-    for(let i=0;i<this.master.sentences.length;i++){
-      if(!inScope(i))continue;
-      const s=this.norm(this.master.sentences[i]);
-      if(s.length>this.MAX_PASSAGE)continue;
-      const low=s.toLowerCase();if(!this._proseOk(low))continue;
-      let v=0;for(const w of qwords)if(low.includes(w))v++;
-      if(v>0)scored.push({i,score:v,text:this._clipPassage(s),u:this.master.sentenceSource[i]});
-    }
-    scored.sort((a,b)=>b.score-a.score||a.i-b.i);
-    if(scored.length<6){
-      for(let i=0;i<this.master.sentences.length&&scored.length<n;i++){if(!inScope(i))continue;const s=this.norm(this.master.sentences[i]);if(s.length>this.MAX_PASSAGE)continue;const low=s.toLowerCase();if(!this._proseOk(low))continue;if(!scored.some(x=>x.i===i))scored.push({i,score:0.5,text:this._clipPassage(s),u:this.master.sentenceSource[i]});}
-    }
-    return scored.slice(0,n);
+  // ── DEEP RESEARCH (src/research/) — grounded projection over an append-only log ──
+  //
+  // The essay organs are GONE (docs/deep-research-log.md): they asked a 3B model
+  // to write confident prose it could not ground. The reader's long output is now
+  // the deep-research projection — every fact an extractive span at a pinned
+  // address, importance earned by the significance loop, coverage measured on the
+  // cube, the model confined to one bind-checked phrasing call per section, the
+  // full surf auditable (the log exports as JSONL). The chat gets the phrased,
+  // cited reply; the SURFACE (onOpenDeepResearch) is a LIVE panel — projectReport
+  // over the same append-only session log, so every further research ask via chat
+  // keeps populating and adjusting it. Never a dead artifact.
+  async _drLib(){
+    if(this._drLibP)return this._drLibP;
+    this._drLibP=import(new URL('src/research/index.js',document.baseURI).href);
+    return this._drLibP;
   }
-  // RESEARCH BEFORE THE ESSAY — gather the ground the essay organ writes over. The essay organ
-  // (runOrganEssay → composeEssay) otherwise composes purely from the model's parametric prior,
-  // which on a 3B model means a confident, ungrounded dolphin blurb. This does what the chat's own
-  // research path does, one step ahead of writing: derive the SUBJECT (peeling "write me an essay
-  // about" down to "dolphins"), and — when the web is on and the reading doesn't already cover it —
-  // run the curiosity walk to read the web and FOLD every page into memory, narrating each hop into
-  // the same live trail. Then pool the strongest in-scope spans (the freshly read pages ∪ whatever
-  // this chat already reads) as the excerpts the organ grounds each section in.
-  //   returns [] — nothing to ground on (web off with nothing read, or no contentful subject);
-  //               the organ composes parametrically, exactly as before.
-  //   returns [excerpts] — the researched ground for composeEssay.
-  //   returns null — the user stopped mid-walk; the caller must bail (the bubble is finalized).
-  async _gatherEssayGround(id,q,cur){
+  async _drSessionGet(){
+    if(this._drSess)return this._drSess;
+    const lib=await this._drLib();
+    this._drSess=lib.createResearchSession({fetch:(u,o)=>fetch(u,o),now:()=>Date.now()});
+    return this._drSess;
+  }
+  // The model handed to the driver — the app's chat model behind the same .phrase
+  // seam every other turn uses. The driver confines it to ONE checked call per
+  // section ("use the model to think", never to assert): retrieval, extraction,
+  // importance, coverage, and the decision to ask are all mechanical and logged.
+  _drModelOf(model){
+    if(!model||typeof model.phrase!=='function')return null;
+    return {name:this.state.backend||'model',phrase:(messages)=>model.phrase(messages)};
+  }
+  // Reconstruct the pinned corpus from the reading: each in-scope source's parsed
+  // sentences, joined. Offline-honest — only what was actually read and folded.
+  _drSources(scope){
+    if(!this.master||!this.master.sentences.length)return [];
+    const by=new Map();
+    for(let i=0;i<this.master.sentences.length;i++){
+      const u=this.master.sentenceSource[i];
+      if(scope&&scope.length&&!scope.includes(u))continue;
+      const s=this.norm(this.master.sentences[i]);
+      if(!s||s.length>this.MAX_PASSAGE)continue;
+      if(!this._proseOk(s.toLowerCase()))continue;
+      if(!by.has(u))by.set(u,[]);
+      by.get(u).push(s);
+    }
+    return [...by.entries()].map(([u,ss])=>({url:(u&&/^https?:/.test(u))?u:null,title:u||'reading',text:ss.join(' ')})).filter(s=>s.text.length>80);
+  }
+  // An explicit "/research <topic>" (or the composer's Research control): seed the
+  // turn bubble the way sendChat does, then run the grounded projection into it.
+  _drCommand(topic){
+    const q=this.norm(topic);if(!q)return;
+    this._stopGen=false;
+    let id=this.state.activeChat;
+    const cur=this.activeChatObj();
+    this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
+      if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
+      const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:'research '+q},{role:'asst',text:'',pending:true,think:'Pinning the corpus…',research:{steps:[{kind:'think',text:'⌕ Deep research commissioned — a grounded projection, every claim tethered to a pinned span.'}],done:false,mode:'think',t0:Date.now()}}]};
+      return {chats,activeChat:id,chatInput:''};});
+    this._scrollChat();this._thinkClock();
+    return this._deepResearch(id,q,cur,{});
+  }
+  // The chat-side deep research turn. Gather with the existing curiosity walk
+  // (web on and the reading does not cover the subject), then run the grounded
+  // driver over the pinned corpus and finish the bubble with the phrased,
+  // bind-checked, cited reply — each [n] quoting the exact span it stands on.
+  async _deepResearch(id,q,cur,opts={}){
     const seed=this._researchSeed(q,cur);
-    const subject=this.norm(seed.topic||'');
+    const subject=this.norm(seed.topic||q)||this.norm(q);
     const anchor=seed.anchor||subject;
-    // No contentful subject to chase (a bare "write an essay" with no topic) → nothing to research.
-    if(!subject||!this._researchTerms(subject).length)return [];
     const existing=this.chatSourcesOf(cur);
     const isolated=this.chatIsolated(cur);
     let gathered=[];
-    // Go to the web only when it's on AND the in-scope reading doesn't already cover the subject —
-    // an isolated / net-new chat grounds nothing from the library, so it always reads when on.
     const webOn=this.state.webBrain!==false;
     const covered=!isolated&&this.groundNotes(subject,existing).relevant;
-    if(webOn&&!covered){
-      this._beat(id,'start','Researching “'+subject+'” before writing — reading the web and folding it into memory so the essay stands on real sources.');
+    if(webOn&&!covered&&!opts.noWalk){
+      this._beat(id,'start','Deep research on “'+subject+'” — reading the web first, then projecting the grounded report from pinned spans.');
       this._busy=true;this.setState({busy:true});
-      const preEnts=(this.graph&&this.graph.entities&&this.graph.entities.size)||0;
       const extraSeeds=seed.focus?[]:this._researchBattery(subject,seed.derived,existing);
       let walk={readUrls:[],hops:[]};
       try{walk=await this._curiosityWalk(subject,anchor,(k,t)=>this._beat(id,k,t),{extraSeeds});}
       catch(e){this._beat(id,'warn','Research stopped — '+((e&&e.message)||e));}
       this._busy=false;this.setState({busy:false});
-      if(this._stopGen)return null;   // user stopped mid-walk — stopGeneration finalized the bubble
+      if(this._stopGen)return;
       gathered=[...new Set(walk.readUrls)];
-      const learned=Math.max(0,((this.graph&&this.graph.entities&&this.graph.entities.size)||0)-preEnts);
-      this._beat(id,'done',gathered.length
-        ?('Read '+gathered.length+' source'+(gathered.length!==1?'s':'')+(learned?(' · learned '+learned+' new '+(learned===1?'entity':'entities')):'')+' — writing the essay grounded in it.')
-        :'Couldn’t gather fresh sources — writing from what’s already known and read.');
       for(const u of gathered)this.addChatSource(u,id);
     }
-    // The ground for the piece: the strongest spans on the subject across the freshly read pages
-    // UNION what this chat already reads. Passed by url scope so isolated chats stay isolated when
-    // nothing was gathered (→ [], parametric compose).
     const scope=[...new Set([...existing,...gathered])];
-    if(!scope.length)return [];
-    // Return the SPANS (text + source url + sentence index), not bare strings, so the essay organ
-    // can BIND each section's claims back to the span they rest on (eo-gen.essayBinder). The idx/u
-    // ride through composeEssay's ground normaliser into the binder's citation.
-    return this._essaySpans(subject,scope,20).map(s=>({text:this.norm(s.text),u:s.u,i:s.i})).filter(s=>s.text);
-  }
-  // Walk the composition over the ground and finalize into the pending assistant bubble.
-  // THE OMNIMODAL PATH first (eoGen.composeGrounded → write/composition.js): the plan is read
-  // off the surfer's own physics over the gathered reading — each arrest one beat — and a
-  // cursor walks it beat by beat, the sentence renderer at the very end, each turn rendered
-  // as a turn with its measured weight, the witness and the connective leash on every beat.
-  // Falls back to the flat arc (window.eoGen.essay → runContinuation) when the walk resolves
-  // nothing (thin ground) or isn't loaded — non-breaking by construction. The audit is kept
-  // for export (this._lastEssayAudit).
-  _composeWalkOn(){try{return localStorage.getItem('eo_compose_walk')!=='0';}catch(e){return true;}}
-  async _pipelineEssay(id,q,sources){
-    this._stopGen=false;
-    const spans=this._essaySpans(q,sources);
-    const guard=this._stallGuard();
-    const finish=(text,srcs,extra)=>{const passages=spans.slice(0,3).map(x=>({text:this.norm(x.text),u:x.u}));
-      this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:text||'(nothing to say)',stance:'ground',register:'grounded',reflection:this._reflect(text||''),sources:srcs||[],passages,...(extra||{})};return {...c,messages:m};})}),()=>this._scrollChat());};
+    const sources=this._drSources(isolated?(scope.length?scope:['__none__']):scope);
+    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,think:'',stance:'ground',register:'grounded',kind:'research',research:m[li].research?{...m[li].research,done:true}:undefined,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+    let lib,sess;
+    try{lib=await this._drLib();sess=await this._drSessionGet();}
+    catch(e){finish({text:'The research module could not load: '+((e&&e.message)||e)});return;}
+    this._setThink(id,'Projecting the grounded report — pins, binds, extracts, strain, coverage…');
+    let model=null;
+    try{const guard=this._stallGuard();model=this._drModelOf(await Promise.race([this.ensureChatModel(guard.feed),guard.race]));guard.clear();}
+    catch(e){model=null;}   // no model → the reply stands on exact spans (never worse than the spans)
     try{
-      const model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);
-      if(this._composeWalkOn()&&window.eoGen&&window.eoGen.composeGrounded){
-        let acc='',raf=0;
-        const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
-        const onToken=(t)=>{const sx=String(t||'');if(!sx)return;guard.feed();acc+=sx;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
-        // Narrate the movement as it renders: a beat that crosses a turn says so, with the
-        // rewrite's measured weight — the dynamics on the surface, not just the conclusions.
-        const onBeat=(b)=>{guard.feed();
-          if(b.arc&&b.arc.turn)this._beat(id,'lead','The reading turns here'+(b.arc.heaviest?' — the strongest turn':'')+' (weight '+(b.arc.turn.weight||0).toFixed(2)+') — rendering it as a turn.');};
-        let w=null;
-        try{w=await Promise.race([window.eoGen.composeGrounded({spans,model,signal:guard.signal,onToken,onBeat}),guard.race]);}catch(e){w=null;}
-        if(w&&w.draft){
-          guard.clear();
-          this._lastEssayAudit={kind:'composition',question:q,
-            beats:(w.beats||[]).map(b=>({cell:b.cellId,stop:b.stop,site:b.site,band:b.band,arc:b.arc,text:b.text,
-              retracted:((b.witness&&b.witness.retractions)||[]).length,leash:b.leash?{clean:b.leash.clean,unlicensed:b.leash.unlicensed.map(u=>u.connective)}:null})),
-            flags:w.flags||[],turns:(w.arc&&w.arc.turns)||[],heaviest:(w.arc&&w.arc.heaviest)??null};
-          const flagged=(w.flags||[]).length;
-          finish(w.draft,[...new Set(spans.map(x=>x.u).filter(Boolean))],
-            flagged?{modelNote:flagged+' beat'+(flagged===1?'':'s')+' flagged by the witness or the connective leash — surfaced, never removed.'}:{});
-          return;
-        }
-        // The walk resolved nothing on this ground — fall through to the flat arc.
-      }
-      const r=await window.eoGen.essay({spans,model,question:q,signal:guard.signal});
-      guard.clear();
-      this._lastEssayAudit=r.audit;
-      finish(r.text,r.sources||[]);
-    }catch(e){
-      guard.clear();
-      this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,text:'The arc could not complete: '+((e&&e.message)||e),stance:'ground'};return {...c,messages:m};})}));
-    }
+      const {report,rootId}=await sess.research(subject,{
+        sources,model,
+        onEvent:(ev)=>{if(ev&&(ev.kind==='rec'||ev.kind==='void'||ev.kind==='pin'))this._beat(id,ev.kind==='pin'?'read':'lead',lib.describeEvent(ev));},
+      });
+      const text=lib.formatChatReply(report,rootId);
+      const secs=report.sections.filter(sx=>sx.frameId===rootId||sx.frameId.indexOf(rootId+'.')===0);
+      const props=secs.reduce((a,sx)=>a.concat(sx.propositions),[]);
+      const passages=props.slice(0,6).map(p=>{const pin=report.pinById[p.pinId];return {text:p.span.text,u:(pin&&(pin.url||pin.title))||''};});
+      finish({text:text+'\n\n---\n*Deep research · '+props.length+' grounded proposition'+(props.length===1?'':'s')+' · '+report.recs.length+' reframing'+(report.recs.length===1?'':'s')+' · '+report.convergence.badge+' · full audit on the Surface (⌕).*',
+        passages,sources:[...new Set(props.map(p=>{const pin=report.pinById[p.pinId];return pin&&pin.url;}).filter(Boolean))]});
+      this.setState({drHasLog:true});
+    }catch(e){finish({text:'Deep research failed: '+((e&&e.message)||e)});}
   }
-  // ── THE ESSAY ORGAN in the reader's chat (src/organs/out/essay.js via eo-gen.js) ──────
-  //
-  // Distinct from _pipelineEssay above (the longgen arc over a READING ground): this is the
-  // commission-driven organ — plan an outline, write section after section until the piece
-  // clears the ≥2500-word floor, land on a conclusion — steered by the essay TYPE picked on
-  // the composer. Each type is a template that LEARNS (organs/out/essay-types.js): every
-  // completed essay folds into the type's stored profile (which headings produced real prose,
-  // the section length it actually writes), and the profile steers the next run. Profiles
-  // persist per type under eo_essay_profile_<id>; the selected type under eo_essay_type.
-  //
-  // THE THINKING IS VISIBLE: the walk narrates itself into the pending bubble's live trail —
-  // the plan lands as beats (the title, then every section of the outline), each section opens
-  // with a "Writing §n …" status and closes with its word count against the floor, and the
-  // essay itself STREAMS into the bubble as markdown while it is written. The same reasoning-
-  // trace surface every other turn uses (_setThink/_beat), fed by the organ's hooks.
-  _essayOrganReady(){return typeof window!=='undefined'&&!!(window.eoGen&&window.eoGen.essayCompose&&window.eoGen.essayTypes);}
-  // THE DISCOURSE STEER — the essay organ is ONE option, never the default for anything
-  // essay-shaped. It fires from explicit places (the /essay command, the Write button) and, for
-  // natural-language make-this asks, from the discourse metacognition: sendChat's steer gate reads
-  // the settled route + form off the model's own speech (meta-route.js — physics, not regex) and
-  // OFFERS the organ for permission here. This replaces the old `_essayIntent` regex, which guessed
-  // and ran without asking (and kept hijacking essay-shaped questions, #319/#320).
-  //
-  // _steerOf(read) → { typeId, kindId, label, short } | null — turns the measured form into a
-  // concrete, RUNNABLE output steer. Poem → composeArtifact; essay/story → the essay organ with
-  // the measured kind (story maps to narrative, the picker's story-shaped form). Scaffold formats
-  // (report/summary) are never reached: metaRoute's form grain only settles poem/story/essay.
+  // THE SURFACE — the live report panel: a claude-artifact-like overlay that is
+  // never dead. It mounts src/research/surface.js on the SAME session log the
+  // chat writes into, so further research via chat keeps populating it. Plain
+  // DOM overlay outside the DC tree, so the runtime never re-renders it away.
+  async onOpenDeepResearch(){
+    if(this._drOverlay){this._drOverlay.style.display='';return;}
+    let lib,sess;
+    try{lib=await this._drLib();sess=await this._drSessionGet();}
+    catch(e){alert('The research module failed to load: '+((e&&e.message)||e));return;}
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;z-index:900;background:rgba(15,18,24,.45);display:flex;align-items:stretch;justify-content:flex-end;';
+    const panel=document.createElement('div');
+    panel.style.cssText='width:min(960px,96vw);height:100%;background:#f5f6f8;box-shadow:-12px 0 40px rgba(0,0,0,.25);';
+    ov.appendChild(panel);
+    ov.addEventListener('click',(e)=>{if(e.target===ov)this.closeDeepResearch();});
+    document.body.appendChild(ov);
+    this._drOverlay=ov;
+    let model=null;
+    try{model=this._drModelOf(await this.ensureChatModel());}catch(e){model=null;}
+    this._drSurface=lib.mountResearchSurface(panel,{
+      session:sess,model,
+      fetchPage:async(u)=>{const p=await this.fetchPage(u);return {url:u,title:(p&&p.title)||u,text:(p&&(p.text||p.content))||''};},
+      sources:this._drSources([]),
+      onClose:()=>this.closeDeepResearch(),
+    });
+  }
+  closeDeepResearch(){if(this._drOverlay)this._drOverlay.style.display='none';}
+  // The composer's Research control: deep-research whatever is in the box; an
+  // empty box gets the scaffold dropped in, so the affordance teaches its own use.
+  researchGo(){
+    const q=this.norm(this.state.chatInput);
+    if(!q){this.setState({chatInput:'research '});return;}
+    this._drCommand(q.replace(/^\/?research\s+/i,''));
+  }
+  // THE DISCOURSE STEER — the poem offer stays (composeArtifact is untouched);
+  // essay/story-shaped asks now flow to deep research through the longform gate,
+  // never to a compose organ, so the steer only ever suggests the poem.
   _steerOf(read){
     if(!read)return null;
     if(read.kind==='poem')return {typeId:'poem',kindId:null,label:'a poem',short:'a poem'};
-    if(read.kind==='essay'||read.kind==='story'){
-      if(!this._essayOrganReady())return null;              // no organ → can't offer to run it
-      const list=this._essayTypesList();
-      let kindId=read.kind==='story'?'narrative':(read.steerKind||this.state.essayType||'argument');
-      const meta=list.find(t=>t.id===kindId)||list[0];kindId=meta.id;
-      const label='a'+(/^[aeiou]/i.test(meta.label)?'n ':' ')+meta.label.toLowerCase()+' essay';
-      return {typeId:'essay',kindId,label,short:label};
-    }
     return null;
   }
   // Park the permission suggestion in the turn's pending bubble instead of answering. The stored
@@ -1516,16 +1491,13 @@ class Component extends DCLogic {
           writeLabel:'Write '+steer.short,answerLabel:'Just answer'}};
       return {...c,messages:m};})}),()=>this._scrollChat());
   }
-  // "Write it" — accept the steer. Drop the suggestion turn (its user echo + the parked bubble) so
-  // the organ lays down a clean turn of its own with no duplicate echo, then run it. The kind is
-  // passed explicitly (setState wouldn't have flushed before runOrganEssay reads it).
+  // "Write it" — accept the steer. Only the poem survives as a steered compose.
   _acceptSteer(chatId,mi){
     const c=(this.state.chats||[]).find(x=>x.id===chatId);if(!c)return;
     const m=c.messages[mi];const sug=m&&m.suggest;if(!sug)return;
-    const{topic,typeId,kindId}=sug;
+    const{topic,typeId}=sug;
     this._dropTurnAt(chatId,mi);
-    if(typeId==='essay'){this.setEssayType(kindId);this.setState({outputType:'essay'});this.runOrganEssay(topic,kindId);}
-    else if(typeId==='poem'){this.setState({outputType:'poem'});this.composeArtifact(topic);}
+    if(typeId==='poem')this.composeArtifact(topic);
   }
   // "Just answer" — decline the steer. Drop the suggestion turn and re-send the topic with
   // steerBypass so it answers normally, without the steer gate re-firing.
@@ -1542,337 +1514,6 @@ class Component extends DCLogic {
       if(mi>=0&&mi<m.length){const start=(mi>0&&m[mi-1]&&m[mi-1].role==='user')?mi-1:mi;m.splice(start,(mi-start)+1);}
       return {...c,messages:m};})}));
   }
-  // The UI list of types: the organ registry when loaded, else this fallback (same ids), so
-  // the picker renders before the module lands. `desc` is the picker's one-line gloss.
-  _ESSAY_FALLBACK(){return [
-    {id:'argument',label:'Argument',desc:'stake a claim, meet objections, press it home'},
-    {id:'explainer',label:'Explainer',desc:'make a hard subject genuinely clear'},
-    {id:'narrative',label:'Narrative',desc:'carry the ideas on scenes, people, and time'},
-    {id:'review',label:'Review',desc:'judge it against criteria, land a verdict'},
-    {id:'reflection',label:'Reflection',desc:'think on the page, in the first person'}];}
-  _essayTypesList(){const ET=this._essayOrganReady()?window.eoGen.essayTypes:null;const fall=this._ESSAY_FALLBACK();
-    if(!ET)return fall;
-    return ET.ESSAY_TYPES.map(t=>{const f=fall.find(x=>x.id===t.id);return {id:t.id,label:t.label,desc:(f&&f.desc)||''};});}
-  _essayTypeMeta(){const idv=this.state.essayType||'argument';const list=this._essayTypesList();return list.find(t=>t.id===idv)||list[0];}
-  // The learned profile for a type — localStorage, dropped (fresh) when malformed.
-  _essayProfile(typeId){const ET=this._essayOrganReady()?window.eoGen.essayTypes:null;if(!ET)return null;
-    try{return ET.profileFromJSON(localStorage.getItem('eo_essay_profile_'+typeId))||ET.emptyProfile(typeId);}
-    catch(e){return ET.emptyProfile(typeId);}}
-  _saveEssayProfile(p){try{localStorage.setItem('eo_essay_profile_'+p.type,window.eoGen.essayTypes.profileToJSON(p));}catch(e){}}
-  setEssayType(idv){try{localStorage.setItem('eo_essay_type',idv);}catch(e){}this.setState({essayType:idv,essayMenuOpen:false});}
-  toggleEssayMenu(){this.setState(s=>({essayMenuOpen:!s.essayMenuOpen}));}
-  // THE OUTPUT PICKER — the composer's single "what to write" control. Top level is the output
-  // FORMAT; each format opens a submenu of KINDS. Essay is wired (organs/out/essay.js, learning
-  // types); report/summary/poem are scaffolds — shown so the shape is visible, `ready:false` until
-  // their organs (organs/out/*) are wired to the composer. Icons are Phosphor codepoints.
-  _OUTPUT_TYPES(){return [
-    {id:'essay',   label:'Essay',   icon:'', desc:'a ≥2,500-word piece that thinks out loud', ready:true},
-    {id:'report',  label:'Report',  icon:'', desc:'structured findings, section by section', ready:false},
-    {id:'summary', label:'Summary', icon:'', desc:'the short of it — the gist, kept honest', ready:false},
-    {id:'poem',    label:'Poem',    icon:'', desc:'carry the idea in verse', ready:false}];}
-  _outputTypeMeta(){const idv=this.state.outputType||'essay';const list=this._OUTPUT_TYPES();return list.find(t=>t.id===idv)||list[0];}
-  // The kinds under a format. Only essay carries real, learning kinds today; the rest are scaffolds
-  // (empty here → the menu shows a "coming soon" note in their place).
-  _outputKinds(typeId){return typeId==='essay'?this._essayTypesList():[];}
-  setOutputType(typeId,kindId){const patch={outputType:typeId,essayMenuOpen:false};
-    if(typeId==='essay'&&kindId){patch.essayType=kindId;try{localStorage.setItem('eo_essay_type',kindId);}catch(e){}}
-    try{localStorage.setItem('eo_output_type',typeId);}catch(e){}
-    this.setState(patch);}
-  toggleOutputExpand(typeId){this.setState(s=>({outputExpanded:s.outputExpanded===typeId?null:typeId}));}
-  // The WRITE control is a TOGGLE: it arms/disarms essay mode rather than firing a one-shot write.
-  // Armed, sendChat routes each sent turn to the essay organ (the box text is the topic), so the
-  // normal Enter/Send triggers the essay — no separate button press per piece. Only the wired essay
-  // format arms; a scaffold format is a no-op (its button is disabled in the view too).
-  outputGo(){if((this.state.outputType||'essay')!=='essay')return;
-    const on=!this.state.essayArmed;
-    try{localStorage.setItem('eo_essay_armed',on?'1':'');}catch(e){}
-    this.setState({essayArmed:on,essayMenuOpen:false});}
-  // Flatten the format→kind tree into a single row list so the view needs no nested sc-for.
-  // Each row is a self-describing cell: a FORMAT header (icon + caret, toggles its accordion) or,
-  // when that format is expanded, its KIND rows (indented, picking one selects format+kind), or a
-  // "coming soon" note for a scaffold format with no kinds yet.
-  _outputMenuRows(){const sat=this.state.outputType||'essay';
-    const exp=this.state.outputExpanded==null?sat:this.state.outputExpanded;
-    const hdr='display:flex;align-items:center;gap:9px;font-size:12px;font-weight:600;text-align:left;padding:7px 9px;border-radius:8px;cursor:pointer;';
-    const rows=[];
-    this._OUTPUT_TYPES().forEach(t=>{const open=exp===t.id;const selType=sat===t.id;
-      rows.push({key:'h-'+t.id,onClick:()=>this.toggleOutputExpand(t.id),
-        title:t.ready?(t.label+' — '+t.desc):(t.label+' — not wired yet'),
-        style:hdr+'color:'+(selType?'var(--acc)':'var(--ink)')+';background:'+(selType&&!open?'var(--accbg)':'transparent')+';',
-        icon:t.icon,iconStyle:'font-family:Phosphor;font-size:15px;line-height:1;flex:0 0 auto;width:20px;text-align:center;color:'+(selType?'var(--acc)':'var(--ink2)')+';',
-        label:t.label+(t.ready?'':'  · soon'),
-        sub:t.desc,subStyle:'display:block;font-weight:500;font-size:10.5px;color:var(--ink3);',
-        caret:open?'▾':'▸'});
-      if(!open)return;
-      const kinds=this._outputKinds(t.id);
-      kinds.forEach(k=>{const sel=selType&&k.id===(this.state.essayType||'argument');
-        const p=t.id==='essay'?this._essayProfile(k.id):null;const runs=(p&&p.runs)||0;
-        rows.push({key:t.id+'-'+k.id,onClick:()=>this.setOutputType(t.id,k.id),
-          title:runs?(k.label+' — learned from '+runs+' '+t.label.toLowerCase()+(runs===1?'':'s')):(k.label+' — '+k.desc),
-          style:'display:flex;align-items:flex-start;gap:9px;font-size:12px;font-weight:600;text-align:left;padding:6px 9px 6px 12px;margin-left:16px;border-left:1px solid var(--line2);border-radius:0 8px 8px 0;cursor:pointer;color:'+(sel?'var(--acc)':'var(--ink2)')+';background:'+(sel?'var(--accbg)':'transparent')+';',
-          icon:sel?'✓':'',iconStyle:'flex:0 0 auto;width:12px;text-align:center;font-size:11px;color:var(--acc);',
-          label:k.label,
-          sub:k.desc+(runs?(' · learned from '+runs+' run'+(runs===1?'':'s')):''),
-          subStyle:'display:block;font-weight:500;font-size:10.5px;color:var(--ink3);',
-          caret:''});});
-      if(!kinds.length)rows.push({key:t.id+'-soon',onClick:()=>{},title:'',
-        style:'font-size:11px;font-style:italic;color:var(--ink3);padding:5px 9px 7px 37px;',
-        icon:'',iconStyle:'display:none;',label:'Not wired yet — coming soon.',sub:'',subStyle:'display:none;',caret:''});});
-    return rows;}
-  // The ✍ Essay button: commission an essay on whatever is in the box. An empty box gets the
-  // scaffold dropped in instead, so the affordance teaches its own use.
-  essayGo(){if(!this._essayOrganReady())return;
-    const q=this.norm(this.state.chatInput);
-    if(!q){this.setState({chatInput:'write an essay on ',essayMenuOpen:false});return;}
-    this.runOrganEssay(q);}
-  async runOrganEssay(topic,typeIdOverride,opts={}){
-    const q=this.norm(topic);if(!q)return;
-    this._stopGen=false;
-    const cur=this.activeChatObj();           // the chat being written into (for research scope/subject)
-    const G=window.eoGen,ET=G.essayTypes;
-    // The type is normally the composer's selected one; a discourse-steered "Write it" passes the
-    // kind the metacognition measured, so the accepted essay is the one that was suggested.
-    const typeId=typeIdOverride||this.state.essayType||'argument';
-    const type=ET.essayTypeOf(typeId)||ET.ESSAY_TYPES[0];
-    const floor=G.ESSAY_MIN_WORDS||2500;
-    // Seed the user turn + the pending bubble with a live trail, mirroring sendChat — OR reuse the
-    // bubble sendChat's frame-binding fork already created (the essay-continuation path), relabelling
-    // it and appending the commission step to the read's trail instead of a second bubble.
-    const reuse=opts.reuseId!=null;
-    let id=reuse?opts.reuseId:this.state.activeChat;
-    const commission='✍ '+type.label+' essay commissioned — a piece of at least '+floor.toLocaleString()+' words.';
-    if(reuse){
-      this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-        if(li>=0&&m[li].role==='asst'&&m[li].pending){const r=m[li].research||{steps:[],done:false,mode:'think',t0:Date.now()};
-          m[li]={...m[li],think:'Planning the essay…',research:{...r,steps:[...r.steps,{kind:'think',text:commission}]}};}
-        return {...c,messages:m};})}));
-    }else{
-      this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
-        if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
-        const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
-        chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,think:'Planning the essay…',research:{steps:[{kind:'think',text:commission}],done:false,mode:'think',t0:Date.now()}}]};
-        return {chats,activeChat:id,chatInput:'',essayMenuOpen:false};});
-    }
-    this._scrollChat();this._thinkClock();
-    // THE DISCOURSE STEERS THE ESSAY (docs/discourse-routing.md). The Write path used to skip the
-    // metacognition and take the box text literally — so a CRITIQUE of the last piece ("that's not
-    // an essay") was researched as if "essay" were the subject, and the essay drifted off the thread
-    // onto essays-about-essays. Run the SAME read the chat path runs: the talker puts the turn into
-    // words for itself. That read streams live (real-time feedback) and rides into the compose cue as
-    // a steer — what would satisfy the asker. And when the ask names no subject of its OWN (a critique,
-    // "make it longer", "one about them"), the essay is written on the conversation's STANDING subject
-    // rather than the literal words. A genuine "write a <form> about SUBJECT" still names its own topic
-    // and is untouched. Null read (model cold / failed) → no steer, today's behavior otherwise.
-    let subject=q,readSteer='',subjectChanged=false;
-    {
-      let fold=null;try{fold=await this._convFold(cur);}catch(e){fold=null;}
-      // The talker reads the turn in context and puts it into words for itself; that read streams
-      // live (real-time feedback) and rides into the compose cue as a steer (what would satisfy the
-      // asker). Null read (model cold) → no steer, today's behavior. When sendChat's frame-binding
-      // fork already took the read on this same bubble, REUSE it (opts.read) — one read, not two.
-      const read=(opts.read!==undefined)?opts.read:await this._discourseRead(id,q,cur,fold||{stance:null});
-      if(this._stopGen)return;
-      if(read)readSteer=this._steerLine(read);
-      // Does the ask name a subject of its OWN? A "write a <form> about X" frame, or a plain
-      // "about/on SUBJECT" tail whose subject isn't a bare pronoun (a pronoun — "about them", "make
-      // it better" — points back at the thread, it names nothing new). If it names nothing of its
-      // own, this REFINES the standing thread: a critique ("that's not an essay"), "make it longer",
-      // "one about them". Write on what the conversation is already about, not the literal words.
-      const tail=(String(q).match(/\b(?:about|on|regarding|concerning|covering)\s+(.+)$/i)||[])[1]||'';
-      const ownSubject=this._genTopic(q)||((tail&&!/^(?:them|they|it|its|this|that|these|those|him|her|us|one|ones|same|others?)\b/i.test(tail.trim()))?this.norm(tail).replace(/[?.!]+$/,'').trim():'');
-      const chatSubj=cur?this._chatSubject(cur):null;      // the thread's standing subject (existing machinery)
-      if(ownSubject){
-        // The ask NAMES ITS OWN SUBJECT — commission the essay on THAT, not the literal framing
-        // ("write an essay on X" → the topic is X, not the whole "write an essay on X" string, which
-        // would poison the research query and the title). And detect a SUBJECT CHANGE: an own-subject
-        // sharing no content word with the thread's standing subject is a genuine switch (dolphins →
-        // fission/fusion), not a refinement. On a switch the essay must stand on sources gathered for
-        // the NEW subject, never the standing corpus — so flag it here and suppress the standing-corpus
-        // grounded walk below, letting the flat commission walk run over the freshly-gathered ground.
-        subject=ownSubject;
-        subjectChanged=!!(chatSubj&&this._usableSubject(chatSubj)&&!this._subjectsOverlap(ownSubject,chatSubj));
-      }else if(chatSubj&&this._usableSubject(chatSubj)){
-        // The ask names nothing of its own (a critique, "make it longer", "one about them") — REFINE
-        // the standing thread: write on what the conversation is already about, not the literal words.
-        subject=chatSubj;
-      }
-    }
-    // RESEARCH BEFORE WRITING — the "it needs to do research" fix. With the web on, read the subject
-    // and FOLD it into memory first (the same curiosity walk the chat uses), so the piece stands on
-    // real sources instead of a 3B model's thin, confabulation-prone prior. Web off — or the reading
-    // already covers the subject — gathers no fresh pages and composes from what's known, as before.
-    // The gathered excerpts ride into essayCompose as its ground. Null return = a user stop mid-walk
-    // (stopGeneration already finalized the bubble), so bail without writing over it.
-    let essayGround=[];
-    // The CREATIVE register commissions the essay from the model alone — no research walk, no
-    // binding — so the piece is honest invention and wears the creative badge below.
-    const amode=this.state.answerMode||'auto';
-    if(amode!=='creative'){
-      try{essayGround=await this._gatherEssayGround(id,subject,cur);}
-      catch(e){essayGround=[];}
-      if(essayGround===null||this._stopGen)return;
-    }
-    // The register the essay ACTUALLY runs at: grounded when it stands on gathered sources
-    // (sections cite-or-strike bound via eo-gen's essayBinder), creative when composed freely.
-    const essayRegister=(essayGround&&essayGround.length)?'grounded':'creative';
-    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-      if(li>=0&&m[li].role==='asst')m[li]={role:'asst',pending:false,stance:'compose',kind:'essay',register:essayRegister,
-        research:m[li].research?{...m[li].research,done:true}:m[li].research,text:'',...patch};
-      return {...c,messages:m};})}),()=>this._scrollChat());
-    // THE LEARNED STEER: the type's stored profile → the voice cue, the heading hints offered
-    // to the planner, and the word target the walk runs at. Run one steers from the seed arc.
-    const profile=this._essayProfile(typeId);
-    const steer=ET.steerFrom(profile,typeId);
-    // The essay STREAMS into the bubble as it is written — the live markdown render forms
-    // headings and paragraphs mid-walk. RAF-throttled, the same paint the other turns use.
-    let acc='',raf=null;
-    const paint=()=>{raf=null;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-      if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}));};
-    const push=(t)=>{if(!t)return;acc+=t;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
-    // TWO ATTEMPTS. A local CPU model can hang on first load or on the first plan token, leaving a
-    // promise that never settles — the stall the user otherwise had to clear by reloading the page.
-    // A fresh guard on a second try usually gets past it. Only a STALL with nothing streamed retries;
-    // a user stop or a break after real text has streamed is final. The stall budget is widened to
-    // 90s because planning a ≥2,500-word essay on a 3B CPU model can be slow to its first token.
-    for(let attempt=1;attempt<=2;attempt++){
-    acc='';
-    const guard=this._stallGuard(90000);
-    let model;
-    try{model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);}
-    catch(e){guard.clear();
-      if(e&&e.stopped){finish({text:'_Stopped before the model loaded._'});return;}
-      if(attempt<2&&e&&e.stalled){this._beat(id,'warn','The model stalled while loading — retrying once…');continue;}
-      finish({text:'The model could not load: '+((e&&e.message)||e)});return;}
-    this._setThink(id,'Outlining '+(/^[aeiou]/i.test(type.label)?'an ':'a ')+type.label.toLowerCase()+' essay'+((profile&&profile.runs)?(' — steered by '+profile.runs+' earlier run'+(profile.runs===1?'':'s')+' of this type'):' — first run of this type, steering from its seed arc')+(attempt>1?' — second try':'')+'…');
-    try{
-      // ONE hook surface, both walks: every hook feeds the stall guard; every painted
-      // string is tracked by streamedAny so a failure AFTER tokens landed falls through
-      // to the partial-keep catch and never re-composes into the same bubble.
-      // groundedWalk: true only while the grounded (surfer-physics) walk is streaming. The flat
-      // commission walk aims at the 2,500-word floor, so its live progress reads "N of 2,500"; the
-      // grounded walk aims at its own measured target (res.targetWords), not the floor, so it reads
-      // plain "N words" — showing "of 2,500" there would misreport a run that never aimed at it.
-      let streamedAny=false,prose=false,groundedWalk=false;
-      const goalOf=(r)=>(r&&r.targetWords)||floor;
-      const hooks={
-        onPlanToken:()=>guard.feed(),
-        onPulse:()=>guard.feed(),
-        onPlan:({title,outline})=>{guard.feed();streamedAny=true;
-          this._beat(id,'plan','Outlined “'+title+'” — '+outline.length+' section'+(outline.length===1?'':'s')+' planned:');
-          outline.forEach((h,i)=>this._beat(id,'plan','§'+(i+1)+' · '+h));
-          push('# '+title+'\n');},
-        onSection:({heading,index,words})=>{guard.feed();streamedAny=true;prose=true;
-          this._setThink(id,'Writing §'+(index+1)+' “'+heading+'” — '+words.toLocaleString()+(groundedWalk?'':' of '+floor.toLocaleString())+' words so far…');
-          push('\n\n## '+heading+'\n\n');},
-        onToken:(piece)=>{guard.feed();streamedAny=true;prose=true;push(String(piece||''));},
-        onSectionEnd:({heading,index,words,total})=>{guard.feed();
-          this._beat(id,'write','§'+(index+1)+' “'+heading+'” landed — '+words+' words ('+total.toLocaleString()+(groundedWalk?'':' of '+floor.toLocaleString())+' total)');},
-        // the walk's per-beat audit: witness retractions and over-claiming connectives are
-        // surfaced in the thinking trail, flag-and-tell — the prose is never rewritten.
-        onBeat:(b)=>{guard.feed();
-          if(b.witness&&b.witness.retractions.length)this._beat(id,'write','⚠ a claim the passages do not carry was hedged forward (band void)');
-          if(b.leash&&b.leash.unlicensed.length)this._beat(id,'write','⚠ '+b.leash.unlicensed.length+' connective'+(b.leash.unlicensed.length===1?'':'s')+' claim more than the arc holds ('+b.leash.unlicensed.map(c=>c.connective).join(', ')+')');},
-      };
-      // THE GROUNDED WALK FIRST (eoGen v4, organs/out/essay.js composeEssayGrounded): when
-      // the ask runs grounded over an UNSCOPED chat and the merged corpus log is in hand,
-      // the plan is read off the surfer physics — each arrest one beat, the witness and
-      // the connective leash after every beat, the arc's turns voiced with their measured
-      // weight. A chat scoped to specific sources (or isolated) keeps the flat path: the
-      // walk rides the whole merged log and would quote pages the chat excluded — the
-      // isolation discipline outranks the walk until a scoped doc handle exists. A null
-      // walk (no plan, or every beat empty) falls back to the flat commission walk — into
-      // the SAME bubble, so a plan-only paint (just the title) is wiped first and the flat
-      // path repaints from scratch; only a walk that broke off mid-PROSE keeps its partial.
-      let res=null;
-      const _sc=this._answerScope(cur,null);
-      // The grounded walk reads its plan off the physics of the WHOLE merged corpus (this._logDoc).
-      // That is right when the ask continues the thread, but WRONG on a subject CHANGE: it would
-      // ground a fission/fusion essay in the standing dolphin corpus. On subjectChanged, skip it and
-      // let the flat commission walk run over essayGround — sources gathered for the NEW subject.
-      if(essayRegister==='grounded'&&!subjectChanged&&!_sc.isolated&&!_sc.sources.length&&this._logDoc&&typeof G.essayComposeGrounded==='function'&&essayGround&&essayGround.length){
-        groundedWalk=true;   // this run reads its progress against its own target, not the floor
-        const history=((cur&&cur.messages)||[]).filter(m=>m.role==='user').slice(-4).map(m=>({role:'user',content:m.text||''}));
-        this._beat(id,'plan','Composing from the reading’s own arc (grounded walk) — the plan is read off the surfer, not authored.');
-        try{res=await Promise.race([G.essayComposeGrounded({model,doc:this._logDoc,topic:subject,signal:guard.signal,
-          ground:essayGround,history,hooks}),guard.race]);}
-        catch(e){if((e&&e.stopped)||(e&&e.stalled)||prose)throw e;res=null;}
-        if(res&&!(res.sections&&res.sections.length))res=null;
-        if(!res){
-          groundedWalk=false;   // fell back to the flat floor walk — restore floor-relative progress
-          if(prose)throw new Error('the grounded walk broke off');
-          // plan-only paint (the title) — wipe it so the flat walk repaints cleanly
-          if(streamedAny){acc='';streamedAny=false;paint();
-            this._beat(id,'plan','The grounded walk found nothing to compose — walking the flat commission instead.');}
-        }else{
-          // the banner counts SOURCES the beats actually stood on, as urls the reader can open
-          const urls=new Set((res.sourceSpans||[]).map(i=>this.master&&this.master.sentenceSource?this.master.sentenceSource[i]:null).filter(Boolean));
-          if(res.sourceSpans&&res.sourceSpans.length)res={...res,sourceCount:urls.size};
-        }
-      }
-      if(!res)res=await Promise.race([G.essayCompose({model,topic:subject,signal:guard.signal,
-        cue:(steer.cue||'')+(readSteer?('\n\n'+readSteer):''),planHints:steer.planHints,targetPerSection:steer.targetPerSection,
-        ground:essayGround&&essayGround.length?essayGround:null,
-        hooks}),guard.race]);
-      guard.clear();
-      // FOLD THE RUN INTO THE TYPE — the learning. An aborted or thin walk teaches nothing.
-      // GROUNDED-WALK runs (res.targetWords) don't fold either: their headings are the
-      // corpus's own relations ('Grete fed Gregor') and their sections are beat-scale —
-      // folding them would hand the NEXT flat commission corpus-specific planHints and
-      // drag its section target toward beat size. Typed steering stays with the flat path.
-      let learnedLine='';
-      if(profile&&!res.targetWords){const folded=ET.foldEssay(profile,res);
-        if(folded!==profile){this._saveEssayProfile(folded);
-          const next=ET.steerFrom(folded,typeId);
-          learnedLine=type.label+' learned from this run — '+folded.runs+' essay'+(folded.runs===1?'':'s')+' folded in; section target now ~'+next.targetPerSection+' words.';
-          this._beat(id,'think','✎ '+learnedLine);}}
-      // The grounded walk's length is what the reading earned (its own targetWords), not the
-      // commission floor — report against the goal the run actually walked at.
-      const goal=goalOf(res);const goalName=res.targetWords?'-word target':'-word floor';
-      this._beat(id,'think',res.words>=goal
-        ?('Done — '+res.words.toLocaleString()+' words across '+res.sections.length+' sections; clears the '+goal.toLocaleString()+goalName+'.')
-        :('Done — '+res.words.toLocaleString()+' words across '+res.sections.length+' sections; under the '+goal.toLocaleString()+goalName+'.'));
-      // The banner is HONEST about how much of the piece actually bound to the sources — the
-      // "grounded in N sources" label no longer stands on its own (that was the failure: a piece
-      // that touched no source still wore the badge). When binding ran, report the bound share.
-      const boundPct=(typeof res.boundFraction==='number')?Math.round(res.boundFraction*100):null;
-      const groundedNote=res.grounded
-        ?(' · grounded in '+res.sourceCount+' researched source'+(res.sourceCount===1?'':'s')+(boundPct!=null?(' · '+boundPct+'% of claims tied to them'):''))
-        :'';
-      const meta='*'+res.words.toLocaleString()+' words · '+res.sections.length+' sections · '+type.label+' essay'+groundedNote+(learnedLine?(' · ✎ '+learnedLine):'')+'*';
-      const essayText=(res.text||acc||'').trim();
-      // A grounded essay is read back through the EOT reflection like any grounded answer.
-      finish({text:essayText+'\n\n---\n'+meta,
-        reflection:essayRegister==='grounded'?this._reflect(essayText):null});
-      return;
-    }catch(e){guard.clear();
-      const partial=acc.trim();
-      const words=(partial.match(/\S+/g)||[]).length;
-      if(e&&e.stopped){finish({text:partial?(partial+'\n\n---\n*⏹ Stopped at '+words.toLocaleString()+' words.*'):'_Stopped._',stopped:true});return;}
-      if(partial){finish({text:partial+'\n\n---\n*The walk broke off at '+words.toLocaleString()+' words: '+((e&&e.message)||e)+'*'});return;}
-      // Nothing streamed. If it STALLED and a try remains, go around once more with a fresh guard
-      // before giving up — a transient first-token hang usually clears on the retry.
-      if(attempt<2&&e&&e.stalled){this._beat(id,'warn','The writer stalled before the first line — retrying once…');continue;}
-      {
-        // FAIL SOFT, like the answer path (sendChat's catch): a stall or model error with NOTHING
-        // streamed shouldn't dead-end an essay ask. Degrade to the reading's own structural answer,
-        // labeled honestly and wearing the full grounding apparatus (refs/passages/sources) so the
-        // citations bind like any other grounded turn. An isolated chat draws on nothing read, so
-        // there is no structural fallback to pull from — say so plainly (the sibling's rule).
-        const why=(e&&e.stalled)?'the chat model stalled':((e&&e.message)||e);
-        const _sc=this._answerScope(cur,null);
-        const scope=[...new Set((essayGround||[]).map(s=>s&&s.u).filter(Boolean))];
-        const fb=_sc.isolated?null:this.answerQuestion(subject,scope.length?scope:_sc.sources);
-        if(fb&&fb.refs&&fb.refs.length){
-          const passages=fb.refs.map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i}));
-          finish({text:fb.text,refs:fb.refs,entities:fb.entities,sources:fb.sources,passages,groundKind:'matched',
-            modelNote:'Answered from your reading — '+why+' before the essay could be composed.',
-            register:'grounded',reflection:this._reflect(fb.text)});
-        }else finish({text:'The essay could not complete: '+why});
-        return;
-      }
-    }
-    }
-  }
   // CREATIVE GENERATION over a topic — "write an emily dickinson poem about iced coffee",
   // "compose an essay on dolphins", "draft a haiku about the sea". The frame (write/compose/draft
   // + poem/essay/song/…) names a FORM, and the real topic rides in the "about/on X" tail. Taken at
@@ -1888,7 +1529,7 @@ class Component extends DCLogic {
   // ── The named-subject gate (the "essay about Grok" failure), the reader's copy ──
   // The same hole the answerabilityGate closes in the turn pipeline (src/longgen/answerable.js,
   // wired into src/turn/stages.js), brought to the path this UI actually runs: the Reader
-  // answers in its OWN sendChat / _longformArc, never through that pipeline, so the gate there
+  // answers in its OWN sendChat / _deepResearch, never through that pipeline, so the gate there
   // never sees these turns. The failure: eight pages about Errol Musk, "write me a long essay
   // about Grok", incidental word overlap ("long" inside "no longer") that marked the sources
   // relevant and kept the turn offline, and a 3B model that then invented sections about a Grok
@@ -2603,19 +2244,13 @@ class Component extends DCLogic {
     // below can strip it to a "subject" and research it. The cheap sync pre-gate keeps a
     // non-math turn from ever loading the module; the module makes the strict final call.
     if(this._looksMath(q)&&await this._mathChat(q))return;
-    // THE ESSAY ORGAN — an EXPLICIT "/essay <topic>" walks the organ (runOrganEssay): plan, then
-    // section after section to the ≥2500-word floor, steered by the composer's selected type,
-    // thinking out loud in the live trail. Explicit command = run it, no ask. The old regex intent
-    // ("write an essay on…") is GONE: essay steering is now read off the discourse metacognition
-    // below (the steer gate after _discourseRead) and OFFERED for permission, never guessed by a
-    // string match (docs/discourse-routing.md). Organ not loaded → the steer gate finds nothing.
-    if(this._essayOrganReady()){
-      const essayCmd=/^\/essay\b[\s:]*/i.exec(q);
-      if(essayCmd){const t=this.norm(q.slice(essayCmd[0].length));if(t)return this.runOrganEssay(t);}
-      // THE ARMED WRITE TOGGLE: with essay mode on, a plain sent turn IS the essay commission — the
-      // box text is the topic. This is the reliable route to an essay (no string-matching "write me
-      // an essay", no compose-continuation stealing it into a poem); the toggle stays on for the next.
-      if(this.state.essayArmed&&!opts.steerBypass)return this.runOrganEssay(q);
+    // DEEP RESEARCH — an EXPLICIT "/research <topic>" (or the composer's Research control)
+    // runs the grounded projection directly (src/research/): pin, bind, extract, strain,
+    // project. The essay organ is gone; this is the long-output path the reader focuses on.
+    // "/essay <topic>" maps here too, so the old habit lands on the honest machinery.
+    {
+      const drCmd=/^\/(?:research|essay)\b[\s:]*/i.exec(q);
+      if(drCmd){const t=this.norm(q.slice(drCmd[0].length));if(t)return this._drCommand(t);}
     }
     // COMPOSE — a generative artifact ("write an emily dickinson poem", "compose a sonnet about
     // the sea") is a make-this, not a question. It must be caught BEFORE _shouldWeb, or the web
@@ -2645,7 +2280,7 @@ class Component extends DCLogic {
     // Append the user turn + a pending assistant bubble BEFORE any routing, so the discourse read
     // — and every decision that follows it, INCLUDING the compose/switch fork — narrates into a
     // live trail from the first frame. The compose-continuation, web, and ground paths all REUSE
-    // this one bubble (composeArtifact/runOrganEssay via {reuseId}, chatResearch via pre.id),
+    // this one bubble (composeArtifact via {reuseId}, _deepResearch, chatResearch via pre.id),
     // never a second one.
     const contentful=amode!=='creative'&&!this.mechanicalAnswer(q)&&this._researchTerms(q).length>0;
     const seedThink=contentful?'Reading the conversation…':'Thinking…';
@@ -2674,7 +2309,6 @@ class Component extends DCLogic {
     if(pop&&!this._stopGen){
       this._tagUserFrame(id,{move:'return',target:pop.id});
       const rfold={...fold,stance:'compose',focus:pop.focus||fold.focus};
-      if(pop.focus&&pop.focus.kind==='essay'&&this._essayOrganReady())return this.runOrganEssay(q,undefined,{reuseId:id,read});
       return this.composeArtifact(q,rfold,{reuseId:id,focus:pop.focus||undefined});
     }
     // CONTINUATION-BY-DEFAULT, now read off the BINDING (docs/frame-binding-route.md, Phase 1;
@@ -2689,13 +2323,12 @@ class Component extends DCLogic {
     // into a research walk on the literal phrase (the songs it wrongly matched by title). Only a
     // compose stance re-routes here; a ground / null stance falls through to today's path unchanged.
     if(fold.stance==='compose'&&!researchIntent&&this._continuesCompose(q,fold,read)){
-      // A composing thread continues composing — but an ESSAY and a creative artifact are different
-      // organs. runOrganEssay tags its turn stance:'compose' too, so without this a follow-up after
-      // an essay ("make it longer", "one about X", "write me an essay …") fell into composeArtifact,
-      // which defaults to a POEM. Continue the essay as an essay when the last piece was one. Both
-      // REUSE this bubble and the read already taken — no second bubble, no second model call.
-      const lastEssay=cur&&[...cur.messages].reverse().find(m=>m.role==='asst'&&!m.pending&&m.text&&m.kind==='essay');
-      if(lastEssay&&this._essayOrganReady())return this.runOrganEssay(q,undefined,{reuseId:id,read});
+      // A composing thread continues composing — but a RESEARCH thread and a creative
+      // artifact are different machines. A follow-up after a deep-research turn ("dig
+      // deeper", "what about X") continues the research (appending to the same session
+      // log — the live surface keeps populating); anything else composes the artifact.
+      const lastResearch=cur&&[...cur.messages].reverse().find(m=>m.role==='asst'&&!m.pending&&m.text&&m.kind==='research');
+      if(lastResearch)return this._deepResearch(id,q,cur,{});   // reuse this bubble; same session log
       return this.composeArtifact(q,fold,{reuseId:id});
     }
     // THE PUSH (docs/frame-holon.md, Phase B): this turn LEAVES a composing thread — a genuine
@@ -2741,17 +2374,13 @@ class Component extends DCLogic {
     if(!isolated&&amode!=='creative'&&!this._subjectsKnown(q,sources)){finish(this._noSubjectPatch(q,sources));return;}
     // 1b) OPT-IN LONGFORM, offline too: an essay/report/"N words" ask over what's ALREADY been read
     // (web off, or the reading already covers it) becomes a multi-section grounded piece — the arc
-    // over the in-scope sources — instead of one capped answer. The opt-in is now PHYSICS, not a
-    // keyword cliff: _wantsLongform reads the develop/brief demand off the discourse metacognition
-    // (the `read` above), with the keyword _longformIntent kept only as the cold-model floor — so a
-    // soft "explain this in detail" no longer trips a full essay walk unless the read agrees. Needs
-    // grounded supply; _longformArc itself falls back to the single answer when supply is thin.
+    // over the in-scope sources — becomes DEEP RESEARCH: the grounded projection over the
+    // reading (src/research/driver.js), every claim tethered to a pinned span, instead of
+    // the essay walk this gate used to summon. The opt-in stays PHYSICS, not a keyword
+    // cliff: _wantsLongform reads the develop/brief demand off the discourse metacognition
+    // (the `read` above), with the keyword _longformIntent kept only as the cold-model floor.
     if(!isolated&&amode!=='creative'&&this._wantsLongform(q,read)&&(sources.length||!!(this.graph&&this.graph.entities&&this.graph.entities.size))){
-      // THE GENERATION PIPELINE (src/reader/eo-gen.js): an essay ask WALKS THE ARC — open,
-      // develop, turn, land — over a rich ground (runContinuation), instead of the capped
-      // grounded blurb. On by default when the module is loaded; the old arc is the fallback.
-      if(typeof window!=='undefined'&&window.eoGen&&this._essayPipelineOn())return this._pipelineEssay(id,q,sources);
-      return this._longformArc(id,q,[]);
+      return this._deepResearch(id,q,cur,{noWalk:true});   // the web gate below never ran — stand on the reading
     }
     // 2) the spans that surface for this question, scoped to the chat's sources (none when
     //    isolated — and none in the CREATIVE register, which answers from the model alone)
@@ -3021,7 +2650,7 @@ class Component extends DCLogic {
   // routes it to a plain WRITE: the model is handed the request almost verbatim, in the plain writer
   // frame, and it composes. No web hop, no example scaffolding, no "cite your sources / output only"
   // constraints — the prompting was the thing flattening the poem. Essays/reports stay the grounded
-  // arc (_longformArc). The gate is a compose VERB plus a creative KIND, so a question never trips it.
+  // deep-research projection. The gate is a compose VERB plus a creative KIND, so a question never trips it.
   _CK(){return 'poems?|poetry|sonnets?|haikus?|limericks?|ballads?|odes?|verses?|villanelles?|couplets?|elegy|elegies|epigrams?|hymns?|psalms?|songs?|lyrics?|jingles?|raps?|stories|story|tales?|fables?|fairy[\\s-]?tales?|myths?|legends?|anecdotes?|jokes?|riddles?|dialogues?|monologues?|screenplays?|scripts?|plays?|skits?|rhymes?';}
   _CV(){return 'write|compose|draft|create|pen|author|generate|make(?:\\s+me|\\s+up)?|come\\s+up\\s+with|give\\s+me|tell\\s+me';}
   _composeIntent(q){
@@ -3199,7 +2828,7 @@ class Component extends DCLogic {
     // other ask — or thin supply — takes the ordinary single answer. Length stays EMERGENT.
     // `opts.longform` lets the caller carry the intent from the ORIGINAL turn when `q` has been
     // reduced to a bare subject (research strips "write me an essay about" down to "dolphins").
-    if((opts&&opts.longform)||this._wantsLongform(q,opts&&opts.meta))return this._longformArc(id,q,gathered);
+    if((opts&&opts.longform)||this._wantsLongform(q,opts&&opts.meta))return this._deepResearch(id,q,this.activeChatObj(),{noWalk:true});   // the walk already ran — project the grounded report over what it pinned
     return this._answerSingle(id,q,gathered,opts&&opts.meta);
   }
   async _answerSingle(id,q,gathered,meta){
@@ -3266,187 +2895,6 @@ class Component extends DCLogic {
         register:relevant?'grounded':'creative',reflection:relevant?this._reflect(fb.text):null});
       this.setState({modelStatus:''});
     }
-  }
-  // THE ARC, in the reader's own primitives — multi-section grounded longform (spec-the-arc).
-  // The document is a fold of its events; the turn a fold of its stages; the ARC a fold of a
-  // section plan. The plan's sections are THEMES, not sources. The old fold ran one section PER
-  // SOURCE: with eight pages all ABOUT one subject (the dolphin essays), every section re-told
-  // the same material — evolution, communication, intelligence, pods — and each was headed by a
-  // raw page title ("Dolphins Essay - 1049 Words | Bartleby"). So instead: POOL every relevant
-  // span across the in-scope sources, then cluster the pool by what the spans are ABOUT. One
-  // section now reads on one idea drawn from wherever it was read, headed by the theme — the
-  // repetition and the page-title headings both fall out.
-  //   POOL  gather every relevant span across the in-scope sources; drop near-duplicates.
-  //   SEG   cluster the pool into themes by shared distinctive terms → the section plan, ranked.
-  //   LEAD  open with one short grounded paragraph over the strongest spans overall (no heading).
-  //   CON   generate each section grounded ONLY in its theme's spans (a re-prompt per fold).
-  //   EVA   does this fold add NEW coverage (terms not already covered)? …
-  //   NUL   …if it would only re-cite, skip it. Saturation, not a token target, sets the length.
-  // Degrades to the single answer when supply is thin (<4 spans / <2 themes) or anything throws.
-  async _longformArc(id,q,gathered){
-    // An essay/report is the GROUNDED arc (distinct from creative compose) — tag `ground`,
-    // and badge it grounded (patch may override, e.g. an honest no-subject decline).
-    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,stance:'ground',register:'grounded',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
-    const cur=this.state.chats.find(c=>c.id===id);
-    // A net-new chat that gathered nothing has no reading to build an arc over — don't fall back
-    // to the whole library; answer plainly instead.
-    const _sc=this._answerScope(cur,gathered);
-    if(_sc.isolated)return this._answerSingle(id,q,gathered);
-    const had=this.chatSourcesOf(cur);
-    const scope=had.length?[...new Set([...had,...(gathered||[])])]:[];
-    const allUrls=scope.length?scope:[...new Set((this.master&&this.master.sentenceSource||[]).filter(Boolean))];
-    // QUALITY GATE on the grounding pool: an essay grounded in essay-mill pages recaps those essays
-    // (the plagiarism failure). Ground only in real sources when any are in scope; fall back to the
-    // full set just in case the whole scope is mills (then it's an honest recap, not a silent one).
-    const hostOf=u=>{try{return new URL(/^https?:/i.test(u)?u:'https://'+u).hostname;}catch(e){return '';}};
-    const good=allUrls.filter(u=>!this._lowQualitySource(hostOf(u)));
-    const urls=good.length?good:allUrls;
-    // The named-subject gate: don't build a multi-section essay about a subject the in-scope
-    // reading never names (the Grok case) — answer honestly instead of confabulating sections.
-    if(!this._subjectsKnown(q,urls)){finish(this._noSubjectPatch(q,scope));return;}
-    this._setThink(id,'Gathering the relevant passages across '+urls.length+' source'+(urls.length!==1?'s':'')+'…');
-    // POOL — every relevant span across the in-scope sources, near-duplicates removed so two
-    // sources phrasing the same fact don't seed two sections.
-    const pool=[],seenKey=new Set(),poolEnts=new Set();
-    for(const u of urls){
-      const g=this.groundNotes(q,[u]);
-      if(!g.relevant)continue;
-      for(const e of (g.entities||[]))poolEnts.add(e);
-      for(const s of (g.spans||[])){
-        if(!s.text||s.text.length<=24)continue;
-        const key=s.text.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().slice(0,72);
-        if(!key||seenKey.has(key))continue;seenKey.add(key);
-        pool.push(s);
-      }
-    }
-    if(pool.length<4)return this._answerSingle(id,q,gathered);   // thin supply — a flat answer reads better
-    this._setThink(id,'Found '+pool.length+' passages — mapping out the sections…');
-    // SEG — cluster the pool into themes; each becomes one section. <2 themes → single answer.
-    const plan=this._clusterSpans(pool,q).slice(0,6);
-    if(plan.length<2)return this._answerSingle(id,q,gathered);
-    // Guard the load too: a hung download would otherwise wedge the whole arc. On a stall the arc
-    // degrades gracefully (model=null → each fold writes its section structurally from the spans).
-    let model=null;try{const lg=this._stallGuard();model=await Promise.race([this.ensureChatModel(lg.feed),lg.race]);lg.clear();}catch(e){model=null;}
-    const NOVELTY=0.2;
-    const covered=new Set(),parts=[],usedHead=new Set(),allEnts=new Set(poolEnts),allSrcs=new Set(),allPass=[];
-    // CITATION REGISTRY for the inline superscripts — one footnote number per distinct source, in
-    // first-appearance order. _md renders a ⟦cSLOT⟧ sentinel as a superscript glyph showing `n`;
-    // the registry rides on the pending message (attached in paint) so the numbers form WHILE the
-    // essay streams, and the references list below points at the same numbers. (slot = array index
-    // the sentinel carries; n = the displayed footnote number.)
-    const cites={},slotOf=new Map();
-    const citeFor=(u,sample)=>{if(!u)return -1;if(!slotOf.has(u)){const slot=slotOf.size;
-      cites[slot]={u,n:slot+1,text:sample||'',label:this.truncLabel((((this.pageOf(u)||{}).title)||(/^text:/i.test(u)?'text':this.short(u))),40)};
-      slotOf.set(u,slot);}return slotOf.get(u);};
-    // Bind each SENTENCE of a finished section to the best-matching span it leans on, appending that
-    // span's source as an inline superscript (the receipt the reader wanted — every claim shows where
-    // it's grounded). Lexical overlap, the same match _citeAnnotate uses, but numbered off the shared
-    // registry so a source keeps one number across the whole essay. Headings never get a footnote.
-    const SENT=/(?<=[.!?])\s+/;
-    const citeBody=(body,spans)=>{
-      const ptok=(spans||[]).filter(s=>s&&s.text&&s.u).map(s=>({s,set:new Set(this._researchTerms(s.text))})).filter(p=>p.set.size);
-      if(!ptok.length)return body;
-      return String(body||'').split('\n').map(line=>{
-        if(!line.trim()||/^\s*#{1,6}\s/.test(line))return line;
-        return line.split(SENT).map(sent=>{
-          const toks=this._researchTerms(sent);if(toks.length<3)return sent;
-          const tset=new Set(toks);let best=null,bestScore=0;
-          for(const {s,set} of ptok){let hit=0;for(const t of tset)if(set.has(t))hit++;const score=hit/tset.size;if(hit>=2&&score>bestScore){bestScore=score;best=s;}}
-          if(best&&bestScore>=0.25){const slot=citeFor(best.u,best.text);if(slot>=0)return sent+'⟦c'+slot+'⟧';}
-          return sent;
-        }).join(' ');
-      }).join('\n');
-    };
-    let acc='',raf=0;
-    const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,cites};return {...c,messages:m};})}),()=>this._scrollChat());};
-    // The grounding guidance carried into every fold — synthesize across sources, bound claims by
-    // identity/space/time, never recap one source end to end (GROUNDING_CUE), in the librarian register.
-    const groundShape=[this._ME.LIBRARIAN_CUE,this._ME.GROUNDING_CUE].filter(Boolean).join('\n\n');
-    // A grounded fold: stream `spans` into the running essay under an optional `header`, then append
-    // the result to `parts`. Shared by the LEAD (no header) and each CON theme section. ACCUMULATE the
-    // streamed tokens (`streamed`), don't REPLACE — each onToken piece is one token, so `acc=base+
-    // streamed` grows the live view left-to-right. Returns true if it wrote a section, false if the
-    // model gave nothing — a barren fold is SKIPPED (no header, no raw-source paste), which is the fix
-    // for the essay "crapping out" into a pasted source line (the bled "…| Bartleby" title): a failed
-    // section now drops cleanly instead of dumping verbatim source text as prose.
-    const fold=async(spans,header)=>{
-      this._setThink(id,header?('Writing on: '+header+'…'):'Drafting the opening…');
-      const head=header?('## '+header+'\n\n'):'';
-      acc=(parts.join('\n\n')+(parts.length?'\n\n':'')+head);paint();
-      let body='',streamed='';
-      if(model){
-        const fg=this._stallGuard();
-        try{
-          const srcs=[...new Set(spans.map(s=>s.u).filter(Boolean))];const gscope=srcs.length?srcs:urls;
-          const msgs=this._ME.buildGroundedMessages({question:q,spans,graph:this.meaningGraph(gscope),
-            orientation:this.chatOrientation(gscope),task:'answer',conversation:{pastTurns:[]},now:new Date(),shape:groundShape});
-          const base=acc;
-          const onToken=(piece)=>{const t=String(piece||'');if(!t)return;fg.feed();streamed+=t;acc=base+streamed;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
-          // A stall here keeps whatever streamed and falls through to the structural fallback below,
-          // so one wedged section never wedges the whole essay.
-          body=this.normMd(await Promise.race([this._ME.streamPhrase(model,msgs,{maxTokens:384,temperature:0.4,onToken,signal:fg.signal}),fg.race]))||this.normMd(streamed);
-        }catch(e){body=this.normMd(streamed);}
-        fg.clear();
-      }
-      if(!body){acc=parts.join('\n\n');paint();return false;}   // barren fold — skip it, don't paste raw source
-      parts.push(head+citeBody(body,spans));
-      for(const s of spans.slice(0,2))allPass.push({text:s.text,u:s.u,i:s.i});
-      for(const s of spans)if(s.u)allSrcs.add(s.u);
-      acc=parts.join('\n\n');paint();
-      return true;
-    };
-    // LEAD — open on the strongest spans across the whole pool (a frame, not a theme section).
-    await fold([...pool].sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,5),null);
-    if(this._stopGen)return;   // user stop — stopGeneration kept the partial; don't write past it
-    // CON — one grounded section per theme, headed by the theme, while it still adds coverage.
-    for(const sec of plan){
-      if(this._stopGen)return;
-      // EVA → NUL: a fold whose terms are already covered would only re-cite — skip it.
-      const terms=new Set(sec.spans.flatMap(s=>this._researchTerms(s.text)));
-      const fresh=[...terms].filter(t=>!covered.has(t));
-      if(covered.size&&terms.size&&fresh.length/terms.size<NOVELTY)continue;
-      let head=(sec.heading&&!usedHead.has(sec.heading.toLowerCase()))?sec.heading:null;
-      if(head)usedHead.add(head.toLowerCase());
-      await fold(sec.spans,head);
-      for(const t of terms)covered.add(t);
-    }
-    if(this._stopGen)return;
-    if(parts.length<2)return this._answerSingle(id,q,gathered);
-    const arcText=parts.join('\n\n');
-    finish({text:arcText,entities:[...allEnts].slice(0,8),sources:[...allSrcs],
-      passages:allPass.slice(0,12),cites:Object.keys(cites).length?cites:null,groundKind:'matched',related:this.relatedDocs(q,scope),
-      reflection:this._reflect(arcText)});
-  }
-  // SEG for the arc: group pooled spans into THEMES, one section each. A theme IS a salient
-  // content word — the spans that share it are its section, and that word (Title-Cased) is its
-  // heading, clean by construction. So grouping and naming are the same act: no separate
-  // heading-derivation step that can name a section "Even" or "Have". The subject's own words
-  // and a stoplist of function/verb/adverb/generic words are barred from being theme words (else
-  // every span shares them and the pool is one blob). Each span lands in its single best theme;
-  // themes are ranked by how many spans they organize, capped at six.
-  _clusterSpans(pool,q){
-    const stop=this._themeStop();
-    const subj=new Set();for(const t of this._researchTerms(q)){subj.add(t);subj.add(t.replace(/s$/,''));subj.add(t+'s');}
-    const ok=t=>t.length>=4&&t.length<=14&&!subj.has(t)&&!stop.has(t)&&/^[a-z][a-z'’-]*$/.test(t);
-    const termsOf=s=>[...new Set(this._researchTerms(s.text).filter(ok))];
-    const items=pool.map((s,idx)=>({s,idx,terms:termsOf(s)})).filter(it=>it.terms.length);
-    if(!items.length)return [];
-    // term → the spans that carry it. A term in ≥2 spans is a candidate theme (it recurs).
-    const byTerm=new Map();
-    for(const it of items)for(const t of it.terms){if(!byTerm.has(t))byTerm.set(t,new Set());byTerm.get(t).add(it.idx);}
-    const cands=[...byTerm.entries()].filter(([,set])=>set.size>=2)
-      .sort((a,b)=>b[1].size-a[1].size||(a[0]<b[0]?-1:1));   // most-organizing first, stable by name
-    // Greedily claim themes: each takes its still-unclaimed spans; a theme needs ≥2 of them.
-    const MAXSEC=6,claimed=new Set(),themes=[];
-    for(const [t,set] of cands){
-      if(themes.length>=MAXSEC)break;
-      const idxs=[...set].filter(i=>!claimed.has(i));
-      if(idxs.length<2)continue;
-      for(const i of idxs)claimed.add(i);
-      themes.push({heading:this._titleCase(t),spans:idxs.map(i=>pool[i]),score:idxs.length});
-    }
-    return themes;
   }
   _titleCase(t){t=String(t||'');return t?t.charAt(0).toUpperCase()+t.slice(1):t;}
   // Words barred from being a theme/heading — function words, light verbs, adverbs, and generic
@@ -5005,6 +4453,107 @@ class Component extends DCLogic {
   }
   showAllEntities(){this.setState({panelMode:'entities'});}
   showOverview(){this.setState({panelMode:'overview'});}
+  // ── site profiles: a page for every read source, and a directory of them all ──────
+  // A site that lists sites gives each one a profile; here every source read into memory
+  // becomes its own navigable page. The kind label a source wears in its profile / card.
+  _siteKind(p,url){
+    if(!p)return 'Source';
+    if(p.image)return 'Image';
+    if(/^text:/i.test(url))return 'Imported text';
+    if(p.author)return 'Book';
+    if(p.via==='REAFFERENCE')return 'Found by EO';
+    return 'Web page';
+  }
+  // The face a source wears — its avatar letters + colour + hostname. Imported text and
+  // other opaque (non-http) sources have no hostname, so fall back to the title's initials
+  // and hide the empty host instead of showing a bare middot.
+  _siteFace(p,url){const host=this.short(url),hasHost=!!host,color=this.hashColor(host||url||'');
+    const av=hasHost?host.slice(0,2).toUpperCase():this.initials((p&&p.title)||'Source');
+    return {host,hasHost,color,av};}
+  // Entities that appear in ONE source, ranked by how many of its propositions name them.
+  _siteEntities(url){
+    const sets=new Map();
+    for(const ev of this.master.events){if(ev.sentIdx==null||this.master.sentenceSource[ev.sentIdx]!==url)continue;
+      [ev.id,ev.src,ev.tgt,ev.from,ev.to].filter(Boolean).forEach(x=>{const r=this.graph.representative(x);
+        if(this.graph.entities.has(r)&&this.showable(r)&&!this.isURLish(this.labelOf(r))){let st=sets.get(r);if(!st){st=new Set();sets.set(r,st);}st.add(ev.sentIdx);}});}
+    return [...sets].map(([eid,st])=>({eid,n:st.size})).sort((a,b)=>b.n-a.n);
+  }
+  // The full-page profile of a single site — the reading rendered as a page ABOUT the
+  // source: its gist, the entities it introduced (each a click to its own page), the
+  // passages the reading flagged, and the sources it branches to. "Read page" hands off to
+  // the live reader (goWeb), so the profile is the listing and the page is the visit.
+  siteProfile(url){
+    const p=this.pageOf(url);if(!p)return null;
+    const face=this._siteFace(p,url),host=face.host,c=face.color;
+    const fmtDate=ts=>{try{return new Date(ts).toLocaleDateString([],{year:'numeric',month:'short',day:'numeric'});}catch(e){return '';}};
+    let propN=0;for(let i=0;i<this.master.sentenceSource.length;i++)if(this.master.sentenceSource[i]===url)propN++;
+    // gist — the source's own lead prose, boilerplate stripped (mirrors pageOverview)
+    const boiler=s=>this._refLike(s)||/^this article\b|please help|needs? (additional|more) citation|citation needed|may be in need of|unreferenced|unsourced|multiple issues|improve this article|add citations|learn how and when/i.test(s);
+    const lead=[];for(let i=0;i<this.master.sentences.length&&lead.length<3;i++){if(this.master.sentenceSource[i]!==url)continue;const s=this.clean(this.master.sentences[i]);if(this._proseOk(s)&&s.length>=44&&!boiler(s))lead.push(s);}
+    const gist=lead.length?this.endOnBoundary(lead.join(' '),440):'';
+    const ranked=this._siteEntities(url),maxN=ranked.length?ranked[0].n:1;
+    const ents=ranked.slice(0,18).map(({eid,n})=>{const nl=this.labelOf(eid);
+      return {id:eid,name:this.truncLabel(nl,30),av:this.initials(nl),avStyle:this.avatar(nl,30),
+        sub:n+' mention'+(n!==1?'s':''),
+        barStyle:'height:3px;border-radius:2px;margin-top:6px;background:'+this.hashColor(nl)+';width:'+Math.max(9,Math.round(n/maxN*100))+'%;',
+        rowStyle:'display:flex;flex-direction:column;gap:2px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:var(--card);cursor:pointer;min-width:0;',
+        onOpen:()=>this.selectEntity(eid),onEnter:ev=>this.entHover(eid,ev),onLeave:()=>this.entLeave()};});
+    let flags=[];try{flags=this._pageFlags(p);}catch(e){}
+    const passages=flags.slice(0,4).map(f=>({txt:this.truncLabel(this.norm(f.text),320),why:this.norm(f.why||''),hasWhy:!!(f.why&&String(f.why).trim()),onOpen:()=>this.goWeb(url)}));
+    const relCard=x=>{const f=this._siteFace(x,x.url),k=this._siteKind(x,x.url);
+      return {title:this.truncLabel(x.title||f.host||'Source',40),sub:(f.hasHost?f.host+' · ':'')+k,srcId:this.srcId(x.url),
+        av:f.av,avStyle:'width:26px;height:26px;flex:0 0 auto;border-radius:8px;background:'+f.color+'1a;color:'+f.color+';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;',
+        rowStyle:'display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);cursor:pointer;min-width:0;',
+        onOpen:()=>this.openSite(x.url)};};
+    const parentP=p.parent?this.pageOf(p.parent):null;
+    const kids=this.master.pages.filter(x=>x.parent===url);
+    const muted=this._muted.has(url);
+    return {
+      title:p.title||host||'Untitled source', host, hasHost:face.hasHost, url, srcId:this.srcId(url),
+      av:face.av,
+      avStyle:'width:52px;height:52px;flex:0 0 auto;border-radius:14px;background:'+c+'1a;color:'+c+';display:flex;align-items:center;justify-content:center;font-size:'+(face.av.length>2?16:19)+'px;font-weight:800;letter-spacing:-.02em;',
+      when:fmtDate(p.ts), hasWhen:!!p.ts, kind:this._siteKind(p,url),
+      hasAuthor:!!p.author, author:this.norm(p.author||''),
+      hasPublished:!!p.published, published:this.norm(String(p.published||'')),
+      hasGist:!!gist, gist,
+      stats:[{k:'entities',v:ranked.length},{k:'propositions',v:propN},{k:'found here',v:kids.length}],
+      ents, hasEnts:ents.length>0, entsMore:Math.max(0,ranked.length-ents.length), hasEntsMore:ranked.length>ents.length,
+      passages, hasPassages:passages.length>0,
+      parent: parentP?relCard(parentP):null, hasParent:!!parentP,
+      kids: kids.map(relCard), hasKids:kids.length>0, kidCount:kids.length,
+      muted, muteLabel:muted?'Muted — not feeding the record':'Feeding the record',
+      muteBtnLabel:muted?'Unmute source':'Mute source',
+      muteBtnStyle:'display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:8px;padding:7px 13px;cursor:pointer;'+(muted?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
+      onRead:()=>this.goWeb(url), onChat:()=>this.newChat(url), onMute:()=>this.muteSrc(url),
+      onBackDir:()=>this.openSitesDir()
+    };
+  }
+  // The directory: every read source as a profile card. entInSrc (the per-source entity
+  // count the render pass already built) is passed in when available; otherwise counted here.
+  sitesDirectory(entInSrc){
+    const pages=[...this.master.pages].sort((a,b)=>b.ts-a.ts);
+    const propC=new Map();pages.forEach(p=>propC.set(p.url,0));
+    for(let i=0;i<this.master.sentenceSource.length;i++){const u=this.master.sentenceSource[i];if(propC.has(u))propC.set(u,propC.get(u)+1);}
+    let entC=entInSrc;
+    if(!entC){entC=new Map();pages.forEach(p=>entC.set(p.url,0));const seen=new Map();
+      for(const ev of this.master.events){if(ev.sentIdx==null)continue;const u=this.master.sentenceSource[ev.sentIdx];if(!entC.has(u))continue;
+        [ev.id,ev.src,ev.tgt,ev.from,ev.to].filter(Boolean).forEach(x=>{const r=this.graph.representative(x);
+          if(this.graph.entities.has(r)&&this.showable(r)&&!this.isURLish(this.labelOf(r))){let st=seen.get(u);if(!st){st=new Set();seen.set(u,st);}st.add(r);}});}
+      seen.forEach((st,u)=>entC.set(u,st.size));}
+    const fmtDate=ts=>{try{return new Date(ts).toLocaleDateString([],{month:'short',day:'numeric'});}catch(e){return '';}};
+    const cards=pages.map(p=>{const f=this._siteFace(p,p.url),c=f.color,muted=this._muted.has(p.url),kind=this._siteKind(p,p.url);
+      const gist=this.truncLabel(this.norm((p.sentences&&p.sentences[0])||p.text||''),150);
+      const nE=(entC.get(p.url)||0),nP=(propC.get(p.url)||0);
+      return {title:this.truncLabel(p.title||f.host||'Untitled source',46),host:f.host,sub:(f.hasHost?f.host+' · ':'')+kind,srcId:this.srcId(p.url),url:p.url,kind,
+        av:f.av,
+        avStyle:'width:34px;height:34px;flex:0 0 auto;border-radius:10px;background:'+c+'1a;color:'+c+';display:flex;align-items:center;justify-content:center;font-size:'+(f.av.length>2?12:13)+'px;font-weight:800;letter-spacing:-.02em;',
+        when:fmtDate(p.ts),
+        stat:nE+' entit'+(nE!==1?'ies':'y')+' · '+nP+' prop'+(nP!==1?'s':''),
+        hasGist:!!gist, gist, muted,
+        cardStyle:'display:flex;flex-direction:column;gap:9px;padding:15px 16px;border:1px solid '+(muted?'var(--line2)':'var(--line)')+';border-radius:14px;background:var(--card);cursor:pointer;'+(muted?'opacity:.62;':'')+'min-width:0;',
+        onOpen:()=>this.openSite(p.url), onRead:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.goWeb(p.url);}, onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);}};});
+    return {count:pages.length, countLabel:pages.length+' source'+(pages.length!==1?'s':'')+' read into memory', cards, empty:pages.length===0};
+  }
   sourcesOf(id){return [...new Set(this.mentionsOf(id).map(i=>this.master.sentenceSource[i]).filter(Boolean))];}
   neighbors(id){const agg=new Map();for(const e of this.edgesOf(id)){const o=e.from===id?e.to:e.from;if(this.isURLish(this.labelOf(o))||!this.showable(o))continue;const c=agg.get(o)||{w:0,vias:new Set(),sent:null,grain:null,llm:false};c.w+=((e.weight!=null?e.weight:1)||0)+1e-4;const via=e.relType||e.via||e.kind;if(!this.junkRel(via))c.vias.add(via);if(c.sent==null)c.sent=e.sentIdx;if(!c.grain)c.grain=this.edgeGrain(e);if(this.edgeReader(e)==='svo-llm')c.llm=true;agg.set(o,c);}return [...agg].map(([o,v])=>({id:o,w:v.w,vias:[...v.vias],sent:v.sent,grain:v.grain,llm:v.llm})).sort((a,b)=>b.w-a.w);}
   pageOf(url){return (this.master&&this.master.pages)?this.master.pages.find(p=>p.url===url):undefined;}
@@ -5430,9 +4979,14 @@ class Component extends DCLogic {
   feedSep(t){const e=this._feedEnt!=null?this._feedEnt:null;this.setState(s=>({feed:[...s.feed,{sep:t,ent:e}]}));}
   sleep(ms){return new Promise(r=>setTimeout(r,ms));}
   // ---- location/history: each entry is {t:'web',url} or {t:'ent',id} ----
-  _locEq(a,b){return a&&b&&a.t===b.t&&(a.t==='web'?a.url===b.url:a.id===b.id);}
+  _locEq(a,b){return a&&b&&a.t===b.t&&((a.t==='web'||a.t==='site')?a.url===b.url:(a.t==='sites'?true:a.id===b.id));}
   _pushLoc(loc){this._ensureTabs();let h=(this._hist||[]);let p=(this._hpos==null?-1:this._hpos);if(this._locEq(h[p],loc)){this._syncActiveBrowse();return;}h=h.slice(0,p+1);h.push(loc);this._hist=h;this._hpos=h.length-1;this._syncActiveBrowse();}
-  _applyLoc(loc){if(!loc)return;if(loc.t==='web'){this.setState(s=>({selId:null,viewUrl:loc.url,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(loc.url);}else{this.setState(s=>({selId:loc.id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}this._syncPos();}
+  _applyLoc(loc){if(!loc)return;
+    if(loc.t==='web'){this.setState(s=>({selId:null,viewUrl:loc.url,siteView:null,sitesDir:false,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(loc.url);}
+    else if(loc.t==='site'){this.setState(s=>({selId:null,viewUrl:null,siteView:loc.url,sitesDir:false,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
+    else if(loc.t==='sites'){this.setState(s=>({selId:null,viewUrl:null,siteView:null,sitesDir:true,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
+    else{this.setState(s=>({selId:loc.id,viewUrl:null,siteView:null,sitesDir:false,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
+    this._syncPos();}
   // ---- Independent, browser-like tabs. Every open tab is one of three kinds:
   //   'browse' — a website / entity, with its OWN back-forward history (hist/hpos) and its
   //              own reader-vs-native viewMode.
@@ -5467,12 +5021,14 @@ class Component extends DCLogic {
     const t=this._tabs.find(x=>x.id===id);if(!t)return;
     this._activeTab=id;this._pageUrl=null;
     this._hist=t.hist||[];this._hpos=(t.hpos==null?this._hist.length-1:t.hpos);
-    const patch={viewMode:t.viewMode||'native',panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,previewWiki:null,histRev:(this.state.histRev||0)+1};
+    const patch={viewMode:t.viewMode||'native',panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,previewWiki:null,siteView:null,sitesDir:false,histRev:(this.state.histRev||0)+1};
     if(t.kind==='chat'){this.setState({...patch,activeChat:t.chatId,viewUrl:null,selId:null,newTabOpen:false});return;}
     if(t.kind==='new'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,newTabOpen:true});return;}
     const loc=(this._hpos>=0&&this._hist)?this._hist[this._hpos]:null;
     if(loc&&loc.t==='web'){this.setState({...patch,activeChat:null,viewUrl:loc.url,selId:null,newTabOpen:false},()=>this.loadCenter(loc.url));}
     else if(loc&&loc.t==='ent'){this.setState({...patch,activeChat:null,viewUrl:null,selId:loc.id,newTabOpen:false});}
+    else if(loc&&loc.t==='site'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,siteView:loc.url,newTabOpen:false});}
+    else if(loc&&loc.t==='sites'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,sitesDir:true,newTabOpen:false});}
     else{this.setState({...patch,activeChat:null,viewUrl:null,selId:null,newTabOpen:true});}
   }
   // Route a chat into a tab: reuse the tab already hosting it, else convert a blank new tab,
@@ -5489,7 +5045,21 @@ class Component extends DCLogic {
   // Opening an entity full takes over the centre column, so it closes any active chat the
   // same way navigating to a page does (see goWeb / doReadUrl). Otherwise the chat would keep
   // filling <main> and the centre-fill guard in the view-model would suppress the explorer.
-  selectEntity(id){if(this.state.viewUrl)this._srcUrl=this.state.viewUrl;this._panelStack=[];this._pushLoc({t:'ent',id});this.setState(s=>({selId:id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,gz:{k:1,x:0,y:0},histRev:(s.histRev||0)+1}));}
+  selectEntity(id){if(this.state.viewUrl)this._srcUrl=this.state.viewUrl;this._panelStack=[];this._pushLoc({t:'ent',id});this.setState(s=>({selId:id,viewUrl:null,siteView:null,sitesDir:false,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,gz:{k:1,x:0,y:0},histRev:(s.histRev||0)+1}));}
+  // ---- site profiles: every read source rendered as its own navigable page, and a
+  // directory of them all — the way a site that lists sites gives each one a profile. Both
+  // are first-class browse LOCATIONS ({t:'site'}/{t:'sites'}), so they ride the same tabs
+  // and back/forward as pages and entities. openSite is the "open its profile" action; the
+  // profile itself carries a "Read page" that hands off to goWeb for the live reading.
+  openSite(url){url=this.norm(url);this._srcUrl=this.state.viewUrl||null;this._pushLoc({t:'site',url});
+    const patch={siteView:url,sitesDir:false,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
+    if(this.phone())patch.pane='doc';
+    this.setState(s=>({...patch,histRev:(s.histRev||0)+1}));this._scrollMainTop();}
+  openSitesDir(){this._pushLoc({t:'sites'});
+    const patch={sitesDir:true,siteView:null,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
+    if(this.phone())patch.pane='doc';
+    this.setState(s=>({...patch,histRev:(s.histRev||0)+1}));this._scrollMainTop();}
+  _scrollMainTop(){requestAnimationFrame(()=>{const a=document.getElementById('eo-main-scroll');if(a)a.scrollTop=0;});}
   _scrollPanelTop(){requestAnimationFrame(()=>{const a=document.getElementById('eo-panel-scroll');if(a)a.scrollTop=0;});}
   clickEntity(id){if(this._gzMoved)return;const cur=this.state.panelSel;if(cur&&cur!==id)this._panelStack.push(cur);
     const patch={panelSel:id,rightOpen:true,panelLens:null,gz:{k:1,x:0,y:0}};
@@ -5838,7 +5408,7 @@ class Component extends DCLogic {
       onAskDepth:()=>{this.setState({mode:'depth'});this.research(id,'depth');},
       onAskResearch:()=>{this.research(id,this.state.mode||'breadth');}};
   }
-  goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
+  goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,siteView:null,sitesDir:false,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
   processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+(res.propCount!=null?res.propCount:res.sentenceCount)+' propositions');this._busy=false;this.setState({busy:false});
     // Now that the page is read it has propositions — re-render the open view in the
     // chosen mode (reader book, or the native page with its contents + flagged passages),
@@ -5859,7 +5429,10 @@ class Component extends DCLogic {
   // Open a fresh, blank tab and switch to it — "+" always adds a visible new tab chip and
   // lands on the new-tab surface (chat / live website / reader view), whatever was showing.
   newTab(){this._ensureTabs();this._saveLive();const id=this._tabId();this._tabs.push({id,kind:'new',hist:[],hpos:-1,viewMode:this.state.viewMode||'native',chatId:null});this._activateTab(id);}
-  tabLabel(loc,g){if(loc.t==='web')return /^search:/i.test(loc.url)?(this.truncLabel(this.norm(loc.url.slice(7)),20)):(/^text:/i.test(loc.url)?((this.pageOf(loc.url)||{}).title||'Text'):this.short(loc.url));return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
+  tabLabel(loc,g){if(loc.t==='web')return /^search:/i.test(loc.url)?(this.truncLabel(this.norm(loc.url.slice(7)),20)):(/^text:/i.test(loc.url)?((this.pageOf(loc.url)||{}).title||'Text'):this.short(loc.url));
+    if(loc.t==='sites')return 'All sites';
+    if(loc.t==='site')return this.truncLabel(((this.pageOf(loc.url)||{}).title)||this.short(loc.url),22);
+    return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
   // Build the tab strip from the tab list \u2014 one chip per open tab, its glyph marking the kind:
   // chat (accent star) \u00b7 reader-view page \u00b7 search glyph \u00b7 a coloured dot for a live page /
   // entity \u00b7 + for a blank new tab.
@@ -5869,7 +5442,9 @@ class Component extends DCLogic {
     else{const loc=(t.kind==='browse'&&t.hpos>=0&&t.hist)?t.hist[t.hpos]:null;
       if(!loc){label='New tab';dotGlyph='+';dotStyle='font-size:14px;line-height:1;color:var(--ink3);flex:0 0 auto;';}
       else{label=this.tabLabel(loc,g);const isWeb=loc.t==='web';const isSearch=isWeb&&/^search:/i.test(loc.url);const reader=(t.viewMode==='reader')&&isWeb&&!isSearch;
-        if(isSearch){dotGlyph='\ue30c';dotStyle='font-family:\'Phosphor\';font-size:13px;line-height:1;color:#9aa1ab;flex:0 0 auto;';}
+        if(loc.t==='sites'){dotGlyph='\u25a6';dotStyle='font-size:12px;line-height:1;color:var(--acc);flex:0 0 auto;';}
+        else if(loc.t==='site'){const c=this.hashColor(this.short(loc.url));dotGlyph='\u25c8';dotStyle='font-size:11px;line-height:1;color:'+c+';flex:0 0 auto;';}
+        else if(isSearch){dotGlyph='\ue30c';dotStyle='font-family:\'Phosphor\';font-size:13px;line-height:1;color:#9aa1ab;flex:0 0 auto;';}
         else if(reader){dotGlyph='\ud83d\udcd6';dotStyle='font-size:12px;line-height:1;flex:0 0 auto;';}
         else if(isWeb){dotStyle='width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:#9aa1ab;';}
         else{const c=this.hashColor(label);dotStyle='width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:'+c+';';}}}
@@ -6694,27 +6269,20 @@ class Component extends DCLogic {
       depthBtnIcon:'\ue79e',depthBtnLabel:(this.state.researchDepth||'deep'),
       depthTitle:'How much research per question: shallow (the strongest answer) · deep (several angles) · obsessive (exhaust the threads). Click to cycle.',
       depthStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.webBrain!==false?'color:var(--ink2);background:var(--app);border:1px solid var(--line2);':'color:var(--ink3);background:var(--app);border:1px solid var(--line2);opacity:.5;'),
-      // THE OUTPUT PICKER on the composer — ONE split control (see view.xdc.html). The accent LEFT
-      // half is the WRITE action (pen-nib icon, outputGo); the neutral RIGHT half shows the current
-      // format+kind and opens the menu (an accordion of formats → kinds). Neither is a toggle — the
-      // accent marks the action, the neutral half marks what will be written. The two halves share
-      // one border + radius so they read as a single control. Phosphor codepoints throughout.
-      outputGoIcon:'', // pen-nib — WRITE
-      outputWriteLabel:(this._outputTypeMeta().ready&&this.state.essayArmed)?'Essay on':'Write',
-      onOutputGo:()=>this.outputGo(),
-      outputCurrentIcon:this._outputTypeMeta().icon,
-      outputCurrentLabel:(this._outputTypeMeta().id==='essay')?('Essay · '+this._essayTypeMeta().label):this._outputTypeMeta().label,
-      outputGoTitle:this._outputTypeMeta().ready
-        ?(this.state.essayArmed
-            ?('Essay mode is ON — every message you send is written as a ≥2,500-word '+this._essayTypeMeta().label.toLowerCase()+' essay on what you typed. Click to turn off.')
-            :('Turn on essay mode — then each message you send is written as a ≥2,500-word '+this._essayTypeMeta().label.toLowerCase()+' essay, thinking out loud as it plans and writes.'))
-        :(this._outputTypeMeta().label+' output isn’t wired yet — choose Essay to write'),
-      onOutputMenu:()=>this.toggleEssayMenu(),
-      outputMenuOpen:!!this.state.essayMenuOpen,
-      outputMenuTitle:'Choose what to write — the output format and, within it, its kind',
-      outputMenuRows:this._outputMenuRows(),
-      outputGoStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px 0 0 7px;padding:4px 10px;flex:0 0 auto;border-right:none;'+((this._outputTypeMeta().ready&&this.state.essayArmed)?'color:#fff;background:var(--acc);border:1px solid var(--acc);':('color:'+(this._outputTypeMeta().ready?'var(--acc)':'var(--ink3)')+';background:var(--accbg);border:1px solid var(--accline);'))+(this._outputTypeMeta().ready?'cursor:pointer;':'cursor:not-allowed;opacity:.55;'),
-      outputChooserStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:0 7px 7px 0;padding:4px 9px;flex:0 0 auto;cursor:pointer;color:var(--ink2);background:var(--app);border:1px solid var(--accline);white-space:nowrap;',
+      // THE RESEARCH CONTROL on the composer — deep research replaced the essay
+      // organ (docs/deep-research-log.md). The accent half runs the grounded
+      // projection on the box text (researchGo → /research); the neutral half
+      // opens the SURFACE — the live report panel over the session's research
+      // log, which keeps populating as further research is asked in chat.
+      outputGoIcon:'\uE30C', // magnifying glass — RESEARCH
+      outputWriteLabel:'Research',
+      onOutputGo:()=>this.researchGo(),
+      outputGoTitle:'Deep research on what you typed — pin sources, bind spans, extract grounded propositions, and project a report where every claim is tethered to its exact span. The chat gets the cited reply; the Surface holds the live report.',
+      onOutputMenu:()=>this.onOpenDeepResearch(),
+      outputMenuTitle:this.state.drHasLog?'Open the live research surface — the report keeps populating as you research in chat':'Open the research surface — run grounded deep research in a live panel',
+      outputCurrentLabel:'Surface',
+      outputGoStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px 0 0 7px;padding:4px 10px;flex:0 0 auto;border-right:none;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);cursor:pointer;',
+      outputChooserStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:0 7px 7px 0;padding:4px 9px;flex:0 0 auto;cursor:pointer;border:1px solid var(--accline);white-space:nowrap;'+(this.state.drHasLog?'color:#fff;background:var(--acc);':'color:var(--ink2);background:var(--app);'),
       backend:this.state.backend||'webllm',
       backendOptions:[{v:'webllm',label:'Llama-3.2-3B · runs in your browser'},
         {v:'qwen-coder-1.5b',label:'Qwen2.5-Coder 1.5B · code model, WebGPU'},
@@ -6734,7 +6302,7 @@ class Component extends DCLogic {
       plainBtnStyle:'display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;border-radius:7px;padding:5px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.linkMode?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
       cursor:{label:ready&&this.master?('line '+this.master.sentences.length):'—',title:ready&&this.master?('Projection at the latest read · '+this.state.pages.length+' pages · '+this.master.sentences.length+' sentences'):'no data yet'},
       liveColor:this.state.busy?'#b45309':'#22a06b',liveLabel:this.state.busy?'Working…':(ready?'Engine ready':'Loading…'),
-      hasSel:false,showPrompt:false,promptTitle:'',promptBody:'',suggestions:[],
+      hasSel:false,hasSite:false,site:null,sitesDirOn:false,sitesDir:null,onOpenSites:()=>this.openSitesDir(),showPrompt:false,promptTitle:'',promptBody:'',suggestions:[],
       newTabLanding:false,simplePrompt:false,landingModeNative:false,landingModeReader:false,landingModePageStyle:'',landingModeReaderStyle:'',onLandingPage:()=>{},onLandingReader:()=>{},
       ledger:[],ledgerCount:0,ledgerEmpty:true,hoverCardOn:false,srcOpen:false,
       direction:this.state.direction,onDirInput:e=>this.onDirInput(e),mode:this.state.mode,
@@ -6945,8 +6513,8 @@ class Component extends DCLogic {
       else kids.forEach(c=>pushP(c,Math.min(depth+1,2)));};
     pagesByRecency.filter(p=>!inSet(p.parent)).forEach(p=>pushP(p,0));
     pagesByRecency.forEach(p=>{if(!seenP.has(p.url))pushP(p,0);});
-    base.sources=orderedP.map(({p,depth,kids,collapsed:col})=>{const c=this.hashColor(this.short(p.url)),isA=vu===p.url,cnt=entInSrc.get(p.url)||0;
-      return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.goWeb(p.url),onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},
+    base.sources=orderedP.map(({p,depth,kids,collapsed:col})=>{const c=this.hashColor(this.short(p.url)),isA=(vu===p.url)||(this.state.siteView===p.url),cnt=entInSrc.get(p.url)||0;
+      return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.openSite(p.url),onRead:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.goWeb(p.url);},onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},
         hasKids:kids>0,collapsed:col,caret:col?'▸':'▾',collapseTitle:(col?'Show':'Hide')+' the '+kids+' source'+(kids!==1?'s':'')+' found from this one',
         onToggleCollapse:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.toggleSrcCollapse(p.url);},
         caretStyle:'width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:11px;line-height:1;',
@@ -6954,6 +6522,8 @@ class Component extends DCLogic {
         glyph:depth?'↳':(p.via==='REAFFERENCE'?'⟲':this.short(p.url).slice(0,2).toUpperCase()),
         rowStyle:'display:flex;align-items:center;gap:10px;padding:'+(depth?'7px 11px':'9px 11px')+';border-radius:9px;margin-bottom:3px;margin-left:'+(depth*15)+'px;cursor:pointer;border:1px solid '+(isA?'var(--accline)':'transparent')+';background:'+(isA?'var(--accbg)':'transparent')+';'+(depth?'border-left:2px solid '+c+'55;border-radius:0 9px 9px 0;':'')};});
     base.srcCount=this.master.pages.length;base.srcEmpty=this.master.pages.length===0&&(this.state.imports||[]).length===0;
+    base.hasSources=this.master.pages.length>0;
+    base.sitesDirBtnStyle='margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;border-radius:6px;padding:3px 8px;cursor:pointer;letter-spacing:.02em;'+(this.state.sitesDir?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink3);background:transparent;border:1px solid var(--line2);');
 
     // The "+" new-tab surface, once you already have sources read: a blank centre that offers
     // the three kinds a tab can be. Side panels (sources / entities) are built above, so they
@@ -6981,6 +6551,24 @@ class Component extends DCLogic {
     if(base.chatOn && base.chatOverlayOn){
       if(this.state.panelSel&&g.entities.has(this.state.panelSel)){base.panelProfileOn=true;base.panelListOn=false;base.panelProfile=this.panelProfile(this.state.panelSel,null);}
       else if(this.state.previewWiki){base.previewOn=true;base.panelListOn=false;base.preview=this.previewVals();}
+      return base;
+    }
+    // Site profiles + the directory take the centre the same way the entity explorer does:
+    // after page/chat (which win) and before the entity explorer. Both are browse locations.
+    if(this.state.sitesDir){
+      base.sitesDirOn=true;base.sitesDir=this.sitesDirectory(entInSrc);
+      return base;
+    }
+    if(this.state.siteView){
+      const sp=this.siteProfile(this.state.siteView);
+      if(sp){
+        base.hasSite=true;base.site=sp;
+        if(this.state.panelSel&&g.entities.has(this.state.panelSel)){base.panelProfileOn=true;base.panelListOn=false;base.panelProfile=this.panelProfile(this.state.panelSel,null);}
+        else{const ov=this.pageOverview(this.state.siteView);if(ov){base.panelPageOn=true;base.panelListOn=false;base.pageOverview=ov;}}
+        return base;
+      }
+      // the source was muted away or removed — fall back to the directory of what remains
+      base.sitesDirOn=true;base.sitesDir=this.sitesDirectory(entInSrc);
       return base;
     }
     if(!sel){base.showPrompt=true;base.simplePrompt=true;base.promptTitle='Select an entity';base.promptBody='Pick one from the list, or read another URL.';base.ent={name:'',gist:'',av:'',avStyle:'',meta:{sightings:0}};return base;}
