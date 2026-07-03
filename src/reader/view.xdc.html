@@ -26,22 +26,29 @@
        faint dotted rule under the model's own words (grounded to the void). Hovering any span
        floats its provenance card (_showCiteCard): where the source line is, or that it's the
        model's own. Underlines sit just under the baseline so prose stays readable. */
-    .eo-prov{cursor:help;text-decoration:none;-webkit-text-decoration:none;text-underline-offset:3px;transition:background .12s ease;border-radius:2px;}
-    .eo-prov-source{border-bottom:1px solid rgba(21,128,61,.42);}
-    .eo-prov-source:hover{background:rgba(21,128,61,.10);border-bottom-color:rgba(21,128,61,.75);}
-    /* The model as its own provenance (grounded to its training). A model ASSERTION — a real
-       claim the model puts forward — gets an amber dotted rule so it reads as attributable, not
-       merely absent; a CONNECTIVE (the writer's own phrasing) gets a faint neutral dotted rule. */
-    .eo-prov-llm{border-bottom:1px dotted rgba(150,150,160,.55);}
-    .eo-prov-llm:hover{background:rgba(150,150,160,.13);border-bottom-color:rgba(150,150,160,.85);}
-    .eo-prov-assert{border-bottom:1px dotted rgba(208,165,74,.75);}
-    .eo-prov-assert:hover{background:rgba(208,165,74,.14);border-bottom-color:rgba(208,165,74,.95);}
+    /* Per-span provenance, driven by the root's data-prov mode (the composer's "spans:" toggle):
+       'hover' (default) is clean at rest and reveals a span on hover; 'lines' underlines always
+       (green = from a source, amber dotted = a model assertion, faint dotted = model connective);
+       'off' is inert. Source-span underlines sit just under the baseline so prose stays readable. */
+    .eo-prov{border-radius:2px;transition:background .12s ease;}
+    [data-prov="hover"] .eo-prov,[data-prov="lines"] .eo-prov{cursor:help;text-underline-offset:3px;}
+    /* hover mode — reveal only under the cursor */
+    [data-prov="hover"] .eo-prov-source:hover{background:rgba(21,128,61,.10);border-bottom:1px solid rgba(21,128,61,.6);}
+    [data-prov="hover"] .eo-prov-llm:hover{background:rgba(150,150,160,.13);border-bottom:1px dotted rgba(150,150,160,.75);}
+    [data-prov="hover"] .eo-prov-assert:hover{background:rgba(208,165,74,.14);border-bottom:1px dotted rgba(208,165,74,.85);}
+    /* lines mode — always visible */
+    [data-prov="lines"] .eo-prov-source{border-bottom:1px solid rgba(21,128,61,.42);}
+    [data-prov="lines"] .eo-prov-source:hover{background:rgba(21,128,61,.10);border-bottom-color:rgba(21,128,61,.75);}
+    [data-prov="lines"] .eo-prov-llm{border-bottom:1px dotted rgba(150,150,160,.55);}
+    [data-prov="lines"] .eo-prov-llm:hover{background:rgba(150,150,160,.13);}
+    [data-prov="lines"] .eo-prov-assert{border-bottom:1px dotted rgba(208,165,74,.75);}
+    [data-prov="lines"] .eo-prov-assert:hover{background:rgba(208,165,74,.14);}
     :root{ --app:#f5f6f8;--card:#fff;--line:#e6e8ec;--line2:#dde0e5;--ink:#1b1f24;--ink2:#5a626d;--ink3:#9aa1ab;
       --acc:#5b34d6;--accbg:#f1edfc;--accline:#d8ccf7;--web:#2563eb;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
   </style>
 </helmet>
 
-<div data-acc="" style="--acc:{{ accentVar }};--accbg:{{ accbgVar }};--accline:{{ acclineVar }};height:100vh;background:var(--app);color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased;display:grid;grid-template-rows:{{ appRows }};grid-template-columns:minmax(0,1fr);position:relative;">
+<div data-acc="" data-prov="{{ provMode }}" style="--acc:{{ accentVar }};--accbg:{{ accbgVar }};--accline:{{ acclineVar }};height:100vh;background:var(--app);color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased;display:grid;grid-template-rows:{{ appRows }};grid-template-columns:minmax(0,1fr);position:relative;">
 
   <div style="background:#dee1e6;border-bottom:1px solid var(--line);">
     <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--card);">
@@ -458,6 +465,8 @@
               <!-- THE REGISTER SWITCH: auto / grounded / creative — how the next answers are written;
                    every answer is badged with the register it ACTUALLY used. Cycles on click. -->
               <button onclick="{{ onCycleAnswerMode }}" title="{{ answerModeTitle }}" style="{{ answerModeStyle }}" style-hover="border-color:var(--accline)"><span style="font-family:'Phosphor';font-size:13px;line-height:1;margin-right:5px;">{{ answerModeIcon }}</span>{{ answerModeLabel }}</button>
+              <!-- PROVENANCE DISPLAY: how per-span source/model marks show on answers — hover (clean) / lines / off. -->
+              <button onclick="{{ onCycleProvMode }}" title="{{ provModeTitle }}" style="{{ provModeStyle }}" style-hover="border-color:var(--accline)">{{ provModeLabel }}</button>
               <!-- THE RESEARCH CONTROL — deep research replaced the essay output picker. The
                    accent half runs grounded deep research on the box text; the neutral half opens
                    the SURFACE: the live report panel (src/research/surface.js) over the session's
@@ -1249,6 +1258,8 @@
               <!-- THE REGISTER SWITCH: auto / grounded / creative — how the next answers are written;
                    every answer is badged with the register it ACTUALLY used. Cycles on click. -->
               <button onclick="{{ onCycleAnswerMode }}" title="{{ answerModeTitle }}" style="{{ answerModeStyle }}" style-hover="border-color:var(--accline)"><span style="font-family:'Phosphor';font-size:13px;line-height:1;margin-right:5px;">{{ answerModeIcon }}</span>{{ answerModeLabel }}</button>
+              <!-- PROVENANCE DISPLAY: how per-span source/model marks show on answers — hover (clean) / lines / off. -->
+              <button onclick="{{ onCycleProvMode }}" title="{{ provModeTitle }}" style="{{ provModeStyle }}" style-hover="border-color:var(--accline)">{{ provModeLabel }}</button>
             <!-- THE RESEARCH CONTROL — deep research replaced the essay output picker. The
                  accent half runs grounded deep research on the box text; the neutral half opens
                  the SURFACE: the live report panel (src/research/surface.js) over the session's
