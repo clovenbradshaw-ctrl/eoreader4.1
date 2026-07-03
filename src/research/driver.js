@@ -96,9 +96,9 @@ const SIM_MIN_SHARED = 3;
 // or the round cap trips. No `search` or no `size` → the corpus is exactly what
 // was handed in (every offline test unchanged).
 export const SIZE_PRESETS = {
-  brief:    { sources: 3,  perSource: 4 },   // a tight answer
-  standard: { sources: 6,  perSource: 6 },   // a real write-up
-  deep:     { sources: 12, perSource: 8 },   // a survey
+  brief:    { sources: 3,  perSource: 4, facets: 3 },   // a tight answer
+  standard: { sources: 6,  perSource: 6, facets: 5 },   // a real write-up
+  deep:     { sources: 12, perSource: 8, facets: 6 },   // a survey
 };
 export const STRATEGIES = {
   // wide and shallow: maximize distinct sources, skim each, expand by new facets
@@ -127,7 +127,26 @@ const OP_FACETS = {
   DEF: 'definition what is',
 };
 
-// resolveDepth(opts) → { targetSources, perSource, follow } | null. Null means
+// The holonic decomposition — the subject broken into sub-holons, each a whole
+// at its own scale, phrased as a natural sub-question so it opens its own frame,
+// gather, and section, then composes into the nested report. Ordered to trace
+// the cube's kinds (existence → structure → mechanism → evaluation → consequence
+// → relation), and trimmed to the size's facet budget.
+const HOLON_FACETS = [
+  (s) => `origins and history of ${s}`,
+  (s) => `types and forms of ${s}`,
+  (s) => `how ${s} works`,
+  (s) => `criticism and controversy around ${s}`,
+  (s) => `impact and significance of ${s}`,
+  (s) => `${s} compared with related subjects`,
+];
+export const holonicFacets = (q, n = 5) => {
+  const s = String(q || '').replace(/^\s*(?:research|about|on|study of)\s+/i, '').trim();
+  if (!s) return [];
+  return HOLON_FACETS.slice(0, Math.max(1, Math.min(HOLON_FACETS.length, n))).map((f) => f(s));
+};
+
+// resolveDepth(opts) → { targetSources, perSource, facets, follow } | null. Null means
 // no active gather (behave exactly as before): only chosen when a size preset
 // is set. Strategy scales the size; an explicit targetSources/perSource wins.
 export const resolveDepth = (opts = {}) => {
@@ -138,6 +157,7 @@ export const resolveDepth = (opts = {}) => {
   return {
     targetSources: opts.targetSources ?? Math.max(1, Math.round(base.sources * strat.sourcesMul)),
     perSource: opts.maxSpansPerSource ?? Math.max(2, Math.round(base.perSource * strat.perSourceMul)),
+    facets: base.facets ?? 5,
     follow: strat.follow,
   };
 };
@@ -234,39 +254,54 @@ export const runGroundedResearch = async (question, opts = {}) => {
 
   const q = String(question || '').trim();
   const subject = researchTerms(q);
+  const depth = resolveDepth(opts);
+  const perSourceCap = depth ? depth.perSource : maxSpansPerSource;
+
+  // Holonic strategy with no explicit sub-questions AUTO-DECOMPOSES the subject
+  // into facet sub-frames — each a sub-holon gathered to its own mini-target and
+  // composed into the nested report. Explicit sub-questions always win; offline
+  // (no search) the facets still structure the read over the seed corpus.
+  const holonic = depth?.follow === 'holonic';
+  const perHolon = holonic && !!search; // read per-sub-holon vs. over the whole corpus
+  const effectiveSubQs = subQuestions.length ? subQuestions
+    : (holonic ? holonicFacets(q, depth.facets) : []);
 
   // The root frame of THIS run. Sub-questions push child frames under it (the
   // frame stack); the depth guard is the shared runaway guard, reused unchanged.
   emit(openResearch({ id: rootId, question: q, subject, scope: { alpha }, depth: 0, t: tick() }));
-  const kids = subQuestions.slice(0, MAX_FANOUT).map((sq, i) => {
+  const kids = effectiveSubQs.slice(0, MAX_FANOUT).map((sq, i) => {
     const id = `${rootId}.${i}`;
     emit(openResearch({ id, parentId: rootId, question: String(sq), subject: researchTerms(sq), depth: 1, t: tick() }));
     return { id, question: String(sq) };
   });
-  if (subQuestions.length > MAX_FANOUT) {
+  if (effectiveSubQs.length > MAX_FANOUT) {
     const a = askUser({
       id: `ask:${askN++}`, frameId: rootId, trigger: 'depth',
-      text: `The plan spawned ${subQuestions.length} threads; the budget is ${MAX_FANOUT}. Which to pursue?`,
-      options: subQuestions.map(String), t: tick(),
+      text: `The plan spawned ${effectiveSubQs.length} threads; the budget is ${MAX_FANOUT}. Which to pursue?`,
+      options: effectiveSubQs.map(String), t: tick(),
     });
     emit(a);
     const reply = ask ? await safeAsk(ask, a) : null;
     if (reply != null) emit(answerAsk({ askId: a.id, reply, t: tick() }));
   }
   const frames = [{ id: rootId, question: q }, ...kids].filter((f) => f.question);
+  // Holonic splits the source budget across the sub-holons: the root gathers a
+  // light general footing, each facet gathers its own share.
+  const perFacetTarget = depth ? Math.max(2, Math.round(depth.targetSources / frames.length)) : 0;
 
   // Preliminary — the corpus must be a specified cell-region, not a vague string.
   // A size preset turns the single-shot fallback into a gather-to-target loop:
   // keep searching until there is enough grounded material for the requested
   // size, shaped by the strategy (breadth / depth / holonic).
-  const depth = resolveDepth(opts);
-  const perSourceCap = depth ? depth.perSource : maxSpansPerSource;
   let corpus = [...sources];
   if (search && (depth || !corpus.length)) {
     corpus = await gatherCorpus(q, subject, corpus, search, {
-      targetSources: depth ? Math.max(depth.targetSources, corpus.length) : 1,
+      // Under holonic decomposition the root takes only a light general footing
+      // (chase the subject's own leads) and leaves the facet-specific pages for
+      // the sub-holons to claim; otherwise it gathers the full strategy shape.
+      targetSources: depth ? Math.max(perHolon ? perFacetTarget : depth.targetSources, corpus.length) : 1,
       maxRounds: opts.maxRounds ?? (depth ? Math.max(6, depth.targetSources * 2) : 1),
-      follow: depth ? depth.follow : 'lead',
+      follow: perHolon ? 'lead' : (depth ? depth.follow : 'lead'),
       k: opts.perQuery ?? 4,
       onBeat: opts.onGather || null,
     });
@@ -286,39 +321,80 @@ export const runGroundedResearch = async (question, opts = {}) => {
   // Pin every source BEFORE it is read — the provenance anchor. The pin
   // degrades to a local record offline; the content hash never degrades. A
   // source already pinned in this log (same content hash — a follow-up ask
-  // over the same corpus) reuses its pin: one snapshot, many reads.
+  // over the same corpus) reuses its pin: one snapshot, many reads. `pinInto`
+  // is reusable so a facet frame can pin its own freshly-gathered sources into
+  // the same working set mid-run.
   const priorPins = new Map(log.filter((e) => e.kind === 'pin').map((e) => [e.contentHash, e.id]));
   const pinned = [];
-  for (const src of corpus) {
-    const text = String(src.text || '');
-    if (!text.trim()) continue;
-    const payload = await pinPayload({ url: src.url ?? null, title: src.title ?? null, text, fetch: netFetch, save, now });
-    let pinId = priorPins.get(payload.contentHash);
-    if (!pinId) {
-      pinId = `pin:${pinN++}`;
-      emit(pinSource({ id: pinId, ...payload, t: tick() }));
-      priorPins.set(payload.contentHash, pinId);
+  const pinnedById = new Map();
+  const pinnedHashes = new Set();
+  // Pin a list of sources; return the ids of the ones NEWLY added to this run's
+  // working set (so a sub-holon owns exactly the sources it first introduced).
+  const pinInto = async (list) => {
+    const added = [];
+    for (const src of list) {
+      const text = String(src.text || '');
+      if (!text.trim()) continue;
+      const payload = await pinPayload({ url: src.url ?? null, title: src.title ?? null, text, fetch: netFetch, save, now });
+      if (pinnedHashes.has(payload.contentHash)) continue; // already owned by an earlier frame
+      pinnedHashes.add(payload.contentHash);
+      let pinId = priorPins.get(payload.contentHash);
+      if (!pinId) {
+        pinId = `pin:${pinN++}`;
+        emit(pinSource({ id: pinId, ...payload, t: tick() }));
+        priorPins.set(payload.contentHash, pinId);
+      }
+      const entry = { pinId, text, doc: admitWebSource({ url: src.url || `pinned:${pinId}`, text }).doc, title: src.title ?? null };
+      pinned.push(entry);
+      pinnedById.set(pinId, entry);
+      added.push(pinId);
     }
-    const { doc } = admitWebSource({ url: src.url || `pinned:${pinId}`, text });
-    pinned.push({ pinId, text, doc, title: src.title ?? null });
-  }
+    return added;
+  };
+  // The root owns the general footing; each holonic facet owns its own gather.
+  const framePins = new Map();
+  framePins.set(rootId, await pinInto(corpus));
 
-  // ── Per-frame: bind, VOID-gate, extract, the significance loop ────────────
+  // ── Per-frame: gather (holonic), bind, VOID-gate, extract, significance ────
   for (const frame of frames) {
     const fq = frame.question;
     const fTerms = researchTerms(fq);
+
+    // A holonic facet is its own whole: it gathers its OWN sources to a
+    // mini-target before it reads, so the sub-holon stands on material it went
+    // and found — not just leftovers of the root's gather. Root gathers the
+    // general footing above; offline (no search) this is a no-op.
+    if (perHolon && frame.id !== rootId) {
+      const facetCorpus = await gatherCorpus(fq, fTerms, [], search, {
+        targetSources: perFacetTarget,
+        maxRounds: opts.maxRounds ?? Math.max(4, perFacetTarget * 2),
+        follow: 'lead',
+        k: opts.perQuery ?? 4,
+        onBeat: opts.onGather || null,
+      });
+      framePins.set(frame.id, await pinInto(facetCorpus));
+    }
+
+    // Which sources this frame READS, and what it binds against. Under holonic
+    // decomposition each sub-holon reads only the sources IT owns, bound to the
+    // subject (the facet's descriptor steered the gather, not the bind — those
+    // words rarely appear in the prose). Otherwise the frame reads the whole
+    // corpus, bound to its own question terms (unchanged).
+    const readSet = perHolon ? (framePins.get(frame.id) || []).map((id) => pinnedById.get(id)).filter(Boolean) : pinned;
+    const bindTerms = perHolon ? subject : fTerms;
+    if (perHolon && !readSet.length) continue; // this sub-holon found no sources — leave its section empty
 
     // The bind measurement per source: score each sentence by its overlap with
     // the frame subject; the spans that clear the strong gate are the reads.
     let anyBind = false;
     const extracts = []; // { pinId, sentence, idx, score }
-    for (const p of pinned) {
+    for (const p of readSet) {
       const sentences = p.doc.sentences || [];
       const scored = sentences.map((s, idx) => {
         const toks = p.doc.tokensBySentence?.[idx];
         let overlap = 0;
-        for (const term of fTerms) if (toks?.has(term)) overlap++;
-        return { idx, sentence: s, overlap, score: fTerms.length ? overlap / fTerms.length : 0 };
+        for (const term of bindTerms) if (toks?.has(term)) overlap++;
+        return { idx, sentence: s, overlap, score: bindTerms.length ? overlap / bindTerms.length : 0 };
       });
       const spans = scored.filter((x) => x.overlap > 0).map((x) => ({ idx: x.idx, score: x.score }));
       const verdict = fieldVerdict(p.doc, fq, spans, { alpha });
@@ -343,7 +419,7 @@ export const runGroundedResearch = async (question, opts = {}) => {
     // The VOID gate, turned into a question rather than a flat "does not say".
     if (!anyBind || !extracts.length) {
       const named = (fq.match(/\b[A-Z][A-Za-z'’-]{2,}\b/g) || []).filter((w) => !fTerms.includes(w.toLowerCase()));
-      const inCorpus = pinned.some((p) => p.doc.sentences?.some((s, i) => fTerms.some((term) => p.doc.tokensBySentence?.[i]?.has(term))));
+      const inCorpus = readSet.some((p) => p.doc.sentences?.some((s, i) => bindTerms.some((term) => p.doc.tokensBySentence?.[i]?.has(term))));
       const terrain = !inCorpus && subject.length ? 'elsewhere' : 'never-set';
       emit(voidAbsence({
         frameId: frame.id, terrain,

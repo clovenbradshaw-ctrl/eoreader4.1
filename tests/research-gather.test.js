@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { runGroundedResearch, resolveDepth, SIZE_PRESETS, STRATEGIES } from '../src/research/driver.js';
+import { runGroundedResearch, resolveDepth, holonicFacets, SIZE_PRESETS, STRATEGIES } from '../src/research/driver.js';
 import { formatChatReply } from '../src/research/session.js';
 
 // The gather-to-target loop (the user's ask: "research on dolphins should
@@ -82,6 +82,57 @@ test('no search injected → the corpus is exactly what was handed in (gather is
   const sources = [{ url: 'https://x', title: 'X', text: 'Dolphins are aquatic mammals. Dolphins eat fish.' }];
   const { report } = await runGroundedResearch('dolphins', { size: 'deep', strategy: 'breadth', sources });
   assert.equal(report.pins.length, 1, 'no search means no widening — the seed corpus stands alone');
+});
+
+// ── Holonic decomposition: the subject as a holarchy of sub-frames ──────────
+
+// A web whose facet pages carry facet-specific search keys (a real engine
+// separates "dolphins" from "origins of dolphins"), so each sub-holon can find
+// and own its own sources.
+const FACET_WEB = [
+  { url: 'https://f/overview', title: 'Dolphin', keys: ['dolphins', 'dolphin', 'overview'],
+    text: 'Dolphins are aquatic mammals within the infraorder Cetacea. Dolphins are widespread across marine environments. Dolphins are carnivorous predators.' },
+  { url: 'https://f/history', title: 'Evolution', keys: ['origins', 'history'],
+    text: 'Dolphins evolved from land mammals about fifty million years ago. The earliest dolphins appear in the fossil record. These dolphins share ancestry with whales.' },
+  { url: 'https://f/how', title: 'Echolocation', keys: ['how', 'works'],
+    text: 'Dolphins use echolocation to navigate. These dolphins emit clicks and read returning echoes. Dolphins hunt cooperatively.' },
+  { url: 'https://f/crit', title: 'Captivity', keys: ['criticism', 'controversy'],
+    text: 'Critics argue keeping dolphins in captivity harms welfare. Captive dolphins show signs of stress. Many dolphins die young in captivity.' },
+  { url: 'https://f/impact', title: 'Significance', keys: ['impact', 'significance'],
+    text: 'Dolphins are keystone predators shaping ecosystems. Dolphins carry cultural significance. Dolphins support tourism economies.' },
+];
+const facetSearch = async (query, { k = 4 } = {}) => {
+  const t = String(query).toLowerCase().split(/\s+/);
+  return FACET_WEB.map((p) => ({ p, s: p.keys.filter((key) => t.includes(key)).length }))
+    .filter((x) => x.s > 0).sort((a, b) => b.s - a.s).slice(0, k)
+    .map((x) => ({ url: x.p.url, title: x.p.title, text: x.p.text }));
+};
+
+test('holonicFacets breaks a subject into natural sub-questions, trimmed to the facet budget', () => {
+  const f = holonicFacets('dolphins', 4);
+  assert.equal(f.length, 4);
+  assert.ok(f.every((q) => /dolphins/.test(q)), 'each facet names the subject');
+  assert.match(f[0], /origins|history/, 'the first facet is the origin/history sub-holon');
+  assert.match(holonicFacets('research dolphins')[0], /^origins and history of dolphins/, 'the research verb is stripped from the subject');
+});
+
+test('holonic auto-decomposes into sub-frames, each reading the sources IT gathered', async () => {
+  const { report } = await runGroundedResearch('dolphins', { size: 'deep', strategy: 'holonic', search: facetSearch });
+  const children = report.sections.filter((s) => s.parentId);
+  assert.ok(children.length >= 4, 'the subject decomposed into several sub-holons');
+  const populated = children.filter((s) => s.propositions.length);
+  assert.ok(populated.length >= 3, 'at least three sub-holons found their own material');
+  // Each populated facet reads pins the root did not — it went and found its own.
+  const rootPins = new Set(report.sections.find((s) => !s.parentId).propositions.map((p) => p.pinId));
+  const facetPins = new Set(populated.flatMap((s) => s.propositions.map((p) => p.pinId)));
+  assert.ok([...facetPins].some((p) => !rootPins.has(p)), 'a sub-holon stands on a source of its own');
+});
+
+test('offline holonic (no search) opens the sub-frames but never crashes', async () => {
+  const sources = [{ url: 'https://x', title: 'X', text: 'Dolphins are aquatic mammals. Dolphins eat fish and squid.' }];
+  const { report } = await runGroundedResearch('dolphins', { size: 'standard', strategy: 'holonic', sources });
+  assert.ok(report.sections.length >= 2, 'the facets still structure the read');
+  assert.ok(report.propositions.length >= 1, 'the root still grounds on the seed corpus');
 });
 
 test('the gathered survey renders an honest, multi-source chat reply', async () => {
