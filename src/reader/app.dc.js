@@ -24,7 +24,7 @@ class Component extends DCLogic {
     // whatever's decoding; `_stopGen` latches a user stop until the next turn starts.
     this._activeGuards=new Set(); this._stopGen=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
-    this.state={ ready:false, engineErr:null, pages:[], selId:null, query:'', url:'', busy:false, feed:[],
+    this.state={ ready:false, engineErr:null, pages:[], selId:null, siteView:null, sitesDir:false, query:'', url:'', busy:false, feed:[],
       // In-flight imports — a file starts here THE MOMENT it's picked, so it shows in the
       // Sources panel instantly (with a live "what it's doing" status) instead of only
       // appearing once the slow extractor — whisper, pdf.js, Tesseract — has finished. Each:
@@ -902,7 +902,7 @@ class Component extends DCLogic {
     // not silently grounded in the whole library.
     const sources=scopeUrl?[scopeUrl]:[];
     this._chatTab(id);
-    this.setState(s=>({chats:[{id,title,sources,scopeAll:false,messages:[],ts:Date.now()},...s.chats],activeChat:id,viewUrl:null,selId:null,chatInput:'',chatAddOpen:false,rightOpen:true,newTabOpen:false,histRev:(s.histRev||0)+1}));
+    this.setState(s=>({chats:[{id,title,sources,scopeAll:false,messages:[],ts:Date.now()},...s.chats],activeChat:id,viewUrl:null,selId:null,siteView:null,sitesDir:false,chatInput:'',chatAddOpen:false,rightOpen:true,newTabOpen:false,histRev:(s.histRev||0)+1}));
     return id;
   }
   // The sources a chat is ABOUT, as a URL list. Tolerates the older single-`scope` shape
@@ -4937,6 +4937,107 @@ class Component extends DCLogic {
   }
   showAllEntities(){this.setState({panelMode:'entities'});}
   showOverview(){this.setState({panelMode:'overview'});}
+  // ── site profiles: a page for every read source, and a directory of them all ──────
+  // A site that lists sites gives each one a profile; here every source read into memory
+  // becomes its own navigable page. The kind label a source wears in its profile / card.
+  _siteKind(p,url){
+    if(!p)return 'Source';
+    if(p.image)return 'Image';
+    if(/^text:/i.test(url))return 'Imported text';
+    if(p.author)return 'Book';
+    if(p.via==='REAFFERENCE')return 'Found by EO';
+    return 'Web page';
+  }
+  // The face a source wears — its avatar letters + colour + hostname. Imported text and
+  // other opaque (non-http) sources have no hostname, so fall back to the title's initials
+  // and hide the empty host instead of showing a bare middot.
+  _siteFace(p,url){const host=this.short(url),hasHost=!!host,color=this.hashColor(host||url||'');
+    const av=hasHost?host.slice(0,2).toUpperCase():this.initials((p&&p.title)||'Source');
+    return {host,hasHost,color,av};}
+  // Entities that appear in ONE source, ranked by how many of its propositions name them.
+  _siteEntities(url){
+    const sets=new Map();
+    for(const ev of this.master.events){if(ev.sentIdx==null||this.master.sentenceSource[ev.sentIdx]!==url)continue;
+      [ev.id,ev.src,ev.tgt,ev.from,ev.to].filter(Boolean).forEach(x=>{const r=this.graph.representative(x);
+        if(this.graph.entities.has(r)&&this.showable(r)&&!this.isURLish(this.labelOf(r))){let st=sets.get(r);if(!st){st=new Set();sets.set(r,st);}st.add(ev.sentIdx);}});}
+    return [...sets].map(([eid,st])=>({eid,n:st.size})).sort((a,b)=>b.n-a.n);
+  }
+  // The full-page profile of a single site — the reading rendered as a page ABOUT the
+  // source: its gist, the entities it introduced (each a click to its own page), the
+  // passages the reading flagged, and the sources it branches to. "Read page" hands off to
+  // the live reader (goWeb), so the profile is the listing and the page is the visit.
+  siteProfile(url){
+    const p=this.pageOf(url);if(!p)return null;
+    const face=this._siteFace(p,url),host=face.host,c=face.color;
+    const fmtDate=ts=>{try{return new Date(ts).toLocaleDateString([],{year:'numeric',month:'short',day:'numeric'});}catch(e){return '';}};
+    let propN=0;for(let i=0;i<this.master.sentenceSource.length;i++)if(this.master.sentenceSource[i]===url)propN++;
+    // gist — the source's own lead prose, boilerplate stripped (mirrors pageOverview)
+    const boiler=s=>this._refLike(s)||/^this article\b|please help|needs? (additional|more) citation|citation needed|may be in need of|unreferenced|unsourced|multiple issues|improve this article|add citations|learn how and when/i.test(s);
+    const lead=[];for(let i=0;i<this.master.sentences.length&&lead.length<3;i++){if(this.master.sentenceSource[i]!==url)continue;const s=this.clean(this.master.sentences[i]);if(this._proseOk(s)&&s.length>=44&&!boiler(s))lead.push(s);}
+    const gist=lead.length?this.endOnBoundary(lead.join(' '),440):'';
+    const ranked=this._siteEntities(url),maxN=ranked.length?ranked[0].n:1;
+    const ents=ranked.slice(0,18).map(({eid,n})=>{const nl=this.labelOf(eid);
+      return {id:eid,name:this.truncLabel(nl,30),av:this.initials(nl),avStyle:this.avatar(nl,30),
+        sub:n+' mention'+(n!==1?'s':''),
+        barStyle:'height:3px;border-radius:2px;margin-top:6px;background:'+this.hashColor(nl)+';width:'+Math.max(9,Math.round(n/maxN*100))+'%;',
+        rowStyle:'display:flex;flex-direction:column;gap:2px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:var(--card);cursor:pointer;min-width:0;',
+        onOpen:()=>this.selectEntity(eid),onEnter:ev=>this.entHover(eid,ev),onLeave:()=>this.entLeave()};});
+    let flags=[];try{flags=this._pageFlags(p);}catch(e){}
+    const passages=flags.slice(0,4).map(f=>({txt:this.truncLabel(this.norm(f.text),320),why:this.norm(f.why||''),hasWhy:!!(f.why&&String(f.why).trim()),onOpen:()=>this.goWeb(url)}));
+    const relCard=x=>{const f=this._siteFace(x,x.url),k=this._siteKind(x,x.url);
+      return {title:this.truncLabel(x.title||f.host||'Source',40),sub:(f.hasHost?f.host+' · ':'')+k,srcId:this.srcId(x.url),
+        av:f.av,avStyle:'width:26px;height:26px;flex:0 0 auto;border-radius:8px;background:'+f.color+'1a;color:'+f.color+';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;',
+        rowStyle:'display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card);cursor:pointer;min-width:0;',
+        onOpen:()=>this.openSite(x.url)};};
+    const parentP=p.parent?this.pageOf(p.parent):null;
+    const kids=this.master.pages.filter(x=>x.parent===url);
+    const muted=this._muted.has(url);
+    return {
+      title:p.title||host||'Untitled source', host, hasHost:face.hasHost, url, srcId:this.srcId(url),
+      av:face.av,
+      avStyle:'width:52px;height:52px;flex:0 0 auto;border-radius:14px;background:'+c+'1a;color:'+c+';display:flex;align-items:center;justify-content:center;font-size:'+(face.av.length>2?16:19)+'px;font-weight:800;letter-spacing:-.02em;',
+      when:fmtDate(p.ts), hasWhen:!!p.ts, kind:this._siteKind(p,url),
+      hasAuthor:!!p.author, author:this.norm(p.author||''),
+      hasPublished:!!p.published, published:this.norm(String(p.published||'')),
+      hasGist:!!gist, gist,
+      stats:[{k:'entities',v:ranked.length},{k:'propositions',v:propN},{k:'found here',v:kids.length}],
+      ents, hasEnts:ents.length>0, entsMore:Math.max(0,ranked.length-ents.length), hasEntsMore:ranked.length>ents.length,
+      passages, hasPassages:passages.length>0,
+      parent: parentP?relCard(parentP):null, hasParent:!!parentP,
+      kids: kids.map(relCard), hasKids:kids.length>0, kidCount:kids.length,
+      muted, muteLabel:muted?'Muted — not feeding the record':'Feeding the record',
+      muteBtnLabel:muted?'Unmute source':'Mute source',
+      muteBtnStyle:'display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:8px;padding:7px 13px;cursor:pointer;'+(muted?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
+      onRead:()=>this.goWeb(url), onChat:()=>this.newChat(url), onMute:()=>this.muteSrc(url),
+      onBackDir:()=>this.openSitesDir()
+    };
+  }
+  // The directory: every read source as a profile card. entInSrc (the per-source entity
+  // count the render pass already built) is passed in when available; otherwise counted here.
+  sitesDirectory(entInSrc){
+    const pages=[...this.master.pages].sort((a,b)=>b.ts-a.ts);
+    const propC=new Map();pages.forEach(p=>propC.set(p.url,0));
+    for(let i=0;i<this.master.sentenceSource.length;i++){const u=this.master.sentenceSource[i];if(propC.has(u))propC.set(u,propC.get(u)+1);}
+    let entC=entInSrc;
+    if(!entC){entC=new Map();pages.forEach(p=>entC.set(p.url,0));const seen=new Map();
+      for(const ev of this.master.events){if(ev.sentIdx==null)continue;const u=this.master.sentenceSource[ev.sentIdx];if(!entC.has(u))continue;
+        [ev.id,ev.src,ev.tgt,ev.from,ev.to].filter(Boolean).forEach(x=>{const r=this.graph.representative(x);
+          if(this.graph.entities.has(r)&&this.showable(r)&&!this.isURLish(this.labelOf(r))){let st=seen.get(u);if(!st){st=new Set();seen.set(u,st);}st.add(r);}});}
+      seen.forEach((st,u)=>entC.set(u,st.size));}
+    const fmtDate=ts=>{try{return new Date(ts).toLocaleDateString([],{month:'short',day:'numeric'});}catch(e){return '';}};
+    const cards=pages.map(p=>{const f=this._siteFace(p,p.url),c=f.color,muted=this._muted.has(p.url),kind=this._siteKind(p,p.url);
+      const gist=this.truncLabel(this.norm((p.sentences&&p.sentences[0])||p.text||''),150);
+      const nE=(entC.get(p.url)||0),nP=(propC.get(p.url)||0);
+      return {title:this.truncLabel(p.title||f.host||'Untitled source',46),host:f.host,sub:(f.hasHost?f.host+' · ':'')+kind,srcId:this.srcId(p.url),url:p.url,kind,
+        av:f.av,
+        avStyle:'width:34px;height:34px;flex:0 0 auto;border-radius:10px;background:'+c+'1a;color:'+c+';display:flex;align-items:center;justify-content:center;font-size:'+(f.av.length>2?12:13)+'px;font-weight:800;letter-spacing:-.02em;',
+        when:fmtDate(p.ts),
+        stat:nE+' entit'+(nE!==1?'ies':'y')+' · '+nP+' prop'+(nP!==1?'s':''),
+        hasGist:!!gist, gist, muted,
+        cardStyle:'display:flex;flex-direction:column;gap:9px;padding:15px 16px;border:1px solid '+(muted?'var(--line2)':'var(--line)')+';border-radius:14px;background:var(--card);cursor:pointer;'+(muted?'opacity:.62;':'')+'min-width:0;',
+        onOpen:()=>this.openSite(p.url), onRead:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.goWeb(p.url);}, onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);}};});
+    return {count:pages.length, countLabel:pages.length+' source'+(pages.length!==1?'s':'')+' read into memory', cards, empty:pages.length===0};
+  }
   sourcesOf(id){return [...new Set(this.mentionsOf(id).map(i=>this.master.sentenceSource[i]).filter(Boolean))];}
   neighbors(id){const agg=new Map();for(const e of this.edgesOf(id)){const o=e.from===id?e.to:e.from;if(this.isURLish(this.labelOf(o))||!this.showable(o))continue;const c=agg.get(o)||{w:0,vias:new Set(),sent:null,grain:null,llm:false};c.w+=((e.weight!=null?e.weight:1)||0)+1e-4;const via=e.relType||e.via||e.kind;if(!this.junkRel(via))c.vias.add(via);if(c.sent==null)c.sent=e.sentIdx;if(!c.grain)c.grain=this.edgeGrain(e);if(this.edgeReader(e)==='svo-llm')c.llm=true;agg.set(o,c);}return [...agg].map(([o,v])=>({id:o,w:v.w,vias:[...v.vias],sent:v.sent,grain:v.grain,llm:v.llm})).sort((a,b)=>b.w-a.w);}
   pageOf(url){return (this.master&&this.master.pages)?this.master.pages.find(p=>p.url===url):undefined;}
@@ -5362,9 +5463,14 @@ class Component extends DCLogic {
   feedSep(t){const e=this._feedEnt!=null?this._feedEnt:null;this.setState(s=>({feed:[...s.feed,{sep:t,ent:e}]}));}
   sleep(ms){return new Promise(r=>setTimeout(r,ms));}
   // ---- location/history: each entry is {t:'web',url} or {t:'ent',id} ----
-  _locEq(a,b){return a&&b&&a.t===b.t&&(a.t==='web'?a.url===b.url:a.id===b.id);}
+  _locEq(a,b){return a&&b&&a.t===b.t&&((a.t==='web'||a.t==='site')?a.url===b.url:(a.t==='sites'?true:a.id===b.id));}
   _pushLoc(loc){this._ensureTabs();let h=(this._hist||[]);let p=(this._hpos==null?-1:this._hpos);if(this._locEq(h[p],loc)){this._syncActiveBrowse();return;}h=h.slice(0,p+1);h.push(loc);this._hist=h;this._hpos=h.length-1;this._syncActiveBrowse();}
-  _applyLoc(loc){if(!loc)return;if(loc.t==='web'){this.setState(s=>({selId:null,viewUrl:loc.url,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(loc.url);}else{this.setState(s=>({selId:loc.id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}this._syncPos();}
+  _applyLoc(loc){if(!loc)return;
+    if(loc.t==='web'){this.setState(s=>({selId:null,viewUrl:loc.url,siteView:null,sitesDir:false,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(loc.url);}
+    else if(loc.t==='site'){this.setState(s=>({selId:null,viewUrl:null,siteView:loc.url,sitesDir:false,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
+    else if(loc.t==='sites'){this.setState(s=>({selId:null,viewUrl:null,siteView:null,sitesDir:true,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
+    else{this.setState(s=>({selId:loc.id,viewUrl:null,siteView:null,sitesDir:false,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
+    this._syncPos();}
   // ---- Independent, browser-like tabs. Every open tab is one of three kinds:
   //   'browse' — a website / entity, with its OWN back-forward history (hist/hpos) and its
   //              own reader-vs-native viewMode.
@@ -5399,12 +5505,14 @@ class Component extends DCLogic {
     const t=this._tabs.find(x=>x.id===id);if(!t)return;
     this._activeTab=id;this._pageUrl=null;
     this._hist=t.hist||[];this._hpos=(t.hpos==null?this._hist.length-1:t.hpos);
-    const patch={viewMode:t.viewMode||'native',panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,previewWiki:null,histRev:(this.state.histRev||0)+1};
+    const patch={viewMode:t.viewMode||'native',panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,previewWiki:null,siteView:null,sitesDir:false,histRev:(this.state.histRev||0)+1};
     if(t.kind==='chat'){this.setState({...patch,activeChat:t.chatId,viewUrl:null,selId:null,newTabOpen:false});return;}
     if(t.kind==='new'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,newTabOpen:true});return;}
     const loc=(this._hpos>=0&&this._hist)?this._hist[this._hpos]:null;
     if(loc&&loc.t==='web'){this.setState({...patch,activeChat:null,viewUrl:loc.url,selId:null,newTabOpen:false},()=>this.loadCenter(loc.url));}
     else if(loc&&loc.t==='ent'){this.setState({...patch,activeChat:null,viewUrl:null,selId:loc.id,newTabOpen:false});}
+    else if(loc&&loc.t==='site'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,siteView:loc.url,newTabOpen:false});}
+    else if(loc&&loc.t==='sites'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,sitesDir:true,newTabOpen:false});}
     else{this.setState({...patch,activeChat:null,viewUrl:null,selId:null,newTabOpen:true});}
   }
   // Route a chat into a tab: reuse the tab already hosting it, else convert a blank new tab,
@@ -5421,7 +5529,21 @@ class Component extends DCLogic {
   // Opening an entity full takes over the centre column, so it closes any active chat the
   // same way navigating to a page does (see goWeb / doReadUrl). Otherwise the chat would keep
   // filling <main> and the centre-fill guard in the view-model would suppress the explorer.
-  selectEntity(id){if(this.state.viewUrl)this._srcUrl=this.state.viewUrl;this._panelStack=[];this._pushLoc({t:'ent',id});this.setState(s=>({selId:id,viewUrl:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,gz:{k:1,x:0,y:0},histRev:(s.histRev||0)+1}));}
+  selectEntity(id){if(this.state.viewUrl)this._srcUrl=this.state.viewUrl;this._panelStack=[];this._pushLoc({t:'ent',id});this.setState(s=>({selId:id,viewUrl:null,siteView:null,sitesDir:false,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,gz:{k:1,x:0,y:0},histRev:(s.histRev||0)+1}));}
+  // ---- site profiles: every read source rendered as its own navigable page, and a
+  // directory of them all — the way a site that lists sites gives each one a profile. Both
+  // are first-class browse LOCATIONS ({t:'site'}/{t:'sites'}), so they ride the same tabs
+  // and back/forward as pages and entities. openSite is the "open its profile" action; the
+  // profile itself carries a "Read page" that hands off to goWeb for the live reading.
+  openSite(url){url=this.norm(url);this._srcUrl=this.state.viewUrl||null;this._pushLoc({t:'site',url});
+    const patch={siteView:url,sitesDir:false,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
+    if(this.phone())patch.pane='doc';
+    this.setState(s=>({...patch,histRev:(s.histRev||0)+1}));this._scrollMainTop();}
+  openSitesDir(){this._pushLoc({t:'sites'});
+    const patch={sitesDir:true,siteView:null,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
+    if(this.phone())patch.pane='doc';
+    this.setState(s=>({...patch,histRev:(s.histRev||0)+1}));this._scrollMainTop();}
+  _scrollMainTop(){requestAnimationFrame(()=>{const a=document.getElementById('eo-main-scroll');if(a)a.scrollTop=0;});}
   _scrollPanelTop(){requestAnimationFrame(()=>{const a=document.getElementById('eo-panel-scroll');if(a)a.scrollTop=0;});}
   clickEntity(id){if(this._gzMoved)return;const cur=this.state.panelSel;if(cur&&cur!==id)this._panelStack.push(cur);
     const patch={panelSel:id,rightOpen:true,panelLens:null,gz:{k:1,x:0,y:0}};
@@ -5770,7 +5892,7 @@ class Component extends DCLogic {
       onAskDepth:()=>{this.setState({mode:'depth'});this.research(id,'depth');},
       onAskResearch:()=>{this.research(id,this.state.mode||'breadth');}};
   }
-  goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
+  goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,siteView:null,sitesDir:false,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
   processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+(res.propCount!=null?res.propCount:res.sentenceCount)+' propositions');this._busy=false;this.setState({busy:false});
     // Now that the page is read it has propositions — re-render the open view in the
     // chosen mode (reader book, or the native page with its contents + flagged passages),
@@ -5791,7 +5913,10 @@ class Component extends DCLogic {
   // Open a fresh, blank tab and switch to it — "+" always adds a visible new tab chip and
   // lands on the new-tab surface (chat / live website / reader view), whatever was showing.
   newTab(){this._ensureTabs();this._saveLive();const id=this._tabId();this._tabs.push({id,kind:'new',hist:[],hpos:-1,viewMode:this.state.viewMode||'native',chatId:null});this._activateTab(id);}
-  tabLabel(loc,g){if(loc.t==='web')return /^search:/i.test(loc.url)?(this.truncLabel(this.norm(loc.url.slice(7)),20)):(/^text:/i.test(loc.url)?((this.pageOf(loc.url)||{}).title||'Text'):this.short(loc.url));return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
+  tabLabel(loc,g){if(loc.t==='web')return /^search:/i.test(loc.url)?(this.truncLabel(this.norm(loc.url.slice(7)),20)):(/^text:/i.test(loc.url)?((this.pageOf(loc.url)||{}).title||'Text'):this.short(loc.url));
+    if(loc.t==='sites')return 'All sites';
+    if(loc.t==='site')return this.truncLabel(((this.pageOf(loc.url)||{}).title)||this.short(loc.url),22);
+    return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
   // Build the tab strip from the tab list \u2014 one chip per open tab, its glyph marking the kind:
   // chat (accent star) \u00b7 reader-view page \u00b7 search glyph \u00b7 a coloured dot for a live page /
   // entity \u00b7 + for a blank new tab.
@@ -5801,7 +5926,9 @@ class Component extends DCLogic {
     else{const loc=(t.kind==='browse'&&t.hpos>=0&&t.hist)?t.hist[t.hpos]:null;
       if(!loc){label='New tab';dotGlyph='+';dotStyle='font-size:14px;line-height:1;color:var(--ink3);flex:0 0 auto;';}
       else{label=this.tabLabel(loc,g);const isWeb=loc.t==='web';const isSearch=isWeb&&/^search:/i.test(loc.url);const reader=(t.viewMode==='reader')&&isWeb&&!isSearch;
-        if(isSearch){dotGlyph='\ue30c';dotStyle='font-family:\'Phosphor\';font-size:13px;line-height:1;color:#9aa1ab;flex:0 0 auto;';}
+        if(loc.t==='sites'){dotGlyph='\u25a6';dotStyle='font-size:12px;line-height:1;color:var(--acc);flex:0 0 auto;';}
+        else if(loc.t==='site'){const c=this.hashColor(this.short(loc.url));dotGlyph='\u25c8';dotStyle='font-size:11px;line-height:1;color:'+c+';flex:0 0 auto;';}
+        else if(isSearch){dotGlyph='\ue30c';dotStyle='font-family:\'Phosphor\';font-size:13px;line-height:1;color:#9aa1ab;flex:0 0 auto;';}
         else if(reader){dotGlyph='\ud83d\udcd6';dotStyle='font-size:12px;line-height:1;flex:0 0 auto;';}
         else if(isWeb){dotStyle='width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:#9aa1ab;';}
         else{const c=this.hashColor(label);dotStyle='width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:'+c+';';}}}
@@ -6665,7 +6792,7 @@ class Component extends DCLogic {
       plainBtnStyle:'display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;border-radius:7px;padding:5px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.linkMode?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
       cursor:{label:ready&&this.master?('line '+this.master.sentences.length):'—',title:ready&&this.master?('Projection at the latest read · '+this.state.pages.length+' pages · '+this.master.sentences.length+' sentences'):'no data yet'},
       liveColor:this.state.busy?'#b45309':'#22a06b',liveLabel:this.state.busy?'Working…':(ready?'Engine ready':'Loading…'),
-      hasSel:false,showPrompt:false,promptTitle:'',promptBody:'',suggestions:[],
+      hasSel:false,hasSite:false,site:null,sitesDirOn:false,sitesDir:null,onOpenSites:()=>this.openSitesDir(),showPrompt:false,promptTitle:'',promptBody:'',suggestions:[],
       newTabLanding:false,simplePrompt:false,landingModeNative:false,landingModeReader:false,landingModePageStyle:'',landingModeReaderStyle:'',onLandingPage:()=>{},onLandingReader:()=>{},
       ledger:[],ledgerCount:0,ledgerEmpty:true,hoverCardOn:false,srcOpen:false,
       direction:this.state.direction,onDirInput:e=>this.onDirInput(e),mode:this.state.mode,
@@ -6876,8 +7003,8 @@ class Component extends DCLogic {
       else kids.forEach(c=>pushP(c,Math.min(depth+1,2)));};
     pagesByRecency.filter(p=>!inSet(p.parent)).forEach(p=>pushP(p,0));
     pagesByRecency.forEach(p=>{if(!seenP.has(p.url))pushP(p,0);});
-    base.sources=orderedP.map(({p,depth,kids,collapsed:col})=>{const c=this.hashColor(this.short(p.url)),isA=vu===p.url,cnt=entInSrc.get(p.url)||0;
-      return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.goWeb(p.url),onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},
+    base.sources=orderedP.map(({p,depth,kids,collapsed:col})=>{const c=this.hashColor(this.short(p.url)),isA=(vu===p.url)||(this.state.siteView===p.url),cnt=entInSrc.get(p.url)||0;
+      return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.openSite(p.url),onRead:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.goWeb(p.url);},onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},
         hasKids:kids>0,collapsed:col,caret:col?'▸':'▾',collapseTitle:(col?'Show':'Hide')+' the '+kids+' source'+(kids!==1?'s':'')+' found from this one',
         onToggleCollapse:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.toggleSrcCollapse(p.url);},
         caretStyle:'width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:11px;line-height:1;',
@@ -6885,6 +7012,8 @@ class Component extends DCLogic {
         glyph:depth?'↳':(p.via==='REAFFERENCE'?'⟲':this.short(p.url).slice(0,2).toUpperCase()),
         rowStyle:'display:flex;align-items:center;gap:10px;padding:'+(depth?'7px 11px':'9px 11px')+';border-radius:9px;margin-bottom:3px;margin-left:'+(depth*15)+'px;cursor:pointer;border:1px solid '+(isA?'var(--accline)':'transparent')+';background:'+(isA?'var(--accbg)':'transparent')+';'+(depth?'border-left:2px solid '+c+'55;border-radius:0 9px 9px 0;':'')};});
     base.srcCount=this.master.pages.length;base.srcEmpty=this.master.pages.length===0&&(this.state.imports||[]).length===0;
+    base.hasSources=this.master.pages.length>0;
+    base.sitesDirBtnStyle='margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;border-radius:6px;padding:3px 8px;cursor:pointer;letter-spacing:.02em;'+(this.state.sitesDir?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink3);background:transparent;border:1px solid var(--line2);');
 
     // The "+" new-tab surface, once you already have sources read: a blank centre that offers
     // the three kinds a tab can be. Side panels (sources / entities) are built above, so they
@@ -6912,6 +7041,24 @@ class Component extends DCLogic {
     if(base.chatOn && base.chatOverlayOn){
       if(this.state.panelSel&&g.entities.has(this.state.panelSel)){base.panelProfileOn=true;base.panelListOn=false;base.panelProfile=this.panelProfile(this.state.panelSel,null);}
       else if(this.state.previewWiki){base.previewOn=true;base.panelListOn=false;base.preview=this.previewVals();}
+      return base;
+    }
+    // Site profiles + the directory take the centre the same way the entity explorer does:
+    // after page/chat (which win) and before the entity explorer. Both are browse locations.
+    if(this.state.sitesDir){
+      base.sitesDirOn=true;base.sitesDir=this.sitesDirectory(entInSrc);
+      return base;
+    }
+    if(this.state.siteView){
+      const sp=this.siteProfile(this.state.siteView);
+      if(sp){
+        base.hasSite=true;base.site=sp;
+        if(this.state.panelSel&&g.entities.has(this.state.panelSel)){base.panelProfileOn=true;base.panelListOn=false;base.panelProfile=this.panelProfile(this.state.panelSel,null);}
+        else{const ov=this.pageOverview(this.state.siteView);if(ov){base.panelPageOn=true;base.panelListOn=false;base.pageOverview=ov;}}
+        return base;
+      }
+      // the source was muted away or removed — fall back to the directory of what remains
+      base.sitesDirOn=true;base.sitesDir=this.sitesDirectory(entInSrc);
       return base;
     }
     if(!sel){base.showPrompt=true;base.simplePrompt=true;base.promptTitle='Select an entity';base.promptBody='Pick one from the list, or read another URL.';base.ent={name:'',gist:'',av:'',avStyle:'',meta:{sightings:0}};return base;}

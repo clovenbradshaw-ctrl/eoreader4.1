@@ -160,7 +160,7 @@
         <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;font-weight:600;color:var(--ink2);">Sources</span><span style="font-size:11px;color:var(--ink3);">{{ srcCount }}</span>
           <button onclick="{{ toggleLeft }}" title="Hide panel" style="margin-left:auto;width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">‹</button>
         </div>
-        <div style="font-size:11.5px;color:var(--ink3);margin-top:6px;line-height:1.5;">Pages you’ve opened. Click one to revisit it here.</div>
+        <div style="font-size:11.5px;color:var(--ink3);margin-top:6px;line-height:1.5;">Every source you’ve read. Click one to open its profile — or “Read” to open the page.</div>
       </div>
       <div style="padding:8px 9px;">
         <button onclick="{{ onNewChat }}" title="Start a net-new chat — tag sources or everything you've read from inside it" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="background:var(--card)"><span style="font-size:14px;line-height:1;">✦</span>New chat</button>
@@ -178,7 +178,12 @@
             </div>
           </sc-for>
         </sc-if>
-        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);padding:8px 4px 4px;">Sources</div>
+        <div style="display:flex;align-items:center;gap:6px;padding:8px 4px 4px;">
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);">Sources</span>
+          <sc-if value="{{ hasSources }}" hint-placeholder-val="{{ false }}">
+            <button onclick="{{ onOpenSites }}" title="Browse every source as a profile page" style="{{ sitesDirBtnStyle }}" style-hover="background:var(--accbg);color:var(--acc);border-color:var(--accline)"><span style="font-size:11px;line-height:1;">▦</span>All sites</button>
+          </sc-if>
+        </div>
         <sc-for list="{{ imports }}" as="im" hint-placeholder-count="0">
           <div style="{{ im.rowStyle }}">
             <div style="{{ im.dotStyle }}"><sc-if value="{{ im.ok }}" hint-placeholder-val="{{ true }}"><span style="{{ im.spinStyle }}"></span></sc-if><sc-if value="{{ im.isErr }}" hint-placeholder-val="{{ false }}">!</sc-if></div>
@@ -201,6 +206,7 @@
             <sc-if value="{{ s.hasKids }}" hint-placeholder-val="{{ false }}">
               <button onclick="{{ s.onToggleCollapse }}" title="{{ s.collapseTitle }}" style="{{ s.caretStyle }}" style-hover="background:#eef0f3;color:var(--ink)">{{ s.caret }}</button>
             </sc-if>
+            <button onclick="{{ s.onRead }}" title="Read the page" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">↗</button>
             <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
           </div>
         </sc-for>
@@ -232,7 +238,7 @@
         </sc-if>
         <button onclick="{{ onNewTab }}" title="New tab" style="width:24px;height:24px;flex:0 0 auto;margin-bottom:6px;border:none;background:transparent;border-radius:6px;color:var(--ink2);font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:rgba(0,0,0,.07);color:var(--ink)">+</button>
       </div>
-      <div style="flex:1 1 auto;min-height:0;position:relative;overflow-y:auto;">
+      <div id="eo-main-scroll" style="flex:1 1 auto;min-height:0;position:relative;overflow-y:auto;">
       <sc-if value="{{ chatOverlayOn }}" hint-placeholder-val="{{ false }}">
         <div style="{{ chat.shellStyle }}">
           <div style="flex:0 0 auto;border-bottom:1px solid var(--line);background:var(--card);">
@@ -849,6 +855,150 @@
 
         <div style="margin-top:26px;border-top:1px solid var(--line);padding-top:12px;color:var(--ink3);font-size:11.5px;line-height:1.6;">{{ footNote }}</div>
       </div>
+      </sc-if>
+      <!-- SITES DIRECTORY — every read source as a profile card. Click one for its page. -->
+      <sc-if value="{{ sitesDirOn }}" hint-placeholder-val="{{ false }}">
+        <div style="height:100%;overflow-y:auto;min-height:0;padding:26px 30px 90px;">
+          <div style="max-width:960px;margin:0 auto;">
+            <div style="display:flex;align-items:center;gap:13px;margin-bottom:22px;">
+              <div style="width:40px;height:40px;flex:0 0 auto;border-radius:12px;background:var(--accbg);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:19px;">▦</div>
+              <div style="min-width:0;">
+                <h1 style="font-size:21px;font-weight:800;letter-spacing:-.02em;margin:0;">All sites</h1>
+                <div style="font-size:12.5px;color:var(--ink3);margin-top:2px;">{{ sitesDir.countLabel }} — each rendered as its own profile page.</div>
+              </div>
+            </div>
+            <sc-if value="{{ sitesDir.empty }}" hint-placeholder-val="{{ false }}">
+              <div style="color:var(--ink3);font-size:13px;line-height:1.6;padding:30px 4px;">No sources yet. Read a URL, import a book, or start a chat to build your library.</div>
+            </sc-if>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:14px;">
+              <sc-for list="{{ sitesDir.cards }}" as="sc" hint-placeholder-count="0">
+                <div onclick="{{ sc.onOpen }}" title="Open this site’s profile" style="{{ sc.cardStyle }}" style-hover="border-color:var(--accline)">
+                  <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                    <div style="{{ sc.avStyle }}">{{ sc.av }}</div>
+                    <div style="min-width:0;flex:1;">
+                      <div style="font-size:13.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ sc.title }}</div>
+                      <div style="font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">{{ sc.sub }}</div>
+                    </div>
+                  </div>
+                  <sc-if value="{{ sc.hasGist }}" hint-placeholder-val="{{ true }}">
+                    <div style="font-size:12px;color:var(--ink2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">{{ sc.gist }}</div>
+                  </sc-if>
+                  <div style="display:flex;align-items:center;gap:7px;margin-top:auto;">
+                    <span style="font-size:10.5px;color:var(--ink3);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ sc.stat }}</span>
+                    <button onclick="{{ sc.onRead }}" title="Open and read the page" style="flex:0 0 auto;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:7px;padding:4px 9px;cursor:pointer;" style-hover="background:var(--card)">Read ↗</button>
+                    <button onclick="{{ sc.onChat }}" title="Chat about this source" style="flex:0 0 auto;width:26px;height:26px;border:1px solid var(--line2);background:var(--app);color:var(--ink3);border-radius:7px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc);border-color:var(--accline)">✦</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+      <!-- SITE PROFILE — one source rendered as its own page: gist, entities, passages, links. -->
+      <sc-if value="{{ hasSite }}" hint-placeholder-val="{{ false }}">
+        <div style="position:sticky;top:0;z-index:8;background:rgba(255,255,255,.82);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line);">
+          <div style="max-width:900px;margin:0 auto;padding:9px 30px;display:flex;align-items:center;gap:10px;">
+            <button onclick="{{ site.onBackDir }}" title="All sites" style="display:inline-flex;align-items:center;gap:4px;white-space:nowrap;font-size:11.5px;font-weight:600;color:var(--ink2);border:1px solid var(--line2);background:var(--app);border-radius:7px;padding:5px 9px;cursor:pointer;flex:0 0 auto;" style-hover="background:#eef0f3;color:var(--ink)">‹ All sites</button>
+            <h2 style="font-size:14px;font-weight:700;letter-spacing:-.01em;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">{{ site.title }}</h2>
+            <span style="margin-left:auto;white-space:nowrap;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:6px;padding:3px 9px;flex:0 0 auto;">Site profile</span>
+          </div>
+        </div>
+        <div style="max-width:900px;margin:0 auto;padding:24px 30px 90px;">
+          <div style="display:flex;align-items:flex-start;gap:16px;">
+            <div style="{{ site.avStyle }}">{{ site.av }}</div>
+            <div style="min-width:0;flex:1;">
+              <h1 style="font-size:22px;font-weight:800;letter-spacing:-.02em;margin:0;line-height:1.25;">{{ site.title }}</h1>
+              <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:var(--ink3);">
+                <sc-if value="{{ site.hasHost }}" hint-placeholder-val="{{ true }}"><span style="font-weight:600;color:var(--ink2);">{{ site.host }} ·</span></sc-if>
+                <span>{{ site.kind }}</span>
+                <span style="font-size:10.5px;font-weight:700;color:var(--ink3);background:var(--app);border:1px solid var(--line2);border-radius:5px;padding:1px 6px;">{{ site.srcId }}</span>
+                <sc-if value="{{ site.hasWhen }}" hint-placeholder-val="{{ true }}"><span>· read {{ site.when }}</span></sc-if>
+              </div>
+              <sc-if value="{{ site.hasAuthor }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:12.5px;color:var(--ink2);margin-top:5px;">by {{ site.author }}<sc-if value="{{ site.hasPublished }}" hint-placeholder-val="{{ false }}"> · {{ site.published }}</sc-if></div>
+              </sc-if>
+            </div>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;">
+            <button onclick="{{ site.onRead }}" title="Open and read the live page" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:#fff;background:var(--acc);border:1px solid var(--acc);border-radius:8px;padding:7px 14px;cursor:pointer;" style-hover="opacity:.9">Read page ↗</button>
+            <button onclick="{{ site.onChat }}" title="Start a chat about this source" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:7px 13px;cursor:pointer;" style-hover="background:var(--card)">✦ Chat about this</button>
+            <button onclick="{{ site.onMute }}" title="Mute stops a source feeding the record" style="{{ site.muteBtnStyle }}" style-hover="filter:brightness(.98)">{{ site.muteBtnLabel }}</button>
+          </div>
+          <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">
+            <sc-for list="{{ site.stats }}" as="st" hint-placeholder-count="3">
+              <div style="flex:1;min-width:118px;border:1px solid var(--line);border-radius:12px;padding:12px 15px;background:var(--card);">
+                <div style="font-size:23px;font-weight:800;letter-spacing:-.02em;color:var(--ink);font-variant-numeric:tabular-nums;">{{ st.v }}</div>
+                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-top:2px;">{{ st.k }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ site.hasGist }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:24px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);margin-bottom:10px;">What it says</div>
+              <p style="font-size:15px;line-height:1.62;color:var(--ink);margin:0;">{{ site.gist }}</p>
+            </div>
+          </sc-if>
+          <sc-if value="{{ site.hasEnts }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:28px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);margin-bottom:12px;">Entities introduced here</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(184px,1fr));gap:10px;">
+                <sc-for list="{{ site.ents }}" as="en" hint-placeholder-count="0">
+                  <div onclick="{{ en.onOpen }}" onmouseenter="{{ en.onEnter }}" onmouseleave="{{ en.onLeave }}" title="Open this entity’s page" style="{{ en.rowStyle }}" style-hover="border-color:var(--accline)">
+                    <div style="display:flex;align-items:center;gap:9px;min-width:0;">
+                      <div style="{{ en.avStyle }}">{{ en.av }}</div>
+                      <div style="min-width:0;flex:1;">
+                        <div style="font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ en.name }}</div>
+                        <div style="font-size:10.5px;color:var(--ink3);">{{ en.sub }}</div>
+                      </div>
+                    </div>
+                    <div style="{{ en.barStyle }}"></div>
+                  </div>
+                </sc-for>
+              </div>
+              <sc-if value="{{ site.hasEntsMore }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;color:var(--ink3);margin-top:10px;">+ {{ site.entsMore }} more entities in this source</div></sc-if>
+            </div>
+          </sc-if>
+          <sc-if value="{{ site.hasPassages }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:28px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);margin-bottom:12px;">Flagged passages</div>
+              <sc-for list="{{ site.passages }}" as="pg" hint-placeholder-count="0">
+                <div onclick="{{ pg.onOpen }}" title="Open the page" style="border-left:3px solid var(--accline);background:var(--accbg);border-radius:0 10px 10px 0;padding:11px 15px;margin-bottom:9px;cursor:pointer;" style-hover="filter:brightness(.99)">
+                  <div style="font-size:13.5px;line-height:1.55;color:var(--ink);">{{ pg.txt }}</div>
+                  <sc-if value="{{ pg.hasWhy }}" hint-placeholder-val="{{ false }}"><div style="font-size:10.5px;font-weight:600;color:var(--acc);margin-top:6px;">{{ pg.why }}</div></sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ site.hasParent }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:28px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);margin-bottom:12px;">Found from</div>
+              <div onclick="{{ site.parent.onOpen }}" title="Open this source’s profile" style="{{ site.parent.rowStyle }}" style-hover="border-color:var(--accline)">
+                <div style="{{ site.parent.avStyle }}">{{ site.parent.av }}</div>
+                <div style="min-width:0;flex:1;">
+                  <div style="font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ site.parent.title }}</div>
+                  <div style="font-size:10.5px;color:var(--ink3);">{{ site.parent.sub }}</div>
+                </div>
+                <span style="font-size:15px;color:var(--ink3);flex:0 0 auto;">›</span>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ site.hasKids }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:28px;">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);margin-bottom:12px;">Sources found from this one · {{ site.kidCount }}</div>
+              <sc-for list="{{ site.kids }}" as="kd" hint-placeholder-count="0">
+                <div onclick="{{ kd.onOpen }}" title="Open this source’s profile" style="{{ kd.rowStyle }}margin-bottom:8px;" style-hover="border-color:var(--accline)">
+                  <div style="{{ kd.avStyle }}">{{ kd.av }}</div>
+                  <div style="min-width:0;flex:1;">
+                    <div style="font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ kd.title }}</div>
+                    <div style="font-size:10.5px;color:var(--ink3);">{{ kd.sub }}</div>
+                  </div>
+                  <span style="font-size:15px;color:var(--ink3);flex:0 0 auto;">›</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <div style="margin-top:28px;border-top:1px solid var(--line);padding-top:12px;color:var(--ink3);font-size:11.5px;line-height:1.6;">A profile of one source in your library, projected from your reading log — its gist, the entities it introduced, its flagged passages, and the sources it branched to. “Read page” opens the live reading; every entity and linked source is its own page.</div>
+        </div>
       </sc-if>
       <sc-if value="{{ showPrompt }}" hint-placeholder-val="{{ false }}">
         <div style="height:100%;display:flex;align-items:center;justify-content:center;padding:40px;">
