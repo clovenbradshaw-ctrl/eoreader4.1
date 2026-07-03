@@ -12,6 +12,8 @@
     "build:morphology": "node scripts/build-morphology.mjs",
     "learn:grammar": "node scripts/learn-grammar.mjs",
     "mechanics": "node eoreader4-eval/mechanics/run.mjs ABCD",
+    "chorus:probe-a": "node eoreader4-eval/chorus-probe-a.mjs",
+    "chorus:probe-a:mock": "node eoreader4-eval/chorus-probe-a.mjs --mock",
     "chat-harness:drive": "node eoreader4-eval/chat-harness.drive.mjs",
     "frame-bind:drive": "node eoreader4-eval/frame-bind.drive.mjs"
   },

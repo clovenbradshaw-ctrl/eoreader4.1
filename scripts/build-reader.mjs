@@ -37,6 +37,7 @@ const resources = {
   eoEmbed:     'src/reader/eo/embed.js',
   eoCells:     'src/reader/eo/phasepost-cells.json',
   eoCentroids: 'src/reader/eo/centroids-27.json',
+  eoChorus:    'src/reader/eo/chorus.js',
 };
 
 const html = `<!doctype html>
