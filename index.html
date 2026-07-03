@@ -3320,7 +3320,10 @@ class Component extends DCLogic {
       const secs=report.sections.filter(sx=>sx.frameId===rootId||sx.frameId.indexOf(rootId+'.')===0);
       const props=secs.reduce((a,sx)=>a.concat(sx.propositions),[]);
       const passages=props.slice(0,6).map(p=>{const pin=report.pinById[p.pinId];return {text:p.span.text,u:(pin&&(pin.url||pin.title))||''};});
-      finish({text:text+'\n\n---\n*Deep research · '+props.length+' grounded proposition'+(props.length===1?'':'s')+' · '+report.recs.length+' reframing'+(report.recs.length===1?'':'s')+' · '+report.convergence.badge+' · full audit on the Surface (⌕).*',
+      // formatChatReply now owns the honest footer (grounded spans · sources ·
+      // VERIFY); the app only appends a pointer to the live Surface where the
+      // full grounded report and its audit trail live.
+      finish({text:text+'\n\n_The full grounded report — every span, pin, and the audit trail — is on the Surface (⌕)._',
         passages,sources:[...new Set(props.map(p=>{const pin=report.pinById[p.pinId];return pin&&pin.url;}).filter(Boolean))]});
       this.setState({drHasLog:true});
     }catch(e){finish({text:'Deep research failed: '+((e&&e.message)||e)});}

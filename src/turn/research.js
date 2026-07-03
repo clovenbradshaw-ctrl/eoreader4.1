@@ -39,7 +39,14 @@ const STOP = new Set(('the a an of to in on for and or but is are was were be be
   'these those it its his her their your our my we you they he she them then than so not no yes do does did has have ' +
   'had will would can could should about into over under more most some any all what who whom whose when where why ' +
   'which how there here just only also very much many out up off down new news said says say one two three first ' +
-  'last year years day days time times back like get got make made well still even now per via amid').split(/\s+/));
+  'last year years day days time times back like get got make made well still even now per via amid ' +
+  // Common non-content words that were slipping through and surfacing as "leads"
+  // and, worse, as reframing labels ("though, quite, flexible") — a reframing
+  // must name something contentful, never a hedge or a bare verb.
+  'though although however whilst while thus hence therefore rather quite somewhat fairly ' +
+  'use uses used using upon within without toward towards among amongst across whether either neither ' +
+  'often usually generally typically including include includes included such each other another both ' +
+  'may might must shall being able around along already always never sometimes mostly largely mainly').split(/\s+/));
 
 export const researchTerms = (s) =>
   (String(s || '').toLowerCase().match(/[a-z][a-z0-9'’-]{2,}/g) || []).filter(t => !STOP.has(t));

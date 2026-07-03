@@ -35,7 +35,7 @@ import { projectReport } from './project.js';
 import { pinPayload, locateSpan } from '../archive/pin.js';
 import { admitWebSource } from '../ingest/websource.js';
 import { fieldVerdict, ANSWERABLE_ALPHA } from '../surfer/answerable.js';
-import { researchTerms, profileOf, curiosityOf, foldInto } from '../turn/research.js';
+import { researchTerms, profileOf, curiosityOf, foldInto, leadsFrom, nextQuery } from '../turn/research.js';
 import { calibrateReader } from '../core/enacted/loop.js';
 import { OPERATORS } from '../core/operators.js';
 import { terrainOf, stanceOf } from '../core/cube.js';
@@ -87,6 +87,112 @@ export const termSimilarity = (aTerms, bTerms) => {
 
 const SIM_THRESHOLD = 0.6;
 const SIM_MIN_SHARED = 3;
+
+// ── Output size × research strategy ─────────────────────────────────────────
+// Deep research needs a LOT of material — one page is a sketch, not a survey.
+// The SIZE preset sets the ambition (how many sources to gather, how deep to
+// mine each); the STRATEGY sets the shape of the search. Both feed the gather
+// loop below, which keeps searching until the target is met, the leads dry up,
+// or the round cap trips. No `search` or no `size` → the corpus is exactly what
+// was handed in (every offline test unchanged).
+export const SIZE_PRESETS = {
+  brief:    { sources: 3,  perSource: 4 },   // a tight answer
+  standard: { sources: 6,  perSource: 6 },   // a real write-up
+  deep:     { sources: 12, perSource: 8 },   // a survey
+};
+export const STRATEGIES = {
+  // wide and shallow: maximize distinct sources, skim each, expand by new facets
+  breadth:  { sourcesMul: 1.6, perSourceMul: 0.6, follow: 'facet' },
+  // narrow and deep: fewer sources, mine each, chase the surprising leads far
+  depth:    { sourcesMul: 0.6, perSourceMul: 1.7, follow: 'lead' },
+  // spread across the cube's kinds of fact — a bit of every operator, seeded by
+  // the facets that tend to surface the operators the coverage grid still lacks
+  diagonal: { sourcesMul: 1.0, perSourceMul: 1.0, follow: 'coverage' },
+};
+// Generic aspect words that pull a subject apart into different facets (breadth).
+const FACETS = ['overview', 'history', 'how it works', 'criticism', 'impact', 'types', 'examples', 'recent developments'];
+// The cube's operators mapped to query cues that tend to surface that KIND of
+// fact — the diagonal walk cycles these so the coverage grid fills along its
+// diagonal rather than piling more of the same operator.
+const OP_FACETS = {
+  INS: 'origin history founded',
+  EVA: 'criticism assessment controversy',
+  CON: 'relationships connections partnerships',
+  SEG: 'types classification differences',
+  SYN: 'overview synthesis how it works',
+  REC: 'evolution reclassification renamed',
+  SIG: 'reports studies according to',
+  DEF: 'definition what is',
+};
+
+// resolveDepth(opts) → { targetSources, perSource, follow } | null. Null means
+// no active gather (behave exactly as before): only chosen when a size preset
+// is set. Strategy scales the size; an explicit targetSources/perSource wins.
+export const resolveDepth = (opts = {}) => {
+  const size = SIZE_PRESETS[opts.size] || (opts.size ? SIZE_PRESETS.standard : null);
+  if (!size && opts.targetSources == null) return null;
+  const strat = STRATEGIES[opts.strategy] || STRATEGIES.diagonal;
+  const base = size || SIZE_PRESETS.standard;
+  return {
+    targetSources: opts.targetSources ?? Math.max(1, Math.round(base.sources * strat.sourcesMul)),
+    perSource: opts.maxSpansPerSource ?? Math.max(2, Math.round(base.perSource * strat.perSourceMul)),
+    follow: strat.follow,
+  };
+};
+
+// gatherCorpus — widen the seed corpus toward the target with the injected
+// `search`. The frontier is seeded by the subject and grown by what the pages
+// surface, shaped by the strategy: `facet` fans across generic aspects, `lead`
+// chases the most surprising terms (curiosityOf/leadsFrom, the same active-
+// inference the walk uses), `coverage` cycles the cube's operator cues so the
+// spread of KINDS widens. Novel on-topic pages only (dedup by a text signature);
+// bounded by targetSources and a round cap. Pure but for `search`.
+const gatherCorpus = async (q, subject, seed, search, { targetSources, maxRounds, follow, k, onBeat }) => {
+  const corpus = [...seed];
+  if (typeof search !== 'function') return corpus;
+  const sig = (t) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 240).toLowerCase();
+  const seen = new Set(corpus.map((s) => sig(s.text)));
+  const seenQ = new Set();
+  const frontier = [];
+  const pushQ = (query) => { const s = String(query || '').trim(); if (s && !seenQ.has(s.toLowerCase())) frontier.push(s); };
+  // Seed: the plain question first, then the strategy's opening spread.
+  pushQ(q);
+  const anchor = subject.join(' ') || q;
+  if (follow === 'facet') for (const f of FACETS) pushQ(`${anchor} ${f}`);
+  if (follow === 'coverage') for (const cue of Object.values(OP_FACETS)) pushQ(`${anchor} ${cue.split(' ')[0]}`);
+  let prior = new Map();
+  for (const s of corpus) prior = foldInto(prior, profileOf(s.text || ''));
+  const need = () => corpus.length < targetSources;
+  const cap = Math.max(1, maxRounds);
+  let rounds = 0;
+  while (frontier.length && (need() || !corpus.length) && rounds < cap) {
+    const query = frontier.shift();
+    const qk = query.toLowerCase();
+    if (seenQ.has(qk)) continue;
+    seenQ.add(qk);
+    rounds++;
+    if (onBeat) { try { onBeat(query, corpus.length, targetSources); } catch { /* a beat never breaks the gather */ } }
+    let hits = [];
+    try { hits = (await search(query, { k })) || []; } catch { hits = []; }
+    for (const h of hits) {
+      const text = String(h?.text || '');
+      if (text.trim().length < 120) continue;
+      const s = sig(text);
+      if (seen.has(s)) continue;
+      seen.add(s);
+      corpus.push(h);
+      // Harvest the next queries from THIS page, shaped by the strategy.
+      if (follow === 'lead' || follow === 'coverage') {
+        const arrival = profileOf(text);
+        const { by } = curiosityOf(prior, arrival);
+        prior = foldInto(prior, arrival);
+        for (const lead of leadsFrom(by, { max: follow === 'lead' ? 3 : 1 })) pushQ(nextQuery(anchor, lead));
+      }
+      if (!need()) break;
+    }
+  }
+  return corpus;
+};
 
 // ── The run ──────────────────────────────────────────────────────────────────
 //
@@ -148,9 +254,20 @@ export const runGroundedResearch = async (question, opts = {}) => {
   const frames = [{ id: rootId, question: q }, ...kids].filter((f) => f.question);
 
   // Preliminary — the corpus must be a specified cell-region, not a vague string.
+  // A size preset turns the single-shot fallback into a gather-to-target loop:
+  // keep searching until there is enough grounded material for the requested
+  // size, shaped by the strategy (breadth / depth / diagonal).
+  const depth = resolveDepth(opts);
+  const perSourceCap = depth ? depth.perSource : maxSpansPerSource;
   let corpus = [...sources];
-  if (!corpus.length && search) {
-    try { corpus = (await search(q)) || []; } catch { corpus = []; }
+  if (search && (depth || !corpus.length)) {
+    corpus = await gatherCorpus(q, subject, corpus, search, {
+      targetSources: depth ? Math.max(depth.targetSources, corpus.length) : 1,
+      maxRounds: opts.maxRounds ?? (depth ? Math.max(6, depth.targetSources * 2) : 1),
+      follow: depth ? depth.follow : 'lead',
+      k: opts.perQuery ?? 4,
+      onBeat: opts.onGather || null,
+    });
   }
   if (!corpus.length) {
     const a = askUser({
@@ -210,7 +327,7 @@ export const runGroundedResearch = async (question, opts = {}) => {
       }
       anyBind = true;
       const strong = scored.filter((x) => x.overlap >= 2 || x.score >= 0.5)
-        .sort((a, b) => b.overlap - a.overlap).slice(0, maxSpansPerSource);
+        .sort((a, b) => b.overlap - a.overlap).slice(0, perSourceCap);
       for (const hit of strong) {
         const span = locateSpan(p.text, hit.sentence);
         emit(readSpan({
@@ -287,10 +404,21 @@ export const runGroundedResearch = async (question, opts = {}) => {
         }
       }
       if (strain >= threshold && sinceRec.length) {
-        const axis = [...axisStrain.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k).slice(0, 3);
+        // The reframing must NAME what the topic reorganized around — a term the
+        // frame did not already stand on. Rank by accumulated strain, drop the
+        // terms the frame already carries (a reframe onto its own DEF terms is
+        // not a reframe), and require a term with some body so a label never
+        // reads as a hedge. Fall back to the forcing span's own distinctive
+        // terms, filtered the same way, before ever emitting a bare token.
+        const from = fTerms.slice(0, 3);
+        const meaningful = (t) => t && t.length >= 4 && !from.includes(t);
+        const ranked = [...axisStrain.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+        let axis = ranked.filter(meaningful).slice(0, 3);
+        if (!axis.length) axis = pr.terms.filter(meaningful).slice(0, 3);
+        if (!axis.length) axis = (ranked.length ? ranked : pr.terms).slice(0, 3);
         emit(recFrame({
           frameId: frame.id, forcedBy: [...sinceRec], strainSum: strain,
-          from: fTerms.slice(0, 3), to: axis.length ? axis : pr.terms.slice(0, 3),
+          from, to: axis,
           trigger: 'accumulation', t: tick(),
         }));
         const a = askUser({
@@ -377,7 +505,21 @@ export const runGroundedResearch = async (question, opts = {}) => {
 };
 
 const safeAsk = async (ask, ev) => { try { return await ask(ev); } catch { return null; } };
-const splitSentences = (text) => String(text || '')
-  .replace(/\s+/g, ' ')
-  .match(/[^.!?]+[.!?]+(?:["'”’)\]]+)?|[^.!?]+$/g)?.map((s) => s.trim()).filter(Boolean) ?? [];
+// Split into sentences WITHOUT breaking inside a decimal ("9.5 m"), an
+// abbreviation ("e.g."), or an initial — the period between two digits (or the
+// dots in a short lower-case abbreviation) is not a sentence boundary. Guarding
+// them keeps a citation from landing mid-number ("to the 9. [1] 5m-long orca").
+const splitSentences = (text) => {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  if (!t) return [];
+  // Mask the dots that are NOT sentence boundaries (decimals like "9.5", short
+  // abbreviations like "e.g."/"U.S.") with a private-use sentinel, split, then
+  // unmask — so a citation can never land mid-number ("to the 9. [1] 5m orca").
+  const DOT = "\uE000";
+  const guarded = t
+    .replace(/(\d)\.(\d)/g, "$1" + DOT + "$2")
+    .replace(/\b([a-z])\.([a-z])\./gi, "$1" + DOT + "$2" + DOT);
+  const parts = guarded.match(/[^.!?]+[.!?]+(?:["'”’)\]]+)?|[^.!?]+$/g) || [];
+  return parts.map((x) => x.replace(new RegExp(DOT, "g"), ".").trim()).filter(Boolean);
+};
 const round3 = (x) => Math.round(x * 1000) / 1000;
