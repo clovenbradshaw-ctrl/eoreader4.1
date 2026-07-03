@@ -87,7 +87,7 @@ inspection.
 | `answer` | mechanical short-circuits (math computed, not researched) | `core`, `perceiver` |
 | `arc` | the long-generation arc (`runContinuation`) · span-veto · saturation gate | `ground`, `surfer` |
 | `longgen` | long-form generation support · answerability gate | `arc` |
-| `organs` | the output organs — the essay organ (`organs/out/essay.js`), text, and the shared composition contract | `write`, `surfer` |
+| `organs` | the output organs — text, publish, limner, and the shared composition contract (the essay organ is gone: long output is the deep-research projection) | `write`, `surfer` |
 | `write` | the omnimodal composition walk (`walkComposition`) · cursor register · lens port | `surfer`, `ground` |
 | `model` | chat backends (WebLLM, Qwen, echo) + embedders (hash, MiniLM) — dependency-injected | nothing |
 | `predict` | the cursor predictor | `perceiver` |
@@ -96,6 +96,8 @@ inspection.
 | `ingest` | text / image / web-source adapters · EoT surface syntax | `perceiver`, `core` |
 | `audit` | the append-only audit log (a projection of the fold) | nothing |
 | `reader` | the **shell build source** (`app.dc.js`, `view.xdc.html`) · `eo-gen` · the geometric reader bundle · file import · `eo/` cells & centroids | the engine |
+| `research` | **deep research as a grounded projection over an append-only log** (`docs/deep-research-log.md`): events · `projectReport` · driver · live view · the mountable surface (in-app overlay + standalone `deep-research.html`) | `archive`, `surfer`, `turn`, `core` |
+| `archive` | archive.org pinning: dated snapshots, content hashes, span anchors (`#:~:text=`) | `ingest` |
 | `credence` | belief / credence detection (carried for the eval battery — see the pointer) | `core` |
 
 ## The nine operators
@@ -136,6 +138,8 @@ after the fact. See [`docs/edge-grounding.md`](docs/edge-grounding.md),
     # serve the app
     npm run serve        # python3 -m http.server 8000
     # then visit http://localhost:8000
+    # deep research standalone (just the research surface):
+    #   http://localhost:8000/deep-research.html
 
     # optional acceptance battery
     npm run mechanics    # needs devDependencies installed

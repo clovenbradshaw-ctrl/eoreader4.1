@@ -62,13 +62,7 @@ export { musicOrgan, renderMusic } from './music.js';
 // re-exported as their own namespace. Each is pure; the renderer is injected.
 export * as publish from './publish/index.js';
 
-// The ESSAY organ — a commission → a whole arc-walked, ≥2500-word piece. Not a task-leaf
-// renderer either (it walks MANY talker passes rather than lowering one leaf), so like the
-// publish family it stays off OUTPUT_ORGANS and is re-exported as its own namespace. The
-// talker is injected; the walk is pure orchestration (organs/out/essay.js).
-export * as essay from './essay.js';
-
-// The essay TYPES — templates that LEARN (organs/out/essay-types.js): each type couples a
-// shipped voice cue + seed arc with a per-type profile folded from every completed essay,
-// steering the next one. Pure fold/steer/serialize; the surface owns persistence.
-export * as essayTypes from './essay-types.js';
+// The ESSAY organ is GONE (docs/deep-research-log.md): commissioned long prose a
+// small model could not ground. Long output is now the deep-research projection
+// (src/research/) — extractive spans at pinned addresses, one checked phrasing
+// call per section — so no organ here writes more than it can tether.
