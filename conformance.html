@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0b0d">
+  <title>eoreader4 · the model frontier</title>
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <style>
+    :root { --bg:#0b0b0d; --panel:#151518; --panel2:#18181b; --line:#27272a;
+            --fg:#e4e4e7; --muted:#a1a1aa; --dim:#71717a; --accent:#60a5fa;
+            --teal:#7fd1c6; --good:#34d399; --bad:#f87171; --warn:#fbbf24; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--bg); color:var(--fg);
+           font:15px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+    a { color:var(--teal); text-decoration:none; }
+    a:hover { text-decoration:underline; }
+    header { display:flex; align-items:center; gap:.75rem; padding:.9rem 1.2rem;
+             background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+    header h1 { font-size:1.05rem; margin:0; font-weight:600; }
+    header .spacer { flex:1; }
+    main { max-width:1040px; margin:0 auto; padding:1.4rem 1.2rem 4rem; }
+    .lede { color:var(--muted); font-size:.92rem; max-width:74ch; }
+    .lede code { color:var(--teal); background:var(--panel2); padding:.05rem .3rem; border-radius:4px; }
+    .lede b { color:var(--fg); }
+    button.run { background:#1d2030; color:var(--fg); border:1px solid #2c4a46;
+                 border-radius:7px; padding:.5rem .95rem; font-size:.92rem; cursor:pointer; letter-spacing:.02em; }
+    button.run:hover:not(:disabled) { background:#24283a; }
+    button.run:disabled { opacity:.5; cursor:default; }
+    .family { margin-top:1.6rem; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+    .family > .head { display:flex; align-items:center; gap:.7rem; padding:.85rem 1rem; background:var(--panel); }
+    .family > .head h2 { font-size:1rem; margin:0; font-weight:600; }
+    .family > .head .targets { color:var(--dim); font-size:.8rem; }
+    .family > .body { padding:1rem; display:none; }
+    .family.open > .body { display:block; }
+    .progress { color:var(--muted); font-size:.85rem; margin:.2rem 0 .8rem; font-variant-numeric:tabular-nums; }
+    .cards { display:flex; flex-wrap:wrap; gap:.6rem; margin:.3rem 0 1rem; }
+    .card { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:.6rem .8rem; min-width:150px; }
+    .card .label { color:var(--dim); font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; }
+    .card .value { font-size:1.35rem; font-variant-numeric:tabular-nums; margin-top:.15rem; }
+    .card .target { font-size:.72rem; color:var(--dim); margin-top:.1rem; }
+    .pill { display:inline-block; font-size:.68rem; font-weight:600; padding:.08rem .4rem; border-radius:99px; vertical-align:middle; }
+    .pill.physics  { background:rgba(52,211,153,.16); color:var(--good); }
+    .pill.frontier { background:rgba(251,191,36,.16); color:var(--warn); }
+    .pill.engine   { background:rgba(52,211,153,.16); color:var(--good); }
+    .pill.mixed    { background:rgba(251,191,36,.16); color:var(--warn); }
+    .pill.model    { background:rgba(248,113,113,.16); color:var(--bad); }
+    .axisbar { display:flex; align-items:stretch; border:1px solid var(--line); border-radius:8px; overflow:hidden; margin:.4rem 0 1rem; font-size:.78rem; }
+    .axisbar .seg { padding:.5rem .7rem; flex:1; }
+    .axisbar .seg b { display:block; font-size:.8rem; }
+    .axisbar .seg.eng { background:rgba(52,211,153,.08); color:#a7f3d0; }
+    .axisbar .seg.mix { background:rgba(251,191,36,.08); color:#fcd34d; }
+    .axisbar .seg.mod { background:rgba(248,113,113,.1); color:#fca5a5; border-left:2px solid var(--bad); }
+    .axisbar .seg small { color:var(--dim); }
+    .subcase { color:var(--dim); font-size:.76rem; margin-top:.25rem; }
+    .subcase .sc { color:var(--muted); } .subcase .t-engine { color:var(--good); } .subcase .t-model { color:var(--bad); }
+    .banner { border-radius:8px; padding:.7rem .9rem; font-size:.86rem; margin:.2rem 0 1rem; }
+    .banner.warn { background:rgba(251,191,36,.1); border:1px solid rgba(251,191,36,.35); color:#fcd34d; }
+    .banner.note { background:var(--panel2); border:1px solid var(--line); color:var(--muted); }
+    .banner b { color:var(--fg); }
+    table { width:100%; border-collapse:collapse; font-size:.83rem; margin-top:.4rem; }
+    th, td { text-align:left; padding:.42rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
+    th { color:var(--dim); font-weight:500; font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; }
+    td.q { color:var(--fg); }
+    .mark.ok { color:var(--good); }
+    .mark.no { color:var(--warn); }
+    .kind { display:inline-block; font-size:.66rem; font-weight:600; padding:.04rem .35rem; border-radius:4px;
+            background:rgba(96,165,250,.13); color:#93c5fd; letter-spacing:.03em; }
+    .caseid { font-weight:600; color:var(--fg); font-variant-numeric:tabular-nums; }
+    .input { color:var(--dim); font-size:.78rem; margin-top:.2rem; }
+    .measured { color:var(--muted); }
+    .needs { color:#fcd34d; font-size:.8rem; }
+    .foot { color:var(--dim); font-size:.78rem; margin-top:.6rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>eoreader4 · the model frontier</h1>
+    <span class="spacer"></span>
+    <a href="index.html">← app</a>
+  </header>
+  <main>
+    <p class="lede">
+      Hard coreference / identity cases, run through the <b>real</b> deterministic core — admission
+      gravity, union-find identity, the symbolic conflict oracle, the <code>DEF·EVA·REC</code> ledger —
+      the same <code>src/</code> modules the app loads, with <b>no model, no embedder, no weights,
+      no network</b>. The panel places each on the one axis that matters: <b>does resolving it need
+      the WITNESS CHANNEL to read meaning?</b> The tempting cut — hand-coded vs learned — is wrong,
+      because the engine’s middle tier already holds a <i>corpus-learned statistical layer</i>
+      (Fellegi-Sunter m/u weights, discriminativeness, the <code>REC</code> ledger). <b>Learned is
+      not the model.</b> The boundary is meaning: a witness reads it and deposits defeasible weight
+      into the field; it never decides (<code>coref.js</code>: “a witness observes, it does not
+      decide”). Most cases sit at <span class="pill engine">ENGINE</span> (the next deterministic
+      build) or <span class="pill mixed">MIXED</span> (a learned core, a witness tail); only a few
+      genuinely cross to <span class="pill model">MODEL</span>. Grounded in the battery
+      (CheckList · Winograd · Fellegi-Sunter · near-identity) — see
+      <a href="https://github.com/clovenbradshaw-ctrl/eoreader4/blob/main/docs/resolution-spectrum.md">docs/resolution-spectrum.md</a>.
+    </p>
+    <div class="axisbar">
+      <div class="seg eng"><b>engine</b><small>deterministic rules + corpus-learned statistics — no witness</small></div>
+      <div class="seg mix"><b>mixed</b><small>a learned/rule core with a witness-needing tail or sub-case</small></div>
+      <div class="seg mod"><b>model</b><small>needs the witness channel to read meaning</small></div>
+    </div>
+    <p><button class="run" id="run-all">▶ Run the frontier</button></p>
+    <div id="families"></div>
+  </main>
+
+  <script type="module">
+    import { runFrontier } from './eoreader4-eval/frontier-llm.mjs';
+
+    const el = (tag, attrs = {}, ...kids) => {
+      const n = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        if (k === 'class') n.className = v;
+        else if (k === 'html') n.innerHTML = v;
+        else n.setAttribute(k, v);
+      }
+      for (const c of kids) n.append(c?.nodeType ? c : document.createTextNode(c));
+      return n;
+    };
+    const card = (label, value, target) => {
+      const c = el('div', { class: 'card' }, el('div', { class: 'label' }, label));
+      c.append(el('div', { class: 'value' }, String(value)));
+      if (target) c.append(el('div', { class: 'target' }, target));
+      return c;
+    };
+
+    const witnessLabel = (w) => w === true ? 'needs witness' : w === 'tail' ? 'witness on tail' : 'no witness';
+    const renderFrontier = (body, { rows, summary: s, meta }) => {
+      body.replaceChildren();
+
+      const cards = el('div', { class: 'cards' });
+      cards.append(
+        card('engine', s.engine, 'more deterministic build — no model'),
+        card('mixed', s.mixed, 'learned core · witness tail'),
+        card('model', s.model, 'genuinely needs the witness'),
+        card('witness-bound', s.witnessBound, 'crosses the meaning line'),
+      );
+      body.append(cards);
+
+      body.append(el('div', { class: 'banner note', html:
+        `Of <b>${s.total}</b> hard cases, <b>${s.witnessBound}</b> strictly need the witness channel; the rest are ` +
+        `reachable by more engine (deterministic rules + corpus-learned statistics) or straddle. The core does not ` +
+        `guess where it can’t read meaning — it abstains, and the abstention is the honest signal.` }));
+
+      const tbl = el('table');
+      tbl.append(el('thead', {}, el('tr', {},
+        el('th', {}, 'tier'), el('th', {}, 'case'), el('th', {}, 'kind'),
+        el('th', {}, 'what the deterministic core does today'), el('th', {}, 'what crossing the line needs'))));
+      const tb = el('tbody');
+      for (const r of rows) {
+        const tierCell = el('td', {},
+          el('span', { class: 'pill ' + r.tier }, r.tier.toUpperCase()),
+          el('div', { class: 'tag', style: 'margin-top:.2rem' }, witnessLabel(r.needsWitness)));
+        const caseCell = el('td', { class: 'q' },
+          el('span', { class: 'caseid' }, r.id), ' — ', r.title,
+          el('div', { class: 'input' }, r.input));
+        const needsCell = el('td', { class: 'needs' }, r.crosses);
+        if (r.subcases) {
+          const sc = el('div', { class: 'subcase' }, 'straddles: ');
+          r.subcases.forEach((c, i) => {
+            if (i) sc.append(' · ');
+            sc.append(el('span', { class: 'sc' }, c.case + ' → '),
+                      el('span', { class: 't-' + c.tier }, c.tier));
+          });
+          needsCell.append(sc);
+        }
+        tb.append(el('tr', {},
+          tierCell, caseCell,
+          el('td', {}, el('span', { class: 'kind' }, r.kind)),
+          el('td', { class: 'measured' }, r.measured),
+          needsCell));
+      }
+      tbl.append(tb);
+      body.append(tbl);
+
+      body.append(el('div', { class: 'banner note', html:
+        `<b>Axis:</b> ${meta.axis}` }));
+      body.append(el('div', { class: 'banner note', html:
+        `<b>Config:</b> engine <code>${meta.engine}</code> · model <code>${meta.model}</code> · ` +
+        `embedder <code>${meta.embedder}</code> · network <code>${meta.network}</code>.` }));
+      body.append(el('div', { class: 'foot' },
+        'INV = invariance / metamorphic relation · DIR = directional (trigger flip) · MFT = minimum functionality ' +
+        '(CheckList, Ribeiro et al. 2020). Tiers from src/core/resolution-spectrum.js — the panel and the live classifier share one taxonomy.'));
+    };
+
+    const FAMILIES = [
+      { id: 'F', title: 'Frontier — where the deterministic core hits its ceiling',
+        targets: 'detection · coreference · identity', run: runFrontier, render: renderFrontier },
+    ];
+
+    const mount = document.getElementById('families');
+    const ui = {};
+    for (const fam of FAMILIES) {
+      const progress = el('div', { class: 'progress' }, 'not run yet');
+      const body = el('div', { class: 'body' }, progress);
+      const runBtn = el('button', { class: 'run' }, '▶ Run');
+      const head = el('div', { class: 'head' },
+        el('h2', {}, fam.title), el('span', { class: 'targets' }, '→ ' + fam.targets),
+        el('span', { class: 'spacer', style: 'flex:1' }), runBtn);
+      const wrap = el('div', { class: 'family open' }, head, body);
+      mount.append(wrap);
+      ui[fam.id] = { fam, body, progress, runBtn };
+      runBtn.addEventListener('click', () => runOne(fam.id));
+    }
+
+    const runOne = async (id) => {
+      const { fam, body, progress, runBtn } = ui[id];
+      runBtn.disabled = true;
+      body.replaceChildren(progress);
+      progress.textContent = 'running…';
+      try {
+        const result = await fam.run({
+          onCase: (row, i, n) => { progress.textContent = `running… ${i + 1}/${n}  (${row.id} ${row.title})`; },
+        });
+        progress.textContent = `done — ${result.rows.length} hard cases through the real deterministic core`;
+        fam.render(body, result);
+        body.prepend(progress);
+      } catch (e) {
+        progress.textContent = '';
+        body.replaceChildren(el('div', { class: 'banner warn' }, 'Error: ' + (e?.message || e)));
+        console.error(e);
+      } finally {
+        runBtn.disabled = false;
+      }
+    };
+
+    document.getElementById('run-all').addEventListener('click', async () => {
+      for (const fam of FAMILIES) await runOne(fam.id);
+    });
+  </script>
+</body>
+</html>

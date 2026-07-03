@@ -1,0 +1,19 @@
+{
+  "meta": {
+    "kind": "placeholder",
+    "note": "The Act pantheon (spec-the-pantheon.md): one contrastive cartridge per face-value, summed at the cube cell the surfer reads. This file ships EMPTY token maps — loadPantheon returns a bank with no steering, so auto-mount still NAMES which gods mount (the Given-Log) and the λ term is a no-op until baked. Bake from a legal run's corrected classified.jsonl (DEF/EVA/REC, not the pre-relabel runs) via `node scripts/distill-voice.mjs`, toward−against per god. God identities, caps, and toward/against seeds are the canonical reference in src/write/voice.js PANTHEON.",
+    "domain": null,
+    "built": null
+  },
+  "gods": {
+    "NUL": { "god": "Chaos",     "cap": 0.8, "tokens": {} },
+    "SIG": { "god": "Apollo",    "cap": 0.4, "tokens": {} },
+    "INS": { "god": "Janus",     "cap": 0.7, "tokens": {} },
+    "SEG": { "god": "Terminus",  "cap": 0.7, "tokens": {} },
+    "CON": { "god": "Harmonia",  "cap": 0.7, "tokens": {} },
+    "SYN": { "god": "Hermes",    "cap": 0.7, "tokens": {} },
+    "DEF": { "god": "Thoth",     "cap": 1.0, "tokens": {} },
+    "EVA": { "god": "Themis",    "cap": 0.7, "tokens": {} },
+    "REC": { "god": "Mnemosyne", "cap": 0.7, "tokens": {} }
+  }
+}
