@@ -13,6 +13,11 @@
 //                      into a research walk that matched the Bieber/Oasis songs by title.
 //   3. A REAL SWITCH — "who won the election last week?" mid-compose, a read naming a world-gap,
 //                      LEAVES compose and routes to the research walk. The fix is not a compose trap.
+//   4. THE POP       — "ok, back to the story about my cat buster" after the digression. The switch
+//                      was recorded as a PUSHED child frame (docs/frame-holon.md, Phase B), so the
+//                      composition stands as a suspended ancestor on the fold's frame stack; the
+//                      bind's coupling argmax returns to it, and the turn re-enters compose with
+//                      the story's carried focus — the return the single-frame router could not do.
 //
 //   run:  node eoreader4-eval/frame-bind.drive.mjs
 
@@ -72,6 +77,8 @@ const main = async () => {
         'The user is responding to my own question about the story; they want to keep composing the tale about their cat Buster. Nothing needs to be looked up.',
         // turn 3 — a genuine switch: a world-question the reading cannot cover (research).
         'They are asking about recent news the reading cannot cover — this has to be found out on the web, a search for current information.',
+        // turn 4 — the pop: done with the digression, back to composing the story.
+        'They are done with the news question and want to return to composing the story about their cat Buster — carry on the tale, nothing to look up.',
       ];
       app.ensureChatModel = async () => ({ id: 'mock' });
       const ME = {
@@ -141,6 +148,35 @@ const main = async () => {
     });
     check(t3.walks === 1, 'turn 3: a genuine switch LEFT compose and ran the research walk', 'walks=' + t3.walks);
     check(t3.mode === 'research', 'turn 3: the trail is a research trail', 'mode=' + t3.mode);
+
+    // ── Turn 4: THE POP (docs/frame-holon.md, Phase B). The switch was recorded as a pushed child
+    // frame, so the composition is a suspended ANCESTOR on the frame stack — and "back to the
+    // story" binds it (the coupling argmax over the path), pops the digression, and re-enters
+    // compose with the story's carried focus. No walk runs; the digression is parked, not closed.
+    const pushTag = await page.evaluate(() => {
+      const c = window.__eoApp.activeChatObj();
+      const u = [...c.messages].reverse().find((m) => m.role === 'user');
+      return u && u.frame && u.frame.move;
+    });
+    check(pushTag === 'push', 'turn 3: leaving compose recorded the digression as a PUSH', 'frame=' + pushTag);
+    await page.evaluate(() => { const a = window.__eoApp; a.setState({ chatInput: 'ok, back to the story about my cat buster' }); return a.sendChat(); });
+    await settle();
+    const t4 = await page.evaluate(async () => {
+      const a = window.__eoApp;
+      const c = a.activeChatObj();
+      const m = c.messages[c.messages.length - 1];
+      const u = [...c.messages].reverse().find((x) => x.role === 'user');
+      const fold = await a._convFold(c);
+      return { stance: m.stance, kind: m.focus && m.focus.kind, walks: a.__walks,
+        tag: u.frame && u.frame.move, target: u.frame && u.frame.target,
+        path: fold.stack.path, suspended: fold.stack.suspended };
+    });
+    check(t4.walks === 1, 'turn 4: the pop ran NO new walk', 'walks=' + t4.walks);
+    check(t4.stance === 'compose', 'turn 4: "back to the story" re-entered compose', 'stance=' + t4.stance);
+    check(t4.kind === 'story', 'turn 4: the popped frame\'s carried focus is restored (a story, not a default poem)', 'kind=' + t4.kind);
+    check(t4.tag === 'return' && t4.target === 'chat.0', 'turn 4: the enacted return is recorded on the turn', `frame=${t4.tag}→${t4.target}`);
+    check(JSON.stringify(t4.path) === JSON.stringify(['chat', 'chat.0']), 'turn 4: the composition is the active leaf again', 'path=' + t4.path.join('>'));
+    check(JSON.stringify(t4.suspended) === JSON.stringify(['chat.0.0']), 'turn 4: the digression is suspended, not closed', 'suspended=' + t4.suspended.join(','));
 
     const pageErrs = errs.filter((e) => !/favicon|eoGen load failed|net::ERR/.test(e));
     check(pageErrs.length === 0, 'no page errors', pageErrs.slice(0, 3).join(' | '));
