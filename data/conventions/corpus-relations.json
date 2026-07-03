@@ -1,0 +1,2979 @@
+{
+  "_note": "Conventions harvested from the corpus — how relations are written and how sentences are operationally shaped. The language's HOW, deliberately separate from any document's WHAT. The engine reads conventions; it predicts about the document under reading, never about this corpus. No fact from any book is stored here.",
+  "source": {
+    "url": "https://storage.googleapis.com/intelechia-content/eo-mind/gutenberg_en_3400.parquet",
+    "sizeBytes": 608461635,
+    "books": 3400,
+    "groups": 17
+  },
+  "coverage": {
+    "booksRead": 3400,
+    "ofBooks": 3400,
+    "charsPerBook": 10000,
+    "booksBoundedByCharLimit": 3314,
+    "note": "3314 books exceeded 10000 chars and were sampled to that bound (no silent truncation — the rest of each long book was not read)"
+  },
+  "totals": {
+    "relationLinks": 154279,
+    "typedByShippedVocabulary": 23240,
+    "typedFraction": 0.1506,
+    "distinctVerbs": 22689
+  },
+  "operationalShape": {
+    "NUL": 0.0135,
+    "SEG": 0.2868,
+    "DEF": 0.0541,
+    "SIG": 0.0061,
+    "CON": 0.2772,
+    "EVA": 0.0185,
+    "INS": 0.3114,
+    "SYN": 0.0147,
+    "REC": 0.0176
+  },
+  "operatorLegend": {
+    "NUL": "Differentiate · Existence",
+    "SEG": "Differentiate · Structure",
+    "DEF": "Differentiate · Interpretation",
+    "SIG": "Relate · Existence",
+    "CON": "Relate · Structure",
+    "EVA": "Relate · Interpretation",
+    "INS": "Generate · Existence",
+    "SYN": "Generate · Structure",
+    "REC": "Generate · Interpretation"
+  },
+  "relationVerbs": [
+    {
+      "via": "made",
+      "count": 976,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "went",
+      "count": 741,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "came",
+      "count": 740,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "know",
+      "count": 720,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "like",
+      "count": 719,
+      "op": "CON",
+      "bucket": "affect"
+    },
+    {
+      "via": "took",
+      "count": 666,
+      "op": "CON",
+      "bucket": "possession"
+    },
+    {
+      "via": "said",
+      "count": 600,
+      "op": "SIG",
+      "bucket": "speech"
+    },
+    {
+      "via": "little",
+      "count": 596,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "see",
+      "count": 574,
+      "op": "CON",
+      "bucket": "perception"
+    },
+    {
+      "via": "come",
+      "count": 541,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "saw",
+      "count": 515,
+      "op": "CON",
+      "bucket": "perception"
+    },
+    {
+      "via": "found",
+      "count": 512,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "make",
+      "count": 508,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "looked",
+      "count": 508,
+      "op": "CON",
+      "bucket": "perception"
+    },
+    {
+      "via": "first",
+      "count": 472,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "got",
+      "count": 471,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "left",
+      "count": 451,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "take",
+      "count": 449,
+      "op": "CON",
+      "bucket": "possession"
+    },
+    {
+      "via": "seemed",
+      "count": 443,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "gave",
+      "count": 442,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "think",
+      "count": 431,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "thought",
+      "count": 415,
+      "op": "SIG",
+      "bucket": "speech"
+    },
+    {
+      "via": "heard",
+      "count": 415,
+      "op": "CON",
+      "bucket": "perception"
+    },
+    {
+      "via": "de",
+      "count": 413,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "good",
+      "count": 405,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "go",
+      "count": 405,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "began",
+      "count": 402,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "turned",
+      "count": 393,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "great",
+      "count": 393,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "long",
+      "count": 388,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "give",
+      "count": 383,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "get",
+      "count": 339,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "old",
+      "count": 338,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "put",
+      "count": 328,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "sat",
+      "count": 326,
+      "op": "CON",
+      "bucket": "spatial"
+    },
+    {
+      "via": "felt",
+      "count": 325,
+      "op": "CON",
+      "bucket": "perception"
+    },
+    {
+      "via": "knew",
+      "count": 324,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "chapter",
+      "count": 316,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "stood",
+      "count": 312,
+      "op": "CON",
+      "bucket": "spatial"
+    },
+    {
+      "via": "according",
+      "count": 308,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "looking",
+      "count": 308,
+      "op": "CON",
+      "bucket": "perception"
+    },
+    {
+      "via": "want",
+      "count": 303,
+      "op": "CON",
+      "bucket": "affect"
+    },
+    {
+      "via": "say",
+      "count": 300,
+      "op": "SIG",
+      "bucket": "speech"
+    },
+    {
+      "via": "himself",
+      "count": 299,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "far",
+      "count": 292,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "called",
+      "count": 283,
+      "op": "SIG",
+      "bucket": "speech"
+    },
+    {
+      "via": "find",
+      "count": 274,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "half",
+      "count": 268,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "told",
+      "count": 263,
+      "op": "SIG",
+      "bucket": "speech"
+    },
+    {
+      "via": "brought",
+      "count": 258,
+      "op": "CON",
+      "bucket": "possession"
+    },
+    {
+      "via": "became",
+      "count": 256,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "leaving",
+      "count": 254,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "used",
+      "count": 254,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "seen",
+      "count": 252,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "read",
+      "count": 250,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "time",
+      "count": 245,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "tell",
+      "count": 239,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "set",
+      "count": 238,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "young",
+      "count": 237,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "making",
+      "count": 236,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "men",
+      "count": 229,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "taken",
+      "count": 216,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "people",
+      "count": 213,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "taking",
+      "count": 212,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "man",
+      "count": 208,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "lived",
+      "count": 207,
+      "op": "CON",
+      "bucket": "spatial"
+    },
+    {
+      "via": "sent",
+      "count": 204,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "back",
+      "count": 204,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "tried",
+      "count": 195,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "kept",
+      "count": 195,
+      "op": "CON",
+      "bucket": "possession"
+    },
+    {
+      "via": "going",
+      "count": 193,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "says",
+      "count": 191,
+      "op": "SIG",
+      "bucket": "speech"
+    },
+    {
+      "via": "held",
+      "count": 190,
+      "op": "CON",
+      "bucket": "possession"
+    },
+    {
+      "via": "seems",
+      "count": 189,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "remember",
+      "count": 186,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "passed",
+      "count": 185,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "asked",
+      "count": 182,
+      "op": "SIG",
+      "bucket": "speech"
+    },
+    {
+      "via": "hear",
+      "count": 179,
+      "op": "CON",
+      "bucket": "perception"
+    },
+    {
+      "via": "received",
+      "count": 179,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "years",
+      "count": 178,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "reached",
+      "count": 173,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "returned",
+      "count": 173,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "given",
+      "count": 171,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "believe",
+      "count": 169,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "presently",
+      "count": 168,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "lay",
+      "count": 166,
+      "op": "CON",
+      "bucket": "spatial"
+    },
+    {
+      "via": "met",
+      "count": 166,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "keep",
+      "count": 166,
+      "op": "CON",
+      "bucket": "possession"
+    },
+    {
+      "via": "appeared",
+      "count": 162,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "wrote",
+      "count": 161,
+      "op": "SIG",
+      "bucket": "speech"
+    },
+    {
+      "via": "wanted",
+      "count": 161,
+      "op": "CON",
+      "bucket": "affect"
+    },
+    {
+      "via": "fell",
+      "count": 160,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "turning",
+      "count": 158,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "shook",
+      "count": 158,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "that's",
+      "count": 157,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "become",
+      "count": 156,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "feel",
+      "count": 156,
+      "op": "CON",
+      "bucket": "perception"
+    },
+    {
+      "via": "makes",
+      "count": 156,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "entered",
+      "count": 155,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "better",
+      "count": 153,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "love",
+      "count": 152,
+      "op": "CON",
+      "bucket": "affect"
+    },
+    {
+      "via": "followed",
+      "count": 150,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "life",
+      "count": 149,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "call",
+      "count": 149,
+      "op": "CON",
+      "bucket": "communication"
+    },
+    {
+      "via": "wish",
+      "count": 149,
+      "op": "CON",
+      "bucket": "affect"
+    },
+    {
+      "via": "away",
+      "count": 148,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "seem",
+      "count": 144,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "leave",
+      "count": 144,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "enough",
+      "count": 143,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "carried",
+      "count": 142,
+      "op": "CON",
+      "bucket": "possession"
+    },
+    {
+      "via": "certain",
+      "count": 142,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "last",
+      "count": 141,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "next",
+      "count": 140,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "seeing",
+      "count": 140,
+      "op": "CON",
+      "bucket": "perception"
+    },
+    {
+      "via": "bring",
+      "count": 140,
+      "op": "CON",
+      "bucket": "possession"
+    },
+    {
+      "via": "gone",
+      "count": 139,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "lost",
+      "count": 138,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "walked",
+      "count": 137,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "married",
+      "count": 137,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "others",
+      "count": 136,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "stopped",
+      "count": 135,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "there's",
+      "count": 134,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "father",
+      "count": 132,
+      "op": "CON",
+      "bucket": "kinship"
+    },
+    {
+      "via": "till",
+      "count": 131,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "following",
+      "count": 130,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "twenty",
+      "count": 130,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "comes",
+      "count": 130,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "new",
+      "count": 130,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "suppose",
+      "count": 129,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "drew",
+      "count": 129,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "holding",
+      "count": 128,
+      "op": "CON",
+      "bucket": "possession"
+    },
+    {
+      "via": "standing",
+      "count": 128,
+      "op": "CON",
+      "bucket": "spatial"
+    },
+    {
+      "via": "ran",
+      "count": 127,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "coming",
+      "count": 126,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "day",
+      "count": 125,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "spoke",
+      "count": 124,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "live",
+      "count": 123,
+      "op": "CON",
+      "bucket": "spatial"
+    },
+    {
+      "via": "sitting",
+      "count": 122,
+      "op": "CON",
+      "bucket": "spatial"
+    },
+    {
+      "via": "wore",
+      "count": 122,
+      "op": "CON",
+      "bucket": "possession"
+    },
+    {
+      "via": "opened",
+      "count": 121,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "mother",
+      "count": 121,
+      "op": "CON",
+      "bucket": "kinship"
+    },
+    {
+      "via": "hope",
+      "count": 121,
+      "op": "CON",
+      "bucket": "affect"
+    },
+    {
+      "via": "instead",
+      "count": 121,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "own",
+      "count": 120,
+      "op": "CON",
+      "bucket": "possession"
+    },
+    {
+      "via": "remained",
+      "count": 120,
+      "op": "CON",
+      "bucket": "spatial"
+    },
+    {
+      "via": "afterwards",
+      "count": 118,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "things",
+      "count": 118,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "need",
+      "count": 117,
+      "op": "CON",
+      "bucket": "affect"
+    },
+    {
+      "via": "there’s",
+      "count": 116,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "started",
+      "count": 116,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "full",
+      "count": 115,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "spent",
+      "count": 114,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "along",
+      "count": 113,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "same",
+      "count": 113,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "small",
+      "count": 113,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "died",
+      "count": 111,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "especially",
+      "count": 111,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "part",
+      "count": 111,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "white",
+      "count": 111,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "herself",
+      "count": 110,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "mean",
+      "count": 110,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "work",
+      "count": 110,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "besides",
+      "count": 109,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "house",
+      "count": 109,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "rose",
+      "count": 109,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "help",
+      "count": 108,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "done",
+      "count": 108,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "giving",
+      "count": 108,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "home",
+      "count": 107,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "high",
+      "count": 106,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "poor",
+      "count": 106,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "son",
+      "count": 105,
+      "op": "CON",
+      "bucket": "kinship"
+    },
+    {
+      "via": "right",
+      "count": 102,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "trying",
+      "count": 102,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "continued",
+      "count": 102,
+      "op": "SIG",
+      "bucket": "speech"
+    },
+    {
+      "via": "later",
+      "count": 102,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "grew",
+      "count": 101,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "living",
+      "count": 100,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "themselves",
+      "count": 100,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "learned",
+      "count": 100,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "try",
+      "count": 99,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "way",
+      "count": 99,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "showed",
+      "count": 99,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "known",
+      "count": 99,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "thinking",
+      "count": 98,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "understand",
+      "count": 98,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "speak",
+      "count": 97,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "early",
+      "count": 97,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "care",
+      "count": 97,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "eyes",
+      "count": 96,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "including",
+      "count": 96,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "laid",
+      "count": 95,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "large",
+      "count": 94,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "beautiful",
+      "count": 94,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "caught",
+      "count": 93,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "knows",
+      "count": 92,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "light",
+      "count": 92,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "alla",
+      "count": 92,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "head",
+      "count": 91,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "children",
+      "count": 90,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "self",
+      "count": 90,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "raised",
+      "count": 90,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "played",
+      "count": 90,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "night",
+      "count": 90,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "together",
+      "count": 89,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "loved",
+      "count": 89,
+      "op": "CON",
+      "bucket": "affect"
+    },
+    {
+      "via": "mind",
+      "count": 88,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "that’s",
+      "count": 88,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "hundred",
+      "count": 87,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "gives",
+      "count": 87,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "myself",
+      "count": 87,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "except",
+      "count": 86,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "goes",
+      "count": 86,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "mr",
+      "count": 85,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "threw",
+      "count": 85,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "daughter",
+      "count": 85,
+      "op": "CON",
+      "bucket": "kinship"
+    },
+    {
+      "via": "liked",
+      "count": 85,
+      "op": "CON",
+      "bucket": "affect"
+    },
+    {
+      "via": "arrived",
+      "count": 85,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "family",
+      "count": 85,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "hold",
+      "count": 84,
+      "op": "CON",
+      "bucket": "possession"
+    },
+    {
+      "via": "alone",
+      "count": 83,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "laughed",
+      "count": 83,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "face",
+      "count": 82,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "open",
+      "count": 82,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "looks",
+      "count": 82,
+      "op": "CON",
+      "bucket": "perception"
+    },
+    {
+      "via": "takes",
+      "count": 82,
+      "op": "CON",
+      "bucket": "possession"
+    },
+    {
+      "via": "hand",
+      "count": 82,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "brother",
+      "count": 81,
+      "op": "CON",
+      "bucket": "kinship"
+    },
+    {
+      "via": "happened",
+      "count": 81,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "feeling",
+      "count": 81,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "stand",
+      "count": 80,
+      "op": "CON",
+      "bucket": "spatial"
+    },
+    {
+      "via": "present",
+      "count": 80,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "turn",
+      "count": 80,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "letter",
+      "count": 80,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "led",
+      "count": 79,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "wished",
+      "count": 79,
+      "op": "CON",
+      "bucket": "affect"
+    },
+    {
+      "via": "wait",
+      "count": 79,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "death",
+      "count": 79,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "bear",
+      "count": 79,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "answered",
+      "count": 79,
+      "op": "SIG",
+      "bucket": "speech"
+    },
+    {
+      "via": "showing",
+      "count": 78,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "place",
+      "count": 78,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "meant",
+      "count": 78,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "putting",
+      "count": 78,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "moved",
+      "count": 78,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "added",
+      "count": 78,
+      "op": "SIG",
+      "bucket": "speech"
+    },
+    {
+      "via": "pass",
+      "count": 77,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "black",
+      "count": 77,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "different",
+      "count": 77,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "possessed",
+      "count": 77,
+      "op": "CON",
+      "bucket": "possession"
+    },
+    {
+      "via": "morning",
+      "count": 77,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "country",
+      "count": 77,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "di",
+      "count": 77,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "ask",
+      "count": 76,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "thousand",
+      "count": 76,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "running",
+      "count": 76,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "thirty",
+      "count": 76,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "further",
+      "count": 76,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "beginning",
+      "count": 75,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "saying",
+      "count": 75,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "pretty",
+      "count": 75,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "write",
+      "count": 75,
+      "op": "CON",
+      "bucket": "communication"
+    },
+    {
+      "via": "placed",
+      "count": 74,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "carrying",
+      "count": 74,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "hard",
+      "count": 74,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "finding",
+      "count": 74,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "talk",
+      "count": 74,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "sit",
+      "count": 73,
+      "op": "CON",
+      "bucket": "spatial"
+    },
+    {
+      "via": "bought",
+      "count": 73,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "passing",
+      "count": 73,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "english",
+      "count": 73,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "rising",
+      "count": 73,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "paid",
+      "count": 73,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "wonder",
+      "count": 73,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "built",
+      "count": 73,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "power",
+      "count": 72,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "whole",
+      "count": 72,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "returning",
+      "count": 72,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "filled",
+      "count": 72,
+      "op": "CON",
+      "bucket": "spatial"
+    },
+    {
+      "via": "somewhat",
+      "count": 72,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "worked",
+      "count": 72,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "cut",
+      "count": 72,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "show",
+      "count": 71,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "means",
+      "count": 71,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "getting",
+      "count": 71,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "discovered",
+      "count": 71,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "strange",
+      "count": 71,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "struck",
+      "count": 71,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "second",
+      "count": 71,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "name",
+      "count": 70,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "close",
+      "count": 70,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "heart",
+      "count": 70,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "waiting",
+      "count": 70,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "stands",
+      "count": 70,
+      "op": "CON",
+      "bucket": "spatial"
+    },
+    {
+      "via": "remembered",
+      "count": 69,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "true",
+      "count": 69,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "drawing",
+      "count": 69,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "dear",
+      "count": 69,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "send",
+      "count": 69,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "general",
+      "count": 68,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "offered",
+      "count": 68,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "state",
+      "count": 68,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "red",
+      "count": 68,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "fancy",
+      "count": 68,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "moreover",
+      "count": 68,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "written",
+      "count": 68,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "world",
+      "count": 67,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "friend",
+      "count": 67,
+      "op": "CON",
+      "bucket": "kinship"
+    },
+    {
+      "via": "imagine",
+      "count": 67,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "king",
+      "count": 66,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "knowing",
+      "count": 66,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "watched",
+      "count": 66,
+      "op": "CON",
+      "bucket": "perception"
+    },
+    {
+      "via": "bearing",
+      "count": 66,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "writing",
+      "count": 66,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "interesting",
+      "count": 66,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "cast",
+      "count": 66,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "dark",
+      "count": 65,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "wild",
+      "count": 65,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "business",
+      "count": 65,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "fear",
+      "count": 65,
+      "op": "CON",
+      "bucket": "affect"
+    },
+    {
+      "via": "dropped",
+      "count": 65,
+      "op": "CON",
+      "bucket": "possession"
+    },
+    {
+      "via": "produced",
+      "count": 65,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "answer",
+      "count": 65,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "closed",
+      "count": 64,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "lying",
+      "count": 64,
+      "op": "CON",
+      "bucket": "spatial"
+    },
+    {
+      "via": "talking",
+      "count": 64,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "appears",
+      "count": 64,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "reading",
+      "count": 64,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "easily",
+      "count": 64,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "listened",
+      "count": 64,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "glanced",
+      "count": 64,
+      "op": "CON",
+      "bucket": "perception"
+    },
+    {
+      "via": "lady",
+      "count": 64,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "short",
+      "count": 64,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "fought",
+      "count": 64,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "thence",
+      "count": 63,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "actually",
+      "count": 63,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "water",
+      "count": 63,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "late",
+      "count": 63,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "history",
+      "count": 63,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "published",
+      "count": 63,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "evidently",
+      "count": 63,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "side",
+      "count": 63,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "days",
+      "count": 62,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "determined",
+      "count": 62,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "promised",
+      "count": 62,
+      "op": "SIG",
+      "bucket": "speech"
+    },
+    {
+      "via": "speaking",
+      "count": 62,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "madame",
+      "count": 62,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "moment",
+      "count": 61,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "finished",
+      "count": 61,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "served",
+      "count": 61,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "year",
+      "count": 61,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "run",
+      "count": 61,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "notwithstanding",
+      "count": 61,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "thing",
+      "count": 61,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "forget",
+      "count": 61,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "save",
+      "count": 60,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "occasionally",
+      "count": 60,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "watching",
+      "count": 60,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "expected",
+      "count": 60,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "succeeded",
+      "count": 60,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "understood",
+      "count": 60,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "reason",
+      "count": 60,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "human",
+      "count": 60,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "owing",
+      "count": 60,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "naturally",
+      "count": 60,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "what's",
+      "count": 60,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "particularly",
+      "count": 59,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "strong",
+      "count": 59,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "use",
+      "count": 59,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "forty",
+      "count": 59,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "talked",
+      "count": 59,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "return",
+      "count": 59,
+      "op": "CON",
+      "bucket": "motion"
+    },
+    {
+      "via": "play",
+      "count": 59,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "believed",
+      "count": 59,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "forgotten",
+      "count": 58,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "decided",
+      "count": 58,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "natural",
+      "count": 58,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "american",
+      "count": 58,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "bringing",
+      "count": 58,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "fair",
+      "count": 58,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "french",
+      "count": 58,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "woman",
+      "count": 58,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "change",
+      "count": 58,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "particular",
+      "count": 57,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "smiled",
+      "count": 57,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "lives",
+      "count": 57,
+      "op": "CON",
+      "bucket": "spatial"
+    },
+    {
+      "via": "end",
+      "count": 57,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "picked",
+      "count": 57,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "guess",
+      "count": 57,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "born",
+      "count": 57,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "rode",
+      "count": 57,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "failed",
+      "count": 57,
+      "op": "CON",
+      "bucket": "speech"
+    },
+    {
+      "via": "leaning",
+      "count": 57,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "public",
+      "count": 56,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "friends",
+      "count": 56,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "sound",
+      "count": 56,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "least",
+      "count": 56,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "entirely",
+      "count": 56,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "considered",
+      "count": 56,
+      "op": "CON",
+      "bucket": null
+    },
+    {
+      "via": "replied",
+      "count": 56,
+      "op": "SIG",
+      "bucket": "speech"
+    }
+  ],
+  "learnedLinkTypes": [
+    {
+      "key": "CON/made",
+      "via": "made",
+      "op": "CON",
+      "count": 976,
+      "coherence": 0.8533,
+      "nullLine": 0.8213,
+      "since": 3400
+    },
+    {
+      "key": "CON/make",
+      "via": "make",
+      "op": "CON",
+      "count": 508,
+      "coherence": 0.8566,
+      "nullLine": 0.8241,
+      "since": 3400
+    },
+    {
+      "key": "CON/got",
+      "via": "got",
+      "op": "CON",
+      "count": 469,
+      "coherence": 0.8504,
+      "nullLine": 0.823,
+      "since": 3400
+    },
+    {
+      "key": "CON/seemed",
+      "via": "seemed",
+      "op": "CON",
+      "count": 443,
+      "coherence": 0.8894,
+      "nullLine": 0.825,
+      "since": 3400
+    },
+    {
+      "key": "CON/gave",
+      "via": "gave",
+      "op": "CON",
+      "count": 442,
+      "coherence": 0.8535,
+      "nullLine": 0.8279,
+      "since": 3400
+    },
+    {
+      "key": "CON/de",
+      "via": "de",
+      "op": "CON",
+      "count": 413,
+      "coherence": 0.9472,
+      "nullLine": 0.8626,
+      "since": 3400
+    },
+    {
+      "key": "CON/good",
+      "via": "good",
+      "op": "CON",
+      "count": 405,
+      "coherence": 0.8354,
+      "nullLine": 0.8209,
+      "since": 3400
+    },
+    {
+      "key": "CON/began",
+      "via": "began",
+      "op": "CON",
+      "count": 402,
+      "coherence": 0.8801,
+      "nullLine": 0.8353,
+      "since": 3400
+    },
+    {
+      "key": "CON/put",
+      "via": "put",
+      "op": "CON",
+      "count": 328,
+      "coherence": 0.8586,
+      "nullLine": 0.8373,
+      "since": 3400
+    },
+    {
+      "key": "CON/chapter",
+      "via": "chapter",
+      "op": "CON",
+      "count": 316,
+      "coherence": 0.9793,
+      "nullLine": 0.844,
+      "since": 3400
+    },
+    {
+      "key": "CON/used",
+      "via": "used",
+      "op": "CON",
+      "count": 254,
+      "coherence": 0.8709,
+      "nullLine": 0.8562,
+      "since": 3400
+    },
+    {
+      "key": "CON/making",
+      "via": "making",
+      "op": "CON",
+      "count": 236,
+      "coherence": 0.8822,
+      "nullLine": 0.8535,
+      "since": 3400
+    },
+    {
+      "key": "CON/tried",
+      "via": "tried",
+      "op": "CON",
+      "count": 195,
+      "coherence": 0.8762,
+      "nullLine": 0.8606,
+      "since": 3400
+    },
+    {
+      "key": "CON/shook",
+      "via": "shook",
+      "op": "CON",
+      "count": 158,
+      "coherence": 0.9132,
+      "nullLine": 0.866,
+      "since": 3400
+    },
+    {
+      "key": "CON/that's",
+      "via": "that's",
+      "op": "CON",
+      "count": 157,
+      "coherence": 0.88,
+      "nullLine": 0.8756,
+      "since": 3400
+    },
+    {
+      "key": "CON/stopped",
+      "via": "stopped",
+      "op": "CON",
+      "count": 135,
+      "coherence": 0.8965,
+      "nullLine": 0.8749,
+      "since": 3400
+    },
+    {
+      "key": "CON/drew",
+      "via": "drew",
+      "op": "CON",
+      "count": 129,
+      "coherence": 0.8972,
+      "nullLine": 0.879,
+      "since": 3400
+    },
+    {
+      "key": "CON/opened",
+      "via": "opened",
+      "op": "CON",
+      "count": 121,
+      "coherence": 0.8977,
+      "nullLine": 0.8768,
+      "since": 3400
+    },
+    {
+      "key": "CON/full",
+      "via": "full",
+      "op": "CON",
+      "count": 115,
+      "coherence": 0.9003,
+      "nullLine": 0.8957,
+      "since": 3400
+    },
+    {
+      "key": "CON/white",
+      "via": "white",
+      "op": "CON",
+      "count": 111,
+      "coherence": 0.8898,
+      "nullLine": 0.8896,
+      "since": 3400
+    },
+    {
+      "key": "CON/grew",
+      "via": "grew",
+      "op": "CON",
+      "count": 101,
+      "coherence": 0.8968,
+      "nullLine": 0.8871,
+      "since": 3400
+    },
+    {
+      "key": "CON/themselves",
+      "via": "themselves",
+      "op": "CON",
+      "count": 99,
+      "coherence": 0.9037,
+      "nullLine": 0.8902,
+      "since": 3400
+    },
+    {
+      "key": "CON/large",
+      "via": "large",
+      "op": "CON",
+      "count": 94,
+      "coherence": 0.9188,
+      "nullLine": 0.899,
+      "since": 3400
+    },
+    {
+      "key": "CON/light",
+      "via": "light",
+      "op": "CON",
+      "count": 92,
+      "coherence": 0.905,
+      "nullLine": 0.8795,
+      "since": 3400
+    },
+    {
+      "key": "CON/alla",
+      "via": "alla",
+      "op": "CON",
+      "count": 92,
+      "coherence": 0.9774,
+      "nullLine": 0.8795,
+      "since": 3400
+    },
+    {
+      "key": "CON/mr",
+      "via": "mr",
+      "op": "CON",
+      "count": 85,
+      "coherence": 0.9592,
+      "nullLine": 0.895,
+      "since": 3400
+    },
+    {
+      "key": "CON/open",
+      "via": "open",
+      "op": "CON",
+      "count": 82,
+      "coherence": 0.9343,
+      "nullLine": 0.9044,
+      "since": 3400
+    },
+    {
+      "key": "CON/di",
+      "via": "di",
+      "op": "CON",
+      "count": 77,
+      "coherence": 0.977,
+      "nullLine": 0.9138,
+      "since": 3400
+    },
+    {
+      "key": "CON/human",
+      "via": "human",
+      "op": "CON",
+      "count": 60,
+      "coherence": 0.9213,
+      "nullLine": 0.9169,
+      "since": 3400
+    },
+    {
+      "key": "CON/natural",
+      "via": "natural",
+      "op": "CON",
+      "count": 58,
+      "coherence": 0.9353,
+      "nullLine": 0.9293,
+      "since": 3400
+    },
+    {
+      "key": "CON/leaning",
+      "via": "leaning",
+      "op": "CON",
+      "count": 57,
+      "coherence": 0.9406,
+      "nullLine": 0.908,
+      "since": 3400
+    },
+    {
+      "key": "CON/mrs",
+      "via": "mrs",
+      "op": "CON",
+      "count": 54,
+      "coherence": 0.9783,
+      "nullLine": 0.9114,
+      "since": 3400
+    },
+    {
+      "key": "CON/green",
+      "via": "green",
+      "op": "CON",
+      "count": 46,
+      "coherence": 0.931,
+      "nullLine": 0.9269,
+      "since": 3400
+    },
+    {
+      "key": "CON/heavy",
+      "via": "heavy",
+      "op": "CON",
+      "count": 46,
+      "coherence": 0.9273,
+      "nullLine": 0.9269,
+      "since": 3400
+    },
+    {
+      "key": "CON/absolutely",
+      "via": "absolutely",
+      "op": "CON",
+      "count": 43,
+      "coherence": 0.9469,
+      "nullLine": 0.9203,
+      "since": 3400
+    },
+    {
+      "key": "CON/blue",
+      "via": "blue",
+      "op": "CON",
+      "count": 43,
+      "coherence": 0.9826,
+      "nullLine": 0.9203,
+      "since": 3400
+    },
+    {
+      "key": "CON/political",
+      "via": "political",
+      "op": "CON",
+      "count": 41,
+      "coherence": 0.9457,
+      "nullLine": 0.9282,
+      "since": 3400
+    },
+    {
+      "key": "CON/yellow",
+      "via": "yellow",
+      "op": "CON",
+      "count": 41,
+      "coherence": 0.9325,
+      "nullLine": 0.9282,
+      "since": 3400
+    },
+    {
+      "key": "CON/fifty",
+      "via": "fifty",
+      "op": "CON",
+      "count": 41,
+      "coherence": 0.9584,
+      "nullLine": 0.9282,
+      "since": 3400
+    },
+    {
+      "key": "CON/cold",
+      "via": "cold",
+      "op": "CON",
+      "count": 41,
+      "coherence": 0.9905,
+      "nullLine": 0.9282,
+      "since": 3400
+    },
+    {
+      "key": "CON/silver",
+      "via": "silver",
+      "op": "CON",
+      "count": 41,
+      "coherence": 0.9409,
+      "nullLine": 0.9282,
+      "since": 3400
+    },
+    {
+      "key": "CON/expressed",
+      "via": "expressed",
+      "op": "CON",
+      "count": 38,
+      "coherence": 0.8764,
+      "nullLine": 0.8535,
+      "since": 3400
+    },
+    {
+      "key": "CON/lose",
+      "via": "lose",
+      "op": "CON",
+      "count": 38,
+      "coherence": 0.9096,
+      "nullLine": 0.8535,
+      "since": 3400
+    },
+    {
+      "key": "CON/dropping",
+      "via": "dropping",
+      "op": "CON",
+      "count": 38,
+      "coherence": 0.8955,
+      "nullLine": 0.8535,
+      "since": 3400
+    },
+    {
+      "key": "CON/du",
+      "via": "du",
+      "op": "CON",
+      "count": 38,
+      "coherence": 0.9774,
+      "nullLine": 0.8535,
+      "since": 3400
+    },
+    {
+      "key": "CON/personal",
+      "via": "personal",
+      "op": "CON",
+      "count": 38,
+      "coherence": 0.9528,
+      "nullLine": 0.8535,
+      "since": 3400
+    },
+    {
+      "key": "CON/spanish",
+      "via": "spanish",
+      "op": "CON",
+      "count": 34,
+      "coherence": 0.952,
+      "nullLine": 0.9515,
+      "since": 3400
+    },
+    {
+      "key": "CON/surrounded",
+      "via": "surrounded",
+      "op": "CON",
+      "count": 32,
+      "coherence": 0.952,
+      "nullLine": 0.9472,
+      "since": 3400
+    },
+    {
+      "key": "CON/private",
+      "via": "private",
+      "op": "CON",
+      "count": 31,
+      "coherence": 0.9603,
+      "nullLine": 0.9539,
+      "since": 3400
+    },
+    {
+      "key": "CON/synopsis",
+      "via": "synopsis",
+      "op": "CON",
+      "count": 31,
+      "coherence": 0.9934,
+      "nullLine": 0.9539,
+      "since": 3400
+    },
+    {
+      "key": "CON/thousands",
+      "via": "thousands",
+      "op": "CON",
+      "count": 29,
+      "coherence": 0.9562,
+      "nullLine": 0.9526,
+      "since": 3400
+    },
+    {
+      "key": "CON/del",
+      "via": "del",
+      "op": "CON",
+      "count": 29,
+      "coherence": 0.9836,
+      "nullLine": 0.9526,
+      "since": 3400
+    },
+    {
+      "key": "CON/gathering",
+      "via": "gathering",
+      "op": "CON",
+      "count": 28,
+      "coherence": 0.9898,
+      "nullLine": 0.9712,
+      "since": 3400
+    },
+    {
+      "key": "CON/observing",
+      "via": "observing",
+      "op": "CON",
+      "count": 26,
+      "coherence": 0.9686,
+      "nullLine": 0.9574,
+      "since": 3400
+    },
+    {
+      "key": "CON/physical",
+      "via": "physical",
+      "op": "CON",
+      "count": 23,
+      "coherence": 0.9825,
+      "nullLine": 0.9596,
+      "since": 3400
+    },
+    {
+      "key": "CON/retirement",
+      "via": "retirement",
+      "op": "CON",
+      "count": 23,
+      "coherence": 0.9793,
+      "nullLine": 0.9596,
+      "since": 3400
+    },
+    {
+      "key": "CON/bed",
+      "via": "bed",
+      "op": "CON",
+      "count": 21,
+      "coherence": 0.9877,
+      "nullLine": 0.9813,
+      "since": 3400
+    },
+    {
+      "key": "CON/bit",
+      "via": "bit",
+      "op": "CON",
+      "count": 21,
+      "coherence": 0.9844,
+      "nullLine": 0.9813,
+      "since": 3400
+    },
+    {
+      "key": "CON/body",
+      "via": "body",
+      "op": "CON",
+      "count": 18,
+      "coherence": 0.9955,
+      "nullLine": 0.9931,
+      "since": 3400
+    }
+  ]
+}

@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#151518">
+  <title>eoreader4 · templates</title>
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="stylesheet" href="src/ui/styles.css">
+  <style>
+    body { margin: 0; }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 18px 20px 64px; }
+    header.tpl { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+    header.tpl h1 { font-size: 19px; margin: 0; }
+    header.tpl .sub { color: var(--fg2, #8a8f98); font-size: 13px; }
+    header.tpl .spacer { flex: 1; }
+    a.reader-link { color: var(--accent, #5b34d6); text-decoration: none; font-size: 13px; }
+    .note { color: var(--fg2, #8a8f98); font-size: 13px; line-height: 1.5; margin: 8px 0 18px; }
+    .learn { border: 1px solid var(--rule, #2a2a31); border-radius: 10px; padding: 14px; margin-bottom: 22px; background: var(--bg2, #1b1b20); }
+    .learn h2 { font-size: 14px; margin: 0 0 10px; }
+    .learn .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+    .learn input[type=text], .learn textarea { width: 100%; box-sizing: border-box; background: var(--bg, #0f0f12); color: inherit;
+      border: 1px solid var(--rule, #2a2a31); border-radius: 7px; padding: 8px 10px; font: inherit; }
+    .learn input[type=text] { max-width: 320px; }
+    .learn textarea { min-height: 150px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; resize: vertical; }
+    .learn button { background: var(--accent, #5b34d6); color: #fff; border: 0; border-radius: 7px; padding: 8px 14px; font: inherit; cursor: pointer; }
+    .learn button.ghost { background: transparent; color: var(--fg2, #8a8f98); border: 1px solid var(--rule, #2a2a31); }
+    .learn .hint { color: var(--fg2, #8a8f98); font-size: 12px; }
+    .cards { display: grid; gap: 12px; }
+    .card { border: 1px solid var(--rule, #2a2a31); border-radius: 10px; padding: 13px 14px; }
+    .card .top { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+    .card .kind { font-weight: 600; font-size: 15px; }
+    .badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--rule, #2a2a31); color: var(--fg2, #8a8f98); }
+    .badge.learned { color: #7ee2b8; border-color: #2c5b48; }
+    .badge.installed { color: #8ab4ff; border-color: #2c4470; }
+    .badge.fallback { color: #c9a14a; border-color: #5b4a23; }
+    .card .form { color: var(--fg2, #8a8f98); font-size: 12.5px; margin: 7px 0; }
+    .card .matter { font-size: 12.5px; margin: 0 0 7px; }
+    .card .matter .lbl { color: var(--fg2, #8a8f98); }
+    .card .matter .phrase { font-style: italic; }
+    .card ol { margin: 6px 0 0; padding-left: 20px; }
+    .card li { font-size: 13px; margin: 2px 0; }
+    .card li .act { color: var(--accent, #5b34d6); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+    .card .row2 { display: flex; gap: 12px; margin-top: 9px; }
+    .card .row2 button { background: none; border: 0; color: var(--fg2, #8a8f98); font: inherit; font-size: 12px; cursor: pointer; padding: 0; text-decoration: underline; }
+    .card pre { background: var(--bg, #0f0f12); border: 1px solid var(--rule, #2a2a31); border-radius: 7px; padding: 10px; overflow: auto; font-size: 11.5px; margin: 9px 0 0; }
+    .empty { color: var(--fg2, #8a8f98); font-size: 13px; padding: 18px 0; }
+    .err { color: #ff8a8a; font-size: 13px; margin-top: 6px; }
+    /* When embedded in the Reader's modal (iframe), the standalone chrome is redundant:
+       the modal supplies its own header + close button, so drop the page's own header. */
+    body.embedded .wrap { padding-top: 14px; }
+    body.embedded header.tpl { display: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="tpl">
+      <h1>Templates</h1>
+      <span class="sub">the shapes the machine has learned — read off examples, not shipped</span>
+      <span class="spacer"></span>
+      <a href="index.html" class="reader-link" title="Open the EO Reader">⟵ Reader</a>
+    </header>
+    <p class="note">
+      Each template is how a kind is built — learned by <b>reading good examples</b> and letting the
+      structure emerge (the core engine finds the line/stanza cut from the examples' own surprise).
+      The learner reads both halves: the <b>form</b> (lines, meter, terminators) and the <b>matter</b>
+      (the recurring vocabulary, the stock phrases, what each section keeps being about).
+      Nothing kind-specific is shipped; the only built-in shape is the universal arc. Learned shapes
+      persist in this browser (localStorage), the way the CLI persists them to the <code>templates/</code> folder.
+    </p>
+
+    <div class="learn">
+      <h2>Learn a shape from examples</h2>
+      <div class="row">
+        <input type="text" id="kind" placeholder="kind — e.g. emily dickinson poem, sonnet, haiku">
+      </div>
+      <div class="row">
+        <textarea id="examples" placeholder="Paste a few good examples. Separate examples with a line of  ---  (three dashes). Blank lines mark stanzas/paragraphs."></textarea>
+      </div>
+      <div class="row">
+        <button id="learn">Learn structure</button>
+        <button id="sample" class="ghost" type="button">Load Dickinson sample</button>
+        <span class="hint" id="hint"></span>
+      </div>
+      <div class="err" id="err"></div>
+    </div>
+
+    <div class="cards" id="cards"></div>
+  </div>
+
+  <script>
+    // Reader opens this page inside a modal iframe; drop the standalone header link there.
+    if (window.top !== window.self) document.body.classList.add('embedded');
+  </script>
+  <script type="module">
+    import {
+      learnStructureFromExamples, GENERIC_SHAPES, templateToJSON,
+      loadTemplatesLocal, saveTemplateLocal, removeTemplateLocal,
+    } from './src/tasks/index.js';
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+    const DICKINSON_SAMPLE =
+`Because I could not stop for Death –
+He kindly stopped for me –
+The Carriage held but just Ourselves –
+And Immortality.
+
+We slowly drove – He knew no haste
+And I had put away
+My labor and my leisure too,
+For His Civility –
+---
+Hope is the thing with feathers –
+That perches in the soul –
+And sings the tune without the words –
+And never stops – at all –
+
+And sweetest – in the Gale – is heard –
+And sore must be the storm –
+That could abash the little Bird
+That kept so many warm –`;
+
+    const formLine = (t) => {
+      if (t.form) {
+        const f = t.form;
+        const bits = [];
+        if (f.stanzas) bits.push(`${f.stanzas} × ${f.linesPerStanza}-line`);
+        if (f.syllablePattern?.length) bits.push(`${f.syllablePattern.join('-')} syllables`);
+        if (f.terminator) bits.push(`ends "${f.terminator}"`);
+        if (typeof f.segF1 === 'number') bits.push(`segF1 ${f.segF1}`);
+        return bits.join(' · ');
+      }
+      return `${t.sections.length} sections · ${t.size} ${t.organ === 'music' ? 'beats' : 'tokens'}`;
+    };
+
+    // The content half of a learned shape — what the examples keep being about, and the
+    // word runs they keep using. Form without this is unusable ("8 lines of 30 syllables"
+    // says nothing to a writer), so it gets its own line on the card.
+    const matterLine = (t) => {
+      const c = t.content;
+      if (!c || (!c.lexicon?.length && !c.phrases?.length)) return '';
+      const bits = [];
+      if (c.lexicon?.length) bits.push(`<span class="lbl">about</span> ${esc(c.lexicon.slice(0, 8).join(', '))}`);
+      if (c.phrases?.length) bits.push(`<span class="lbl">recurring</span> ${c.phrases.slice(0, 4).map((p) => `<span class="phrase">“${esc(p)}”</span>`).join(', ')}`);
+      return `<div class="matter">${bits.join(' · ')}</div>`;
+    };
+
+    const card = (t, { removable }) => {
+      const src = t.source || 'fallback';
+      const sections = t.sections.map((s) =>
+        `<li><span class="act">${esc(s.dir?.act || 'make')}</span> ${esc(s.role)}${s.dir?.detail ? ` — <span style="color:var(--fg2,#8a8f98)">${esc(s.dir.detail)}</span>` : ''}</li>`).join('');
+      const id = 'j_' + t.kind.replace(/\W+/g, '_');
+      return `<div class="card">
+        <div class="top">
+          <span class="kind">${esc(t.kind)}</span>
+          <span class="badge ${src}">${src}</span>
+          <span class="badge">${esc(t.organ)}</span>
+          ${t.format ? `<span class="badge">${esc(t.format)}</span>` : ''}
+        </div>
+        <div class="form">${esc(formLine(t))}${t.note ? ` — ${esc(t.note)}` : ''}</div>
+        ${matterLine(t)}
+        <ol>${sections}</ol>
+        <div class="row2">
+          <button data-json="${id}">view JSON</button>
+          ${removable ? `<button data-del="${esc(t.kind)}">forget</button>` : ''}
+        </div>
+        <pre id="${id}" hidden>${esc(JSON.stringify(templateToJSON(t), null, 2))}</pre>
+      </div>`;
+    };
+
+    const render = () => {
+      const learned = loadTemplatesLocal();
+      const kinds = Object.keys(learned).sort();
+      const floors = [GENERIC_SHAPES.text, GENERIC_SHAPES.music];
+      const cards = [
+        ...kinds.map((k) => card(learned[k], { removable: true })),
+        ...floors.map((t) => card(t, { removable: false })),
+      ];
+      $('cards').innerHTML = cards.join('') ||
+        `<div class="empty">No learned templates yet — paste some examples above to learn one.</div>`;
+      $('cards').querySelectorAll('[data-json]').forEach((b) =>
+        b.addEventListener('click', () => { const p = document.getElementById(b.dataset.json); p.hidden = !p.hidden; }));
+      $('cards').querySelectorAll('[data-del]').forEach((b) =>
+        b.addEventListener('click', () => { removeTemplateLocal(b.dataset.del); render(); }));
+    };
+
+    $('sample').addEventListener('click', () => { $('kind').value = 'emily dickinson poem'; $('examples').value = DICKINSON_SAMPLE; });
+
+    $('learn').addEventListener('click', () => {
+      $('err').textContent = ''; $('hint').textContent = '';
+      const kind = $('kind').value.trim().toLowerCase();
+      const raw = $('examples').value;
+      if (!kind) { $('err').textContent = 'Name the kind first.'; return; }
+      const examples = raw.split(/\n-{3,}\n|\n={3,}\n/).map((s) => s.trim()).filter(Boolean);
+      if (!examples.length) { $('err').textContent = 'Paste at least one example.'; return; }
+      const tmpl = learnStructureFromExamples(kind, examples);
+      if (!tmpl) { $('err').textContent = 'Could not learn a structure from those examples (need a couple of stanzas/paragraphs).'; return; }
+      saveTemplateLocal(tmpl);
+      $('hint').textContent = `learned "${kind}" from ${examples.length} example${examples.length > 1 ? 's' : ''}.`;
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>

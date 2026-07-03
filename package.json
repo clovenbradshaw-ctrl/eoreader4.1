@@ -1,0 +1,29 @@
+{
+  "name": "eoreader4.1",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Holonic document-chat over an append-only event log — the essential 4.1 build",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "serve": "python3 -m http.server 8000",
+    "build": "node scripts/build-reader.mjs",
+    "build:centroids": "node scripts/build-centroids.mjs",
+    "build:morphology": "node scripts/build-morphology.mjs",
+    "learn:grammar": "node scripts/learn-grammar.mjs",
+    "mechanics": "node eoreader4-eval/mechanics/run.mjs ABCD",
+    "essay-backwards": "node eoreader4-eval/essay-backwards.mjs",
+    "essay-real-model": "node eoreader4-eval/essay-real-model.mjs",
+    "essay-real-model:mock": "node eoreader4-eval/essay-real-model.mjs --mock",
+    "chat-harness:drive": "node eoreader4-eval/chat-harness.drive.mjs",
+    "essay-thread:drive": "node eoreader4-eval/essay-thread.drive.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "//devDependencies": "Dev-only tooling. The Mechanics Test Battery (eoreader4-eval/mechanics/) needs @huggingface/transformers to run the CPU talker + MiniLM organ in Node. The browser build loads everything from a CDN — the app itself has no runtime npm dependencies.",
+  "devDependencies": {
+    "@huggingface/transformers": "^3.8.1"
+  },
+  "license": "MIT"
+}

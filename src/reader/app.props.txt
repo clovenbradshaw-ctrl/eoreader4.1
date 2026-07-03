@@ -1,0 +1,1 @@
+{&quot;seedUrl&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;accent&quot;:{&quot;editor&quot;:&quot;color&quot;,&quot;default&quot;:&quot;#2563eb&quot;,&quot;tsType&quot;:&quot;string&quot;}}

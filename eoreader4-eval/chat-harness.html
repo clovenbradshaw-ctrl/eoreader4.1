@@ -1,0 +1,101 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>eoreader4 — generation chat harness (live pipeline)</title>
+<!--
+  Testing the generation pipeline FROM A CHAT UI. The real app (index.html) runs its own
+  inlined engine via answerQuestion and does NOT include this work; this page imports the
+  LIVE src/ modules (runContinuation, exportAudit, diagnose) so you can exercise the actual
+  pipeline — self-register, field read, decision-as-relaxation, NUL, confinement, the audit —
+  from a browser. Serve the repo root (npm run serve) and open /eoreader4-eval/chat-harness.html.
+-->
+<style>
+  body { font: 14px/1.5 ui-monospace, monospace; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.1rem; } label { margin-right: 1rem; }
+  textarea, select, button { font: inherit; }
+  #q { width: 100%; height: 3rem; }
+  .row { margin: .5rem 0; }
+  #verdict { font-weight: bold; padding: .4rem; border-radius: 4px; }
+  .ok { background: #dfd; } .bad { background: #fdd; }
+  pre { background: #f6f6f6; padding: .6rem; overflow-x: auto; white-space: pre-wrap; }
+  .moves { font-size: 1.1rem; letter-spacing: 1px; }
+  details summary { cursor: pointer; color: #06c; }
+</style>
+<h1>eoreader4 — generation chat harness <small>(live <code>src/longgen</code> pipeline)</small></h1>
+
+<div class="row">
+  <label>ground:
+    <select id="preset">
+      <option value="cohered">cohered — a real 8-span field (walks)</option>
+      <option value="uncohered">uncohered — the dolphin case (should NUL)</option>
+      <option value="turning">turning — 3 topics (fires a REC turn)</option>
+    </select>
+  </label>
+</div>
+<div class="row">
+  <label><input type="checkbox" id="selfRegister" checked> selfRegister</label>
+  <label><input type="checkbox" id="fieldRead" checked> fieldRead</label>
+  <label><input type="checkbox" id="dynamics" checked> dynamics</label>
+  <label><input type="checkbox" id="nul" checked> nul</label>
+  <label><input type="checkbox" id="confine" checked> confine</label>
+</div>
+<div class="row"><textarea id="q" placeholder="(optional) a question — leave blank to just walk the ground"></textarea></div>
+<div class="row"><button id="run">Run</button> <span id="status"></span></div>
+
+<div class="row" id="verdict"></div>
+<div class="row">moves: <span class="moves" id="moves"></span></div>
+<div class="row"><b>answer / prose:</b><pre id="answer"></pre></div>
+<details><summary>full audit JSON (export this and hand it back)</summary><pre id="audit"></pre></details>
+
+<script type="module">
+  import { runContinuation, exportAudit, diagnose } from '../src/longgen/index.js';
+  import { createModel } from '../src/model/interface.js';
+  import { createHashEmbedder } from '../src/model/embed-hash.js';
+  import '../src/model/echo.js';
+
+  const $ = (id) => document.getElementById(id);
+  const model = createModel('echo'); await model.load();
+  const embed = createHashEmbedder().embed;
+
+  // A clean topic embedder so the field read finds SEMANTIC turns (the hash organ is
+  // spelling-space; this stands in for a real MiniLM to exercise the turn detector).
+  const e = (k) => { const v = new Array(16).fill(0); v[k] = 1; return v; };
+  const topic = async (t) => /small|fluent|gap|fill|wrong/i.test(t) ? e(0)
+    : /planner|ground|span|floor|bind/i.test(t) ? e(1) : e(2);
+
+  const GROUNDS = {
+    cohered: Array.from({ length: 8 }, (_, i) => ({ idx: i, score: 0.9 - i * 0.05, text: `a real grounded sentence number ${i}` })),
+    uncohered: Array.from({ length: 12 }, (_, i) => ({ idx: i, score: i === 0 ? 0.9 : 1e-190, text: `a dolphin sentence ${i}` })),
+    turning: [
+      'a small model is fluent past its knowledge', 'handed a gap the model will fill the gap',
+      'the fill is fluent and often wrong', 'a planner decides every structural move first',
+      'the planner grounds each claim on a span', 'a floor truncates whatever fails to bind',
+      'across messages the state persists and resumes', 'the resumed session widens the running fold',
+    ].map((text, i) => ({ idx: i, score: 0.95 - i * 0.05, text })),
+  };
+
+  $('run').onclick = async () => {
+    $('status').textContent = 'running…';
+    const preset = $('preset').value;
+    const ground = GROUNDS[preset];
+    const useTopicEmbed = preset === 'turning' || preset === 'uncohered';
+    const cfg = {
+      arc: true, temperature: 1, maxSteps: 40,
+      selfRegister: $('selfRegister').checked, fieldRead: $('fieldRead').checked,
+      dynamics: $('dynamics').checked, nul: $('nul').checked, confine: $('confine').checked,
+      embed: useTopicEmbed ? topic : embed,
+    };
+    const q = $('q').value.trim();
+    const res = await runContinuation({ ground, model, question: q, ...cfg });
+    const audit = exportAudit(res, { config: { ...cfg, embed: true }, question: q, label: `chat:${preset}` });
+    const d = diagnose(audit);
+
+    $('moves').textContent = res.units.map(u => u.move).join(' · ') || '(none)';
+    $('answer').textContent = res.units.map((u, i) => `${i + 1}. [${u.move}] ${u.text}`).join('\n') || res.answer;
+    $('verdict').textContent = `${d.verdict}   ·   stop: ${res.stop}`;
+    $('verdict').className = d.working ? 'ok' : 'bad';
+    $('audit').textContent = JSON.stringify(audit, null, 1);
+    $('status').textContent = 'done';
+    window.__lastAudit = audit;   // for headless drivers
+  };
+  $('status').textContent = 'ready — echo model + hash embed loaded';
+</script>
