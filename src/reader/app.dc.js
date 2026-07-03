@@ -116,7 +116,12 @@ class Component extends DCLogic {
       // Chat model — like the old app. Loaded lazily on first chat; grounded in what
       // you've read when relevant, a normal assistant otherwise. Falls back to a
       // structural answer if the model can't load.
-      backend:(()=>{try{return localStorage.getItem('eo_backend')||'webllm';}catch(e){return 'webllm';}})(), modelStatus:'' };
+      backend:(()=>{try{return localStorage.getItem('eo_backend')||'webllm';}catch(e){return 'webllm';}})(), modelStatus:'',
+      // THE CHORUS (docs/chorus.md) — a clause read as the WHOLE Born distribution
+      // over the 27-cell ground, not collapsed to one argmax cell. Its own overlay,
+      // lazily warming the MiniLM meaning organ on first read; degrades honestly when
+      // the geometric reader can't come up. chorusRes holds the last weighted map.
+      chorusOpen:false, chorusText:'', chorusRes:null, chorusBusy:false, chorusErr:null };
   }
   // ── theme helpers ─────────────────────────────────────────────────────
   _hx(h){h=String(h||'').replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16);return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
@@ -428,6 +433,69 @@ class Component extends DCLogic {
     return base;}
   toggleSettings(){this.setState(s=>({settingsOpen:!s.settingsOpen}));}
   closeSettings(){this.setState({settingsOpen:false});}
+  // ── THE CHORUS (docs/chorus.md) ──────────────────────────────────────────
+  // Open the overlay; seed the box with the selected sentence when there is one,
+  // so a reader can voice what's in front of them with one click.
+  toggleChorus(){this.setState(s=>{const open=!s.chorusOpen;let text=s.chorusText;if(open&&!text){const sel=this._selectedSentence&&this._selectedSentence();if(sel)text=sel;}return {chorusOpen:open,settingsOpen:false,chorusText:text};});}
+  closeChorus(){this.setState({chorusOpen:false});}
+  onChorusText(e){this.setState({chorusText:(e&&e.target?e.target.value:'')});}
+  // The chorus reader, built once and cached: the MiniLM meaning organ (eo/embed.js)
+  // + the installed 27 centroids + the chorus holon (eo/chorus.js). Warmed lazily —
+  // this is the ONE place the reader loads a model, and only on an explicit read.
+  async _chorusReader(){
+    if(this._chorus)return this._chorus;
+    const R=(typeof window!=='undefined'&&window.__resources)||{};
+    const embMod=await import(R.eoEmbed||new URL('src/reader/eo/embed.js',document.baseURI).href);
+    const chMod=await import(R.eoChorus||new URL('src/reader/eo/chorus.js',document.baseURI).href);
+    const cenUrl=R.eoCentroids||new URL('src/reader/eo/centroids-27.json',document.baseURI).href;
+    const centroids=await (await fetch(cenUrl)).json();
+    const embedder=embMod.createMiniLMEmbedder();
+    this._chorus=chMod.createChorusReader({centroids,embedder});
+    return this._chorus;
+  }
+  async chorusRead(){
+    const clause=(this.state.chorusText||'').trim();
+    if(!clause||this.state.chorusBusy)return;
+    this.setState({chorusBusy:true,chorusErr:null});
+    try{
+      const reader=await this._chorusReader();
+      const res=await reader.read(clause);
+      if(res&&res.live===false){this.setState({chorusBusy:false,chorusRes:null,chorusErr:'The geometric reader is unavailable — the meaning organ could not come up. The chorus reads only in the MiniLM space the 27 centroids were built in.'});return;}
+      this.setState({chorusBusy:false,chorusRes:res,chorusErr:null});
+    }catch(e){this.setState({chorusBusy:false,chorusRes:null,chorusErr:'Could not read: '+String((e&&e.message)||e)});}
+  }
+  // The currently selected sentence, if the app has one to seed the chorus box with.
+  // Defensive: returns '' when nothing clean is selectable, so the box just stays empty.
+  _selectedSentence(){try{const sel=this.state.selId;if(sel==null||!this.master)return '';const i=(this.master.entFirstSent&&this.master.entFirstSent[sel]);if(i==null)return '';const s=this.master.sentences&&this.master.sentences[i];return s?this.norm(s):'';}catch(e){return '';}}
+  // The chorus overlay's view-model: the Born weighted map turned into styled rows.
+  // Every field is defined unconditionally with a safe default, so the panel renders
+  // whether or not a read has happened, and never breaks the top bar.
+  _chorusView(){
+    const st=this.state,acc='var(--acc)',res=st.chorusRes;
+    const GRAINC={Ground:'#386a96',Figure:'#a3692c',Pattern:'#3c7a50'};
+    const bar=(p,c)=>'height:6px;border-radius:3px;background:'+c+';width:'+Math.max(2,Math.min(100,p))+'%;transition:width .18s;';
+    const v={
+      open:!!st.chorusOpen,onToggle:()=>this.toggleChorus(),onClose:()=>this.closeChorus(),
+      stop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
+      text:st.chorusText||'',onText:e=>this.onChorusText(e),onRead:()=>this.chorusRead(),
+      busy:!!st.chorusBusy,readLabel:st.chorusBusy?'reading…':'read the chorus',
+      hasErr:!!st.chorusErr,err:st.chorusErr||'',
+      hasRes:false,cells:[],faces:[],evaSites:[],hasEva:false,silenceNote:'',summary:''
+    };
+    if(res&&res.live){
+      v.hasRes=true;
+      v.summary=res.k+(res.k===1?' voice':' voices')+' · '+Math.round((res.coverage||0)*100)+'% coverage · centered Born mass';
+      v.cells=(res.voiced||[]).map(c=>{const gc=(function(k){const g=k.indexOf('_Void')>=0||k.indexOf('_Entity')>=0||k.indexOf('_Kind')>=0?'Ground':(k.indexOf('_Field')>=0||k.indexOf('_Link')>=0||k.indexOf('_Network')>=0?'Figure':'Pattern');return GRAINC[g]||acc;})(c.key);
+        return {label:c.label,op:c.op,pct:c.pct+'%',title:c.title,barStyle:bar(c.pct,gc),
+          rowStyle:'display:flex;align-items:center;gap:9px;padding:5px 0;'};});
+      v.faces=(res.faces||[]).map(f=>({name:f.name,
+        cells:(f.cells||[]).map(c=>({label:c.label,pct:c.pct+'%',barStyle:bar(c.pct,acc)}))}));
+      v.evaSites=(res.evaSites||[]).map(e=>({label:e.hold.join('  ‖  '),pcts:e.pcts.map(p=>p+'%').join(' · ')}));
+      v.hasEva=v.evaSites.length>0;
+      v.silenceNote='SYN·Ground drawn as silence — '+(res.silence?res.silence.pct:0)+'% (a preserved absence, kept as data).';
+    }
+    return v;
+  }
   toggleAudit(){const v=!this.state.auditMode;try{localStorage.setItem('eo_audit',v?'1':'0');}catch(e){}this.setState({auditMode:v});}
   // ── audit helpers: term sets + fold↔wiki referent comparison ──────────
   auditTerms(s){const out=new Set();String(s||'').toLowerCase().split(/[^a-z0-9]+/).forEach(w=>{if(w.length>=4&&!this.STOP.has(w))out.add(w);});return out;}
@@ -6564,6 +6632,7 @@ class Component extends DCLogic {
     const _acc=this.curAccent();
     const base={accentVar:_acc,accbgVar:this.mixWhite(_acc,.90),acclineVar:this.mixWhite(_acc,.70),
       settingsOpen:this.state.settingsOpen,onToggleSettings:()=>this.toggleSettings(),onCloseSettings:()=>this.closeSettings(),
+      chorus:this._chorusView(),
       templatesOpen:this.state.templatesOpen,onOpenTemplates:()=>this.setState({templatesOpen:true,settingsOpen:false}),onCloseTemplates:()=>this.setState({templatesOpen:false}),templatesStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
       memOpen:this.state.memOpen,onOpenMem:()=>this.setState({memOpen:true,settingsOpen:false}),onCloseMem:()=>this.setState({memOpen:false}),memStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},onExportMem:()=>this.exportMemory(),mem:(this.state.memOpen?this.memoryLog():{rows:[],hasRows:false,statLine:'',empty:true}),
       memTab:this.state.memTab||'sources',memTabSources:(this.state.memTab||'sources')==='sources',memTabLog:this.state.memTab==='log',
