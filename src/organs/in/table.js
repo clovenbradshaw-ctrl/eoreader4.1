@@ -46,11 +46,15 @@ export const ingestTable = (table = {}) => {
     if (prevId) log.append({ op: 'CON', src: prevId, tgt: id, via: 'next-row', sentIdx: i });
     prevId = id;
 
-    // A readable projection of the row for retrieval / embeddings.
+    // A readable projection of the row for retrieval / embeddings. It is terminated with a
+    // period so any reader that re-segments these lines as prose keeps ONE SENTENCE PER ROW:
+    // without a sentence boundary, period-less tabular data (names, ids, numbers, categories)
+    // collapses into a single multi-megabyte "sentence" that then stalls — or overflows the
+    // stack in — sentence-level passes downstream.
     const line = keys.map((k, ci) => `${columns[ci]}: ${cells[k]}`).filter(s => !/: $/.test(s)).join('; ');
     records.push({ id, index: i, cells });
     units.push(`row ${i}`);
-    sentences.push(line);
+    sentences.push(line && !/[.!?]$/.test(line) ? line + '.' : line);
   });
 
   const tokensBySentence = sentences.map(s => new Set(tok(s)));
