@@ -1302,18 +1302,9 @@ class Component extends DCLogic {
     const isQuestion=/^(what|whats|what'?s|who|whose|when|where|which|how|is|are|was|were|does|do|did|can|will)\b/.test(s)||s.endsWith('?');
     return isQuestion&&this._researchTerms(s).length<=1;
   }
-  _researchBattery(subject,derived,sources){
-    // A lookup gets no battery — just the seed query, answered shallow (no facet drift).
-    if(!derived&&this._isSimpleLookup(subject))return [];
-    const out=[],seen=new Set(this._researchTerms(subject));
-    const add=t=>{t=this.norm(String(t||'')).trim();const k=t.toLowerCase();if(t&&!seen.has(k)){seen.add(k);out.push(t);}};
-    // (1) the document's own salient threads — only when deepening read sources, so a fresh named
-    // topic never seeds from unrelated reading already in memory.
-    const cap=this._depthCfg().facets;   // shallow 2 · deep 4 · obsessive 5 — how wide the battery
-    if(derived)for(const t of this._seedLeadsFromRead(subject,sources,4))add(t);
-    // (2) neutral facets — breadth for any subject, so it's a battery even with nothing read yet.
-    for(const f of ['overview','analysis','history','significance','criticism','examples']){if(out.length>=cap)break;add(f);}
-    return out.slice(0,cap);}
+  // (The fixed facet battery — a hardcoded overview/analysis/history/… list appended to the subject
+  // — was retired: _planFacets now plans discourse-aware angle queries through the engine's shared
+  // facet brain (modelPlanner + planQueries), with the neutral facets kept only as an offline fallback.)
   // The read context for a question, as the verbatim spans the model leans on (plus the
   // source chips/entities to show). `sources` is the chat's source set — empty ranges over
   // everything read. Empty spans when nothing relevant has been read.
@@ -1384,7 +1375,7 @@ class Component extends DCLogic {
   // facets, so the walk always has a battery and behavior never regresses.
   async _planFacets(subject,seed,cur){
     const cfg=this._depthCfg();
-    // A lookup wants one fast answer — no fan-out (the same guard _researchBattery applied).
+    // A lookup wants one fast answer — no fan-out.
     if(!(seed&&seed.derived)&&this._isSimpleLookup(subject))return [];
     const out=[],seen=new Set([this.norm(subject).toLowerCase()]);
     const push=(q)=>{q=this.norm(String(q||'')).trim();const k=q.toLowerCase();if(q&&!seen.has(k)){seen.add(k);out.push(q);}};
