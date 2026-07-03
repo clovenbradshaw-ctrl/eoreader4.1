@@ -121,11 +121,13 @@ export const renderReportFragment = (report, { title = null } = {}) => {
   }
   h.push(`</section>`);
 
-  // The questions band — every ask with its measured trigger, and the reply.
+  // What to check next — the gaps the run measured, read-only. These were once
+  // blocking questions; on a research surface they belong here as next steps, not
+  // as a modal that parks the run. Answered ones show their resolution.
   if (r.questions.length) {
-    h.push(`<section class="dr-questions"><h2>Questions asked</h2><ul>`);
+    h.push(`<section class="dr-questions"><h2>What to check next</h2><ul>`);
     for (const { ask, answer } of r.questions) {
-      h.push(`<li><span class="dr-trigger">${esc(ask.trigger)}</span> ${esc(ask.text)}${answer ? `<div class="dr-reply">↳ ${esc(answer.reply)}</div>` : `<div class="dr-reply dr-open">open</div>`}</li>`);
+      h.push(`<li><span class="dr-trigger">${esc(ask.trigger)}</span> ${esc(ask.text)}${answer ? `<div class="dr-reply">↳ ${esc(answer.reply)}</div>` : ''}</li>`);
     }
     h.push(`</ul></section>`);
   }

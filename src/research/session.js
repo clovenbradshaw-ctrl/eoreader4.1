@@ -68,15 +68,30 @@ export const createResearchSession = (defaults = {}) => {
   };
 };
 
-// The chat-side rendering of one run: the phrased summary with its glue marked
-// and citations numbered, the grounded spans, the measured absences, and the
-// audit line. Plain text/markdown-ish, for a chat bubble; the surface carries
-// the full projection. `rootId` scopes the reply to the frames of THAT ask.
+// The chat-side rendering of one run — written for what a researcher actually
+// wants back: the ANSWER first (phrased, bind-checked, each claim clickable to
+// its exact span), then an honest account of what the finding rests on (a
+// single-source run says so; disputed and missing things are first-class), and
+// finally concrete FOLLOW-UPS drawn from the gaps the run measured — so the
+// reply ends by offering to go further, not by overselling what it found.
+// Plain text/markdown-ish, for a chat bubble; the surface carries the full
+// projection. `rootId` scopes the reply to the frames of THAT ask.
 export const formatChatReply = (report, rootId = 'root') => {
   const secs = report.sections.filter((s) => s.frameId === rootId || s.frameId.startsWith(rootId + '.'));
   if (!secs.length) return 'Nothing was researched — no frames opened.';
   const num = new Map(report.propositions.map((p, i) => [p.id, i + 1]));
+  const runProps = [];
+  for (const sec of secs) for (const p of sec.propositions) runProps.push(p);
+  const pinIds = new Set(runProps.map((p) => p.pinId));
+  const anyPhrase = secs.some((s) => s.phrase);
   const lines = [];
+
+  // ── 1. THE ANSWER, first ────────────────────────────────────────────────────
+  // Phrased sentences carry their citation; glue carries none. No model → the
+  // significance-ordered spans below ARE the answer (never worse than the spans).
+  if (!anyPhrase && runProps.length) {
+    lines.push('_No model connected — here are the grounded spans, most significant first._');
+  }
   for (const sec of secs) {
     if (sec.frameId !== rootId) lines.push(`\n**${sec.question}**`);
     if (sec.phrase) {
@@ -84,29 +99,88 @@ export const formatChatReply = (report, rootId = 'root') => {
         s.glue ? s.text : `${s.text} [${num.get(s.boundTo) ?? '•'}]`).join(' '));
     }
     for (const v of sec.voids) {
-      lines.push(`The pinned record is silent here (${v.terrain}${v.term ? `: ${v.term}` : ''}) — ${v.receipt}.`);
-    }
-    if (!sec.phrase && sec.propositions.length) {
-      // No model — the reply IS the spans, significance-ordered.
-      for (const p of sec.propositions.slice(0, 5)) lines.push(`[${num.get(p.id)}] “${p.span.text}”`);
+      lines.push(`_Couldn’t find this in the pinned sources_ (${v.terrain}${v.term ? `: ${v.term}` : ''}) — ${v.receipt}.`);
     }
   }
-  // The citations QUOTE their spans. A bare footnote number pointing at a URL
-  // is the severed link this whole design exists to refuse — the reader must be
-  // able to see, under every [n], the exact bytes the claim stands on.
-  const cited = new Set();
-  for (const sec of secs) for (const p of sec.propositions) cited.add(p.id);
+
+  // ── 2. SOURCES — the exact span under every [n] ─────────────────────────────
+  // A bare footnote number pointing at a URL is the severed link this whole
+  // design refuses: the reader must see, under every [n], the exact bytes the
+  // claim stands on. Flags read in plain words, never operator codes.
+  const cited = new Set(runProps.map((p) => p.id));
   if (cited.size) {
-    lines.push('');
+    lines.push('\n**Sources — the exact span under each claim:**');
     for (const p of report.propositions.filter((p) => cited.has(p.id))) {
       const pin = report.pinById[p.pinId];
       const where = pin?.snapshotUrl || pin?.url || pin?.title || (pin ? `local pin ${pin.contentHash.slice(0, 12)}…` : '');
+      const flags = [];
+      if (p.recForcing) flags.push('shifted the picture');
+      if (p.contradictedBy.length) flags.push('⚠ disputed');
+      if (p.corroboratedBy.length) flags.push(`corroborated ×${p.corroboratedBy.length}`);
       lines.push(`[${num.get(p.id)}] “${p.span.text}”`);
-      lines.push(`    — ${where} · chars ${p.span.start}–${p.span.end}${p.recForcing ? ' · REC-forcing' : ''}${p.contradictedBy.length ? ' · ⚠ contradicted' : ''}${p.corroboratedBy.length ? ` · corroborated ×${p.corroboratedBy.length}` : ''}`);
+      lines.push(`    — ${where} · chars ${p.span.start}–${p.span.end}${flags.length ? ` · ${flags.join(' · ')}` : ''}`);
     }
   }
-  if (report.verify.sections) {
-    lines.push(`_VERIFY: ${report.verify.bound}/${report.verify.sentences} sentences bind, ${report.verify.glue} glue._`);
+
+  // ── 3. WORTH KNOWING — the honesty band ─────────────────────────────────────
+  const notes = [];
+  if (runProps.length && pinIds.size === 1) {
+    const only = report.pinById[[...pinIds][0]];
+    const name = only?.title || only?.url || 'one source';
+    notes.push(`Everything above comes from **one source** (${name}). Nothing here is cross-checked — treat it as a starting sketch, not verified fact.`);
   }
+  const disputed = runProps.filter((p) => p.contradictedBy.length);
+  if (disputed.length) {
+    notes.push(`**${disputed.length} claim${disputed.length === 1 ? '' : 's'} disputed** — sources pull in opposite directions and nothing broke the tie (marked ⚠ above).`);
+  }
+  if (notes.length) {
+    lines.push('\n**Worth knowing**');
+    for (const n of notes) lines.push(`- ${n}`);
+  }
+
+  // ── 4. FOLLOW-UPS — offered, not blocking ───────────────────────────────────
+  const follows = followupsFrom(report, secs, rootId, pinIds, runProps);
+  if (follows.length) {
+    lines.push('\n**Want me to go further? Just ask me to:**');
+    for (const f of follows) lines.push(`- ${f}`);
+  }
+
+  // ── 5. FOOTER — honest, not a badge parade ──────────────────────────────────
+  // "converging" only means something with more than one source; with a single
+  // pin, corroboration is impossible, so the badge is withheld rather than shown.
+  const bits = [`${runProps.length} grounded span${runProps.length === 1 ? '' : 's'}`, `${pinIds.size} source${pinIds.size === 1 ? '' : 's'}`];
+  if (pinIds.size > 1 && report.recs.length) bits.push(report.convergence.badge);
+  let foot = `_${bits.join(' · ')}_`;
+  if (report.verify.sections) {
+    foot += `\n_VERIFY: ${report.verify.bound}/${report.verify.sentences} sentences bind${report.verify.glue ? `, ${report.verify.glue} glue` : ''}._`;
+  }
+  lines.push('\n' + foot);
   return lines.join('\n');
+};
+
+// Concrete, sendable follow-ups from the run's MEASURED gaps — the driver logs
+// an askUser on every void / fork / thin-corpus, but its prompts are terse and
+// system-voiced; here we phrase the same conditions as plain next-questions the
+// chat can act on ("research X", "dig deeper" already route). Capped at three,
+// deduped, most actionable first.
+const followupsFrom = (report, secs, rootId, pinIds, runProps) => {
+  const outs = [];
+  const seen = new Set();
+  const add = (t) => { const k = t.toLowerCase(); if (t && !seen.has(k) && outs.length < 3) { seen.add(k); outs.push(t); } };
+  // A measured absence → a concrete search or a source to add.
+  for (const sec of secs) for (const v of sec.voids) {
+    if (v.terrain === 'elsewhere' && v.term) add(`Search the web for “${v.term}” — it isn’t in the sources pinned so far.`);
+    else add(`Add a source that covers “${sec.question}”.`);
+  }
+  // A live contradiction → settle it.
+  if (runProps.some((p) => p.contradictedBy.length)) add('Dig into the disputed claim and work out which source is right.');
+  // A single source → corroborate it.
+  if (runProps.length && pinIds.size === 1) add('Pull in a second source so these findings can be cross-checked.');
+  // Anything the driver flagged that the conditions above didn’t already cover.
+  for (const { ask, answer } of report.questions) {
+    if (answer || outs.length >= 3) break;
+    if (!(ask.frameId === rootId || ask.frameId.startsWith(rootId + '.'))) continue;
+    if (ask.trigger === 'rec') add('Keep going on the reframed topic — the picture shifted partway through the read.');
+  }
+  return outs;
 };

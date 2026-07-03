@@ -35,7 +35,7 @@ import { projectReport } from './project.js';
 import { pinPayload, locateSpan } from '../archive/pin.js';
 import { admitWebSource } from '../ingest/websource.js';
 import { fieldVerdict, ANSWERABLE_ALPHA } from '../surfer/answerable.js';
-import { researchTerms, profileOf, curiosityOf, foldInto } from '../turn/research.js';
+import { researchTerms, profileOf, curiosityOf, foldInto, leadsFrom, nextQuery } from '../turn/research.js';
 import { calibrateReader } from '../core/enacted/loop.js';
 import { OPERATORS } from '../core/operators.js';
 import { terrainOf, stanceOf } from '../core/cube.js';
@@ -88,6 +88,134 @@ export const termSimilarity = (aTerms, bTerms) => {
 const SIM_THRESHOLD = 0.6;
 const SIM_MIN_SHARED = 3;
 
+// ── Output size × research strategy ─────────────────────────────────────────
+// Deep research needs a LOT of material — one page is a sketch, not a survey.
+// The SIZE preset sets the ambition (how many sources to gather, how deep to
+// mine each); the STRATEGY sets the shape of the search. Both feed the gather
+// loop below, which keeps searching until the target is met, the leads dry up,
+// or the round cap trips. No `search` or no `size` → the corpus is exactly what
+// was handed in (every offline test unchanged).
+export const SIZE_PRESETS = {
+  brief:    { sources: 3,  perSource: 4, facets: 3 },   // a tight answer
+  standard: { sources: 6,  perSource: 6, facets: 5 },   // a real write-up
+  deep:     { sources: 12, perSource: 8, facets: 6 },   // a survey
+};
+export const STRATEGIES = {
+  // wide and shallow: maximize distinct sources, skim each, expand by new facets
+  breadth:  { sourcesMul: 1.6, perSourceMul: 0.6, follow: 'facet' },
+  // narrow and deep: fewer sources, mine each, chase the surprising leads far
+  depth:    { sourcesMul: 0.6, perSourceMul: 1.7, follow: 'lead' },
+  // holonic — the topic as a holarchy: each facet a whole at its own scale,
+  // composing into the larger whole. Spread across the cube's kinds of fact (a
+  // bit of every operator), seeded by the cues that surface the kinds the
+  // coverage grid still lacks, so no aspect is left a stub.
+  holonic:  { sourcesMul: 1.0, perSourceMul: 1.0, follow: 'holonic' },
+};
+// Generic aspect words that pull a subject apart into different facets (breadth).
+const FACETS = ['overview', 'history', 'how it works', 'criticism', 'impact', 'types', 'examples', 'recent developments'];
+// The cube's operators mapped to query cues that tend to surface that KIND of
+// fact — the holonic walk cycles these so the grid fills across every kind
+// (each a whole facet) rather than piling more of the same operator.
+const OP_FACETS = {
+  INS: 'origin history founded',
+  EVA: 'criticism assessment controversy',
+  CON: 'relationships connections partnerships',
+  SEG: 'types classification differences',
+  SYN: 'overview synthesis how it works',
+  REC: 'evolution reclassification renamed',
+  SIG: 'reports studies according to',
+  DEF: 'definition what is',
+};
+
+// The holonic decomposition — the subject broken into sub-holons, each a whole
+// at its own scale, phrased as a natural sub-question so it opens its own frame,
+// gather, and section, then composes into the nested report. Ordered to trace
+// the cube's kinds (existence → structure → mechanism → evaluation → consequence
+// → relation), and trimmed to the size's facet budget.
+const HOLON_FACETS = [
+  (s) => `origins and history of ${s}`,
+  (s) => `types and forms of ${s}`,
+  (s) => `how ${s} works`,
+  (s) => `criticism and controversy around ${s}`,
+  (s) => `impact and significance of ${s}`,
+  (s) => `${s} compared with related subjects`,
+];
+export const holonicFacets = (q, n = 5) => {
+  const s = String(q || '').replace(/^\s*(?:research|about|on|study of)\s+/i, '').trim();
+  if (!s) return [];
+  return HOLON_FACETS.slice(0, Math.max(1, Math.min(HOLON_FACETS.length, n))).map((f) => f(s));
+};
+
+// resolveDepth(opts) → { targetSources, perSource, facets, follow } | null. Null means
+// no active gather (behave exactly as before): only chosen when a size preset
+// is set. Strategy scales the size; an explicit targetSources/perSource wins.
+export const resolveDepth = (opts = {}) => {
+  const size = SIZE_PRESETS[opts.size] || (opts.size ? SIZE_PRESETS.standard : null);
+  if (!size && opts.targetSources == null) return null;
+  const strat = STRATEGIES[opts.strategy] || STRATEGIES.holonic;
+  const base = size || SIZE_PRESETS.standard;
+  return {
+    targetSources: opts.targetSources ?? Math.max(1, Math.round(base.sources * strat.sourcesMul)),
+    perSource: opts.maxSpansPerSource ?? Math.max(2, Math.round(base.perSource * strat.perSourceMul)),
+    facets: base.facets ?? 5,
+    follow: strat.follow,
+  };
+};
+
+// gatherCorpus — widen the seed corpus toward the target with the injected
+// `search`. The frontier is seeded by the subject and grown by what the pages
+// surface, shaped by the strategy: `facet` fans across generic aspects, `lead`
+// chases the most surprising terms (curiosityOf/leadsFrom, the same active-
+// inference the walk uses), `coverage` cycles the cube's operator cues so the
+// spread of KINDS widens. Novel on-topic pages only (dedup by a text signature);
+// bounded by targetSources and a round cap. Pure but for `search`.
+const gatherCorpus = async (q, subject, seed, search, { targetSources, maxRounds, follow, k, onBeat }) => {
+  const corpus = [...seed];
+  if (typeof search !== 'function') return corpus;
+  const sig = (t) => String(t || '').replace(/\s+/g, ' ').trim().slice(0, 240).toLowerCase();
+  const seen = new Set(corpus.map((s) => sig(s.text)));
+  const seenQ = new Set();
+  const frontier = [];
+  const pushQ = (query) => { const s = String(query || '').trim(); if (s && !seenQ.has(s.toLowerCase())) frontier.push(s); };
+  // Seed: the plain question first, then the strategy's opening spread.
+  pushQ(q);
+  const anchor = subject.join(' ') || q;
+  if (follow === 'facet') for (const f of FACETS) pushQ(`${anchor} ${f}`);
+  if (follow === 'holonic') for (const cue of Object.values(OP_FACETS)) pushQ(`${anchor} ${cue.split(' ')[0]}`);
+  let prior = new Map();
+  for (const s of corpus) prior = foldInto(prior, profileOf(s.text || ''));
+  const need = () => corpus.length < targetSources;
+  const cap = Math.max(1, maxRounds);
+  let rounds = 0;
+  while (frontier.length && (need() || !corpus.length) && rounds < cap) {
+    const query = frontier.shift();
+    const qk = query.toLowerCase();
+    if (seenQ.has(qk)) continue;
+    seenQ.add(qk);
+    rounds++;
+    if (onBeat) { try { onBeat(query, corpus.length, targetSources); } catch { /* a beat never breaks the gather */ } }
+    let hits = [];
+    try { hits = (await search(query, { k })) || []; } catch { hits = []; }
+    for (const h of hits) {
+      const text = String(h?.text || '');
+      if (text.trim().length < 120) continue;
+      const s = sig(text);
+      if (seen.has(s)) continue;
+      seen.add(s);
+      corpus.push(h);
+      // Harvest the next queries from THIS page, shaped by the strategy.
+      if (follow === 'lead' || follow === 'holonic') {
+        const arrival = profileOf(text);
+        const { by } = curiosityOf(prior, arrival);
+        prior = foldInto(prior, arrival);
+        for (const lead of leadsFrom(by, { max: follow === 'lead' ? 3 : 1 })) pushQ(nextQuery(anchor, lead));
+      }
+      if (!need()) break;
+    }
+  }
+  return corpus;
+};
+
 // ── The run ──────────────────────────────────────────────────────────────────
 //
 // runGroundedResearch(question, opts) → { log, report }
@@ -126,31 +254,57 @@ export const runGroundedResearch = async (question, opts = {}) => {
 
   const q = String(question || '').trim();
   const subject = researchTerms(q);
+  const depth = resolveDepth(opts);
+  const perSourceCap = depth ? depth.perSource : maxSpansPerSource;
+
+  // Holonic strategy with no explicit sub-questions AUTO-DECOMPOSES the subject
+  // into facet sub-frames — each a sub-holon gathered to its own mini-target and
+  // composed into the nested report. Explicit sub-questions always win; offline
+  // (no search) the facets still structure the read over the seed corpus.
+  const holonic = depth?.follow === 'holonic';
+  const perHolon = holonic && !!search; // read per-sub-holon vs. over the whole corpus
+  const effectiveSubQs = subQuestions.length ? subQuestions
+    : (holonic ? holonicFacets(q, depth.facets) : []);
 
   // The root frame of THIS run. Sub-questions push child frames under it (the
   // frame stack); the depth guard is the shared runaway guard, reused unchanged.
   emit(openResearch({ id: rootId, question: q, subject, scope: { alpha }, depth: 0, t: tick() }));
-  const kids = subQuestions.slice(0, MAX_FANOUT).map((sq, i) => {
+  const kids = effectiveSubQs.slice(0, MAX_FANOUT).map((sq, i) => {
     const id = `${rootId}.${i}`;
     emit(openResearch({ id, parentId: rootId, question: String(sq), subject: researchTerms(sq), depth: 1, t: tick() }));
     return { id, question: String(sq) };
   });
-  if (subQuestions.length > MAX_FANOUT) {
+  if (effectiveSubQs.length > MAX_FANOUT) {
     const a = askUser({
       id: `ask:${askN++}`, frameId: rootId, trigger: 'depth',
-      text: `The plan spawned ${subQuestions.length} threads; the budget is ${MAX_FANOUT}. Which to pursue?`,
-      options: subQuestions.map(String), t: tick(),
+      text: `The plan spawned ${effectiveSubQs.length} threads; the budget is ${MAX_FANOUT}. Which to pursue?`,
+      options: effectiveSubQs.map(String), t: tick(),
     });
     emit(a);
     const reply = ask ? await safeAsk(ask, a) : null;
     if (reply != null) emit(answerAsk({ askId: a.id, reply, t: tick() }));
   }
   const frames = [{ id: rootId, question: q }, ...kids].filter((f) => f.question);
+  // Holonic splits the source budget across the sub-holons: the root gathers a
+  // light general footing, each facet gathers its own share.
+  const perFacetTarget = depth ? Math.max(2, Math.round(depth.targetSources / frames.length)) : 0;
 
   // Preliminary — the corpus must be a specified cell-region, not a vague string.
+  // A size preset turns the single-shot fallback into a gather-to-target loop:
+  // keep searching until there is enough grounded material for the requested
+  // size, shaped by the strategy (breadth / depth / holonic).
   let corpus = [...sources];
-  if (!corpus.length && search) {
-    try { corpus = (await search(q)) || []; } catch { corpus = []; }
+  if (search && (depth || !corpus.length)) {
+    corpus = await gatherCorpus(q, subject, corpus, search, {
+      // Under holonic decomposition the root takes only a light general footing
+      // (chase the subject's own leads) and leaves the facet-specific pages for
+      // the sub-holons to claim; otherwise it gathers the full strategy shape.
+      targetSources: depth ? Math.max(perHolon ? perFacetTarget : depth.targetSources, corpus.length) : 1,
+      maxRounds: opts.maxRounds ?? (depth ? Math.max(6, depth.targetSources * 2) : 1),
+      follow: perHolon ? 'lead' : (depth ? depth.follow : 'lead'),
+      k: opts.perQuery ?? 4,
+      onBeat: opts.onGather || null,
+    });
   }
   if (!corpus.length) {
     const a = askUser({
@@ -167,39 +321,80 @@ export const runGroundedResearch = async (question, opts = {}) => {
   // Pin every source BEFORE it is read — the provenance anchor. The pin
   // degrades to a local record offline; the content hash never degrades. A
   // source already pinned in this log (same content hash — a follow-up ask
-  // over the same corpus) reuses its pin: one snapshot, many reads.
+  // over the same corpus) reuses its pin: one snapshot, many reads. `pinInto`
+  // is reusable so a facet frame can pin its own freshly-gathered sources into
+  // the same working set mid-run.
   const priorPins = new Map(log.filter((e) => e.kind === 'pin').map((e) => [e.contentHash, e.id]));
   const pinned = [];
-  for (const src of corpus) {
-    const text = String(src.text || '');
-    if (!text.trim()) continue;
-    const payload = await pinPayload({ url: src.url ?? null, title: src.title ?? null, text, fetch: netFetch, save, now });
-    let pinId = priorPins.get(payload.contentHash);
-    if (!pinId) {
-      pinId = `pin:${pinN++}`;
-      emit(pinSource({ id: pinId, ...payload, t: tick() }));
-      priorPins.set(payload.contentHash, pinId);
+  const pinnedById = new Map();
+  const pinnedHashes = new Set();
+  // Pin a list of sources; return the ids of the ones NEWLY added to this run's
+  // working set (so a sub-holon owns exactly the sources it first introduced).
+  const pinInto = async (list) => {
+    const added = [];
+    for (const src of list) {
+      const text = String(src.text || '');
+      if (!text.trim()) continue;
+      const payload = await pinPayload({ url: src.url ?? null, title: src.title ?? null, text, fetch: netFetch, save, now });
+      if (pinnedHashes.has(payload.contentHash)) continue; // already owned by an earlier frame
+      pinnedHashes.add(payload.contentHash);
+      let pinId = priorPins.get(payload.contentHash);
+      if (!pinId) {
+        pinId = `pin:${pinN++}`;
+        emit(pinSource({ id: pinId, ...payload, t: tick() }));
+        priorPins.set(payload.contentHash, pinId);
+      }
+      const entry = { pinId, text, doc: admitWebSource({ url: src.url || `pinned:${pinId}`, text }).doc, title: src.title ?? null };
+      pinned.push(entry);
+      pinnedById.set(pinId, entry);
+      added.push(pinId);
     }
-    const { doc } = admitWebSource({ url: src.url || `pinned:${pinId}`, text });
-    pinned.push({ pinId, text, doc, title: src.title ?? null });
-  }
+    return added;
+  };
+  // The root owns the general footing; each holonic facet owns its own gather.
+  const framePins = new Map();
+  framePins.set(rootId, await pinInto(corpus));
 
-  // ── Per-frame: bind, VOID-gate, extract, the significance loop ────────────
+  // ── Per-frame: gather (holonic), bind, VOID-gate, extract, significance ────
   for (const frame of frames) {
     const fq = frame.question;
     const fTerms = researchTerms(fq);
+
+    // A holonic facet is its own whole: it gathers its OWN sources to a
+    // mini-target before it reads, so the sub-holon stands on material it went
+    // and found — not just leftovers of the root's gather. Root gathers the
+    // general footing above; offline (no search) this is a no-op.
+    if (perHolon && frame.id !== rootId) {
+      const facetCorpus = await gatherCorpus(fq, fTerms, [], search, {
+        targetSources: perFacetTarget,
+        maxRounds: opts.maxRounds ?? Math.max(4, perFacetTarget * 2),
+        follow: 'lead',
+        k: opts.perQuery ?? 4,
+        onBeat: opts.onGather || null,
+      });
+      framePins.set(frame.id, await pinInto(facetCorpus));
+    }
+
+    // Which sources this frame READS, and what it binds against. Under holonic
+    // decomposition each sub-holon reads only the sources IT owns, bound to the
+    // subject (the facet's descriptor steered the gather, not the bind — those
+    // words rarely appear in the prose). Otherwise the frame reads the whole
+    // corpus, bound to its own question terms (unchanged).
+    const readSet = perHolon ? (framePins.get(frame.id) || []).map((id) => pinnedById.get(id)).filter(Boolean) : pinned;
+    const bindTerms = perHolon ? subject : fTerms;
+    if (perHolon && !readSet.length) continue; // this sub-holon found no sources — leave its section empty
 
     // The bind measurement per source: score each sentence by its overlap with
     // the frame subject; the spans that clear the strong gate are the reads.
     let anyBind = false;
     const extracts = []; // { pinId, sentence, idx, score }
-    for (const p of pinned) {
+    for (const p of readSet) {
       const sentences = p.doc.sentences || [];
       const scored = sentences.map((s, idx) => {
         const toks = p.doc.tokensBySentence?.[idx];
         let overlap = 0;
-        for (const term of fTerms) if (toks?.has(term)) overlap++;
-        return { idx, sentence: s, overlap, score: fTerms.length ? overlap / fTerms.length : 0 };
+        for (const term of bindTerms) if (toks?.has(term)) overlap++;
+        return { idx, sentence: s, overlap, score: bindTerms.length ? overlap / bindTerms.length : 0 };
       });
       const spans = scored.filter((x) => x.overlap > 0).map((x) => ({ idx: x.idx, score: x.score }));
       const verdict = fieldVerdict(p.doc, fq, spans, { alpha });
@@ -210,7 +405,7 @@ export const runGroundedResearch = async (question, opts = {}) => {
       }
       anyBind = true;
       const strong = scored.filter((x) => x.overlap >= 2 || x.score >= 0.5)
-        .sort((a, b) => b.overlap - a.overlap).slice(0, maxSpansPerSource);
+        .sort((a, b) => b.overlap - a.overlap).slice(0, perSourceCap);
       for (const hit of strong) {
         const span = locateSpan(p.text, hit.sentence);
         emit(readSpan({
@@ -224,7 +419,7 @@ export const runGroundedResearch = async (question, opts = {}) => {
     // The VOID gate, turned into a question rather than a flat "does not say".
     if (!anyBind || !extracts.length) {
       const named = (fq.match(/\b[A-Z][A-Za-z'’-]{2,}\b/g) || []).filter((w) => !fTerms.includes(w.toLowerCase()));
-      const inCorpus = pinned.some((p) => p.doc.sentences?.some((s, i) => fTerms.some((term) => p.doc.tokensBySentence?.[i]?.has(term))));
+      const inCorpus = readSet.some((p) => p.doc.sentences?.some((s, i) => bindTerms.some((term) => p.doc.tokensBySentence?.[i]?.has(term))));
       const terrain = !inCorpus && subject.length ? 'elsewhere' : 'never-set';
       emit(voidAbsence({
         frameId: frame.id, terrain,
@@ -287,10 +482,21 @@ export const runGroundedResearch = async (question, opts = {}) => {
         }
       }
       if (strain >= threshold && sinceRec.length) {
-        const axis = [...axisStrain.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k).slice(0, 3);
+        // The reframing must NAME what the topic reorganized around — a term the
+        // frame did not already stand on. Rank by accumulated strain, drop the
+        // terms the frame already carries (a reframe onto its own DEF terms is
+        // not a reframe), and require a term with some body so a label never
+        // reads as a hedge. Fall back to the forcing span's own distinctive
+        // terms, filtered the same way, before ever emitting a bare token.
+        const from = fTerms.slice(0, 3);
+        const meaningful = (t) => t && t.length >= 4 && !from.includes(t);
+        const ranked = [...axisStrain.entries()].sort((a, b) => b[1] - a[1]).map(([k]) => k);
+        let axis = ranked.filter(meaningful).slice(0, 3);
+        if (!axis.length) axis = pr.terms.filter(meaningful).slice(0, 3);
+        if (!axis.length) axis = (ranked.length ? ranked : pr.terms).slice(0, 3);
         emit(recFrame({
           frameId: frame.id, forcedBy: [...sinceRec], strainSum: strain,
-          from: fTerms.slice(0, 3), to: axis.length ? axis : pr.terms.slice(0, 3),
+          from, to: axis,
           trigger: 'accumulation', t: tick(),
         }));
         const a = askUser({
@@ -377,7 +583,21 @@ export const runGroundedResearch = async (question, opts = {}) => {
 };
 
 const safeAsk = async (ask, ev) => { try { return await ask(ev); } catch { return null; } };
-const splitSentences = (text) => String(text || '')
-  .replace(/\s+/g, ' ')
-  .match(/[^.!?]+[.!?]+(?:["'”’)\]]+)?|[^.!?]+$/g)?.map((s) => s.trim()).filter(Boolean) ?? [];
+// Split into sentences WITHOUT breaking inside a decimal ("9.5 m"), an
+// abbreviation ("e.g."), or an initial — the period between two digits (or the
+// dots in a short lower-case abbreviation) is not a sentence boundary. Guarding
+// them keeps a citation from landing mid-number ("to the 9. [1] 5m-long orca").
+const splitSentences = (text) => {
+  const t = String(text || "").replace(/\s+/g, " ").trim();
+  if (!t) return [];
+  // Mask the dots that are NOT sentence boundaries (decimals like "9.5", short
+  // abbreviations like "e.g."/"U.S.") with a private-use sentinel, split, then
+  // unmask — so a citation can never land mid-number ("to the 9. [1] 5m orca").
+  const DOT = "\uE000";
+  const guarded = t
+    .replace(/(\d)\.(\d)/g, "$1" + DOT + "$2")
+    .replace(/\b([a-z])\.([a-z])\./gi, "$1" + DOT + "$2" + DOT);
+  const parts = guarded.match(/[^.!?]+[.!?]+(?:["'”’)\]]+)?|[^.!?]+$/g) || [];
+  return parts.map((x) => x.replace(new RegExp(DOT, "g"), ".").trim()).filter(Boolean);
+};
 const round3 = (x) => Math.round(x * 1000) / 1000;
