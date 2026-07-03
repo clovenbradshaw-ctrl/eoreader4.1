@@ -72,6 +72,9 @@ class Component extends DCLogic {
       // answer; deep covers the subject from several angles; obsessive exhausts the threads.
       // It scales the battery size, the hop budget, pages-per-thread, and leash patience.
       researchDepth:(()=>{try{return localStorage.getItem('eo_depth')||'deep';}catch(e){return 'deep';}})(),
+      // Deep-research strategy: how the gather is shaped — breadth (many sources,
+      // skim), depth (few sources, deep), holonic (decompose into sub-holons).
+      researchStrategy:(()=>{try{return localStorage.getItem('eo_strategy')||'holonic';}catch(e){return 'holonic';}})(),
       leftOpen:true, openGroups:{}, summaries:{}, wikiDefs:{}, learnedOpen:false,
       // Entities the reader has explicitly RESEARCHED (the ✦ button). Once an entity
       // has been researched, its side-panel profile leads with the cross-source reading
@@ -1423,9 +1426,31 @@ class Component extends DCLogic {
     let model=null;
     try{const guard=this._stallGuard();model=this._drModelOf(await Promise.race([this.ensureChatModel(guard.feed),guard.race]));guard.clear();}
     catch(e){model=null;}   // no model → the reply stands on exact spans (never worse than the spans)
+    // Output size × strategy for the gather-to-target loop. Size rides the
+    // existing research-depth dial (shallow/deep/obsessive → brief/standard/deep);
+    // strategy defaults to holonic — the subject decomposed into sub-holons, each
+    // gathering its own sources. `drSearch` is what lets the driver widen past the
+    // walk's corpus (Wikipedia-first, then the open web); withheld when the chat
+    // is scoped to the reading or the reading already covers the subject, so those
+    // stay grounded in what's pinned.
+    const size={shallow:'brief',deep:'standard',obsessive:'deep'}[this.state.researchDepth||'deep']||'standard';
+    const strategy=this.state.researchStrategy||'holonic';
+    const useWeb=webOn&&!isolated&&!covered&&!opts.noWalk;
+    const drSearch=async(query,o)=>{
+      const k=(o&&o.k)||4;let urls=[];
+      try{urls=(await this._wikiFirstLinks(query,k))||[];}catch(e){urls=[];}
+      const out=[];
+      for(const u of urls.slice(0,k)){
+        if(this._stopGen)break;
+        try{const p=await this.fetchPage(u);const text=p&&(p.text||p.content);if(text&&String(text).length>200)out.push({url:u,title:(p.title||u),text:String(text)});}catch(e){}
+      }
+      return out;
+    };
     try{
       const {report,rootId}=await sess.research(subject,{
-        sources,model,
+        sources,model,size,strategy,
+        search:useWeb?drSearch:null,
+        onGather:(query,have,want)=>this._beat(id,'search','Gathering “'+query+'” — '+have+'/'+want+' sources'),
         onEvent:(ev)=>{if(ev&&(ev.kind==='rec'||ev.kind==='void'||ev.kind==='pin'))this._beat(id,ev.kind==='pin'?'read':'lead',lib.describeEvent(ev));},
       });
       const text=lib.formatChatReply(report,rootId);
@@ -2494,6 +2519,8 @@ class Component extends DCLogic {
     if(d==='obsessive')return {key:'obsessive',facets:5, maxHops:9, want:1, wantSeed:2, patience:4};
     return                    {key:'deep',     facets:4, maxHops:8, want:1, wantSeed:2, patience:3};}
   cycleResearchDepth(){const order=['shallow','deep','obsessive'];this.setState(s=>{const i=order.indexOf(s.researchDepth||'deep');const next=order[(i+1)%order.length];try{localStorage.setItem('eo_depth',next);}catch(e){}return {researchDepth:next};});}
+  // THE STRATEGY SWITCH — breadth → depth → holonic, persisted (mirrors cycleResearchDepth).
+  cycleResearchStrategy(){const order=['breadth','depth','holonic'];this.setState(s=>{const i=order.indexOf(s.researchStrategy||'holonic');const next=order[(i+1)%order.length];try{localStorage.setItem('eo_strategy',next);}catch(e){}return {researchStrategy:next};});}
   // THE REGISTER SWITCH — auto → grounded → creative, persisted (mirrors cycleResearchDepth).
   cycleAnswerMode(){const order=['auto','grounded','creative'];this.setState(s=>{const i=order.indexOf(s.answerMode||'auto');const next=order[(i+1)%order.length];try{localStorage.setItem('eo_answermode',next);}catch(e){}return {answerMode:next};});}
   async chatResearch(q,pre){
@@ -6272,6 +6299,11 @@ class Component extends DCLogic {
       depthBtnIcon:'\ue79e',depthBtnLabel:(this.state.researchDepth||'deep'),
       depthTitle:'How much research per question: shallow (the strongest answer) · deep (several angles) · obsessive (exhaust the threads). Click to cycle.',
       depthStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.webBrain!==false?'color:var(--ink2);background:var(--app);border:1px solid var(--line2);':'color:var(--ink3);background:var(--app);border:1px solid var(--line2);opacity:.5;'),
+      // THE STRATEGY SWITCH — how deep research SHAPES the gather (breadth · depth · holonic).
+      onCycleStrategy:()=>this.cycleResearchStrategy(),
+      strategyBtnLabel:'◇ '+(this.state.researchStrategy||'holonic'),
+      strategyTitle:'How deep research gathers: breadth (many sources, skim each) · depth (few sources, followed deep) · holonic (break the topic into facets and research each as its own whole). Click to cycle.',
+      strategyStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.webBrain!==false?'color:var(--ink2);background:var(--app);border:1px solid var(--line2);':'color:var(--ink3);background:var(--app);border:1px solid var(--line2);opacity:.5;'),
       // THE RESEARCH CONTROL on the composer — deep research replaced the essay
       // organ (docs/deep-research-log.md). The accent half runs the grounded
       // projection on the box text (researchGo → /research); the neutral half
