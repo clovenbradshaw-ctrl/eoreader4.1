@@ -16,7 +16,8 @@
     "essay-real-model": "node eoreader4-eval/essay-real-model.mjs",
     "essay-real-model:mock": "node eoreader4-eval/essay-real-model.mjs --mock",
     "chat-harness:drive": "node eoreader4-eval/chat-harness.drive.mjs",
-    "essay-thread:drive": "node eoreader4-eval/essay-thread.drive.mjs"
+    "essay-thread:drive": "node eoreader4-eval/essay-thread.drive.mjs",
+    "frame-bind:drive": "node eoreader4-eval/frame-bind.drive.mjs"
   },
   "engines": {
     "node": ">=20"

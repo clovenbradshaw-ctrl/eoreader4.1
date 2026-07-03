@@ -1557,7 +1557,7 @@ class Component extends DCLogic {
     const q=this.norm(this.state.chatInput);
     if(!q){this.setState({chatInput:'write an essay on ',essayMenuOpen:false});return;}
     this.runOrganEssay(q);}
-  async runOrganEssay(topic,typeIdOverride){
+  async runOrganEssay(topic,typeIdOverride,opts={}){
     const q=this.norm(topic);if(!q)return;
     this._stopGen=false;
     const cur=this.activeChatObj();           // the chat being written into (for research scope/subject)
@@ -1567,13 +1567,24 @@ class Component extends DCLogic {
     const typeId=typeIdOverride||this.state.essayType||'argument';
     const type=ET.essayTypeOf(typeId)||ET.ESSAY_TYPES[0];
     const floor=G.ESSAY_MIN_WORDS||2500;
-    // Seed the user turn + the pending bubble with a live trail, mirroring sendChat.
-    let id=this.state.activeChat;
-    this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
-      if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
-      const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
-      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,think:'Planning the essay…',research:{steps:[{kind:'think',text:'✍ '+type.label+' essay commissioned — a piece of at least '+floor.toLocaleString()+' words.'}],done:false,mode:'think',t0:Date.now()}}]};
-      return {chats,activeChat:id,chatInput:'',essayMenuOpen:false};});
+    // Seed the user turn + the pending bubble with a live trail, mirroring sendChat — OR reuse the
+    // bubble sendChat's frame-binding fork already created (the essay-continuation path), relabelling
+    // it and appending the commission step to the read's trail instead of a second bubble.
+    const reuse=opts.reuseId!=null;
+    let id=reuse?opts.reuseId:this.state.activeChat;
+    const commission='✍ '+type.label+' essay commissioned — a piece of at least '+floor.toLocaleString()+' words.';
+    if(reuse){
+      this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+        if(li>=0&&m[li].role==='asst'&&m[li].pending){const r=m[li].research||{steps:[],done:false,mode:'think',t0:Date.now()};
+          m[li]={...m[li],think:'Planning the essay…',research:{...r,steps:[...r.steps,{kind:'think',text:commission}]}};}
+        return {...c,messages:m};})}));
+    }else{
+      this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
+        if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
+        const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
+        chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,think:'Planning the essay…',research:{steps:[{kind:'think',text:commission}],done:false,mode:'think',t0:Date.now()}}]};
+        return {chats,activeChat:id,chatInput:'',essayMenuOpen:false};});
+    }
     this._scrollChat();this._thinkClock();
     // THE DISCOURSE STEERS THE ESSAY (docs/discourse-routing.md). The Write path used to skip the
     // metacognition and take the box text literally — so a CRITIQUE of the last piece ("that's not
@@ -1589,8 +1600,9 @@ class Component extends DCLogic {
       let fold=null;try{fold=await this._convFold(cur);}catch(e){fold=null;}
       // The talker reads the turn in context and puts it into words for itself; that read streams
       // live (real-time feedback) and rides into the compose cue as a steer (what would satisfy the
-      // asker). Null read (model cold) → no steer, today's behavior.
-      const read=await this._discourseRead(id,q,cur,fold||{stance:null});
+      // asker). Null read (model cold) → no steer, today's behavior. When sendChat's frame-binding
+      // fork already took the read on this same bubble, REUSE it (opts.read) — one read, not two.
+      const read=(opts.read!==undefined)?opts.read:await this._discourseRead(id,q,cur,fold||{stance:null});
       if(this._stopGen)return;
       if(read)readSteer=this._steerLine(read);
       // Does the ask name a subject of its OWN? A "write a <form> about X" frame, or a plain
@@ -2543,32 +2555,11 @@ class Component extends DCLogic {
     // the three steps the request asks for: read examples of the form, then WRITE an original one.
     if(this._composeIntent(q))return this.composeArtifact(q);
     const cur=this.activeChatObj();
-    // CONTINUATION-BY-DEFAULT — the Conversation Fold (docs/conversation-fold.md §2,§5).
-    // "write me one", "do it", "now one about the city", "make it shorter" have no
-    // intrinsic KIND — their stance is inherited from the thread, not read off the
-    // string. So a follow-up in a thread that was already COMPOSING keeps composing,
-    // instead of falling through to the web/grounding path (which would strip it to a
-    // subject and answer ABOUT it — the "write an emily dickinson poem" → memory-of-
-    // Dickinson bug, one turn later). Model-free (rung 2): the carried stance is the
-    // whole decision; a warm model (rung 4) can later override on a clean switch. The
-    // absence of a detected switch means continue. Only a compose stance re-routes; a
-    // ground / null stance falls through to today's path unchanged.
+    // The Conversation Fold carries the STANCE forward (docs/conversation-fold.md §2,§5), so a
+    // follow-up inherits what the thread is doing instead of re-deciding it from the bare string.
+    // The compose-continuation fork it feeds is read off the BINDING below, after the discourse
+    // read — see _continuesCompose (docs/frame-binding-route.md, Phase 1).
     const fold=await this._convFold(cur);
-    // An EXPLICIT research request ("research dolphins", "look into X") is a performed
-    // transition INTO grounding — a structural marker (§5), not an anaphor — so it
-    // breaks continuation and takes the web path below. Everything else in a composing
-    // thread continues to compose.
-    // …but a self-contained question ("what is 237 * 637?") is a SWITCH out of composing, not
-    // an anaphoric follow-up — it must not be answered as another poem. (§5 cold-path seed.)
-    if(fold.stance==='compose'&&!this._researchIntent(q)&&!this._switchesFromCompose(q)){
-      // A composing thread continues composing — but an ESSAY and a creative artifact are different
-      // organs. runOrganEssay tags its turn stance:'compose' too, so without this a follow-up after
-      // an essay ("make it longer", "one about X", "write me an essay …") fell into composeArtifact,
-      // which defaults to a POEM. Continue the essay as an essay when the last piece was one.
-      const lastEssay=cur&&[...cur.messages].reverse().find(m=>m.role==='asst'&&!m.pending&&m.text&&m.kind==='essay');
-      if(lastEssay&&this._essayOrganReady())return this.runOrganEssay(q);
-      return this.composeArtifact(q,fold);
-    }
     // The grounding scope for this turn: isolated (net-new, ground nothing from reading),
     // everything (sources:[]), or the tagged sources. An isolated chat answers plainly.
     const _sc=this._answerScope(cur,null);const isolated=_sc.isolated;const sources=_sc.sources;
@@ -2578,9 +2569,15 @@ class Component extends DCLogic {
     // bypassed below.
     const amode=this.state.answerMode||'auto';
     const prev=cur?cur.messages.filter(m=>m.text&&!m.pending):[];
-    // Append the user turn + a pending assistant bubble BEFORE any routing, so the discourse
-    // read — and every decision that follows it — narrates into a live trail from the first
-    // frame. The web path reuses this same bubble (chatResearch pre), never a second one.
+    // An EXPLICIT research request ("research dolphins", "look into X") is a performed transition
+    // INTO grounding — a structural marker (§5), not an anaphor — so it breaks continuation and
+    // takes the web path below regardless of what the read settles on.
+    const researchIntent=!!this._researchIntent(q);
+    // Append the user turn + a pending assistant bubble BEFORE any routing, so the discourse read
+    // — and every decision that follows it, INCLUDING the compose/switch fork — narrates into a
+    // live trail from the first frame. The compose-continuation, web, and ground paths all REUSE
+    // this one bubble (composeArtifact/runOrganEssay via {reuseId}, chatResearch via pre.id),
+    // never a second one.
     const contentful=amode!=='creative'&&!this.mechanicalAnswer(q)&&this._researchTerms(q).length>0;
     const seedThink=contentful?'Reading the conversation…':'Thinking…';
     let id=this.state.activeChat;
@@ -2592,10 +2589,31 @@ class Component extends DCLogic {
     this._scrollChat();this._thinkClock();
     // THE DISCOURSE METACOGNITION (docs/discourse-routing.md): the model reads the turn in free
     // language before anything routes; the read is shown verbatim in the trail and its measured
-    // currents steer the web decision below. Skipped for clock questions and bare pleasantries
-    // (nothing to read); null on any failure — null means today's behavior, unchanged.
+    // route drives the compose fork AND the web decision below. Skipped for clock questions and
+    // bare pleasantries (nothing to read); null on any failure — null means today's behavior.
     const read=contentful?await this._discourseRead(id,q,cur,fold):null;
     if(this._stopGen)return;
+    // CONTINUATION-BY-DEFAULT, now read off the BINDING (docs/frame-binding-route.md, Phase 1;
+    // docs/conversation-fold.md §2,§5). "write me one", "do it", "now one about the city", "make
+    // it shorter" have no intrinsic KIND — their stance is inherited from the thread, not read off
+    // the string. So a follow-up in a thread that was already COMPOSING keeps composing UNLESS the
+    // MEASURED route left compose: the discourse metacognition (not the inline _switchesFromCompose
+    // regex) decides whether a follow-up binds back to the act (a refinement/repair → continue) or
+    // switches to a fresh subject (→ leave). _continuesCompose enacts routeStance's fusion — a warm
+    // read decides on its settled route, the model-free switch seed is only the cold/abstained
+    // floor. This closes the "what do you mean what's his name?" repair being torn out of the story
+    // into a research walk on the literal phrase (the songs it wrongly matched by title). Only a
+    // compose stance re-routes here; a ground / null stance falls through to today's path unchanged.
+    if(fold.stance==='compose'&&!researchIntent&&this._continuesCompose(q,fold,read)){
+      // A composing thread continues composing — but an ESSAY and a creative artifact are different
+      // organs. runOrganEssay tags its turn stance:'compose' too, so without this a follow-up after
+      // an essay ("make it longer", "one about X", "write me an essay …") fell into composeArtifact,
+      // which defaults to a POEM. Continue the essay as an essay when the last piece was one. Both
+      // REUSE this bubble and the read already taken — no second bubble, no second model call.
+      const lastEssay=cur&&[...cur.messages].reverse().find(m=>m.role==='asst'&&!m.pending&&m.text&&m.kind==='essay');
+      if(lastEssay&&this._essayOrganReady())return this.runOrganEssay(q,undefined,{reuseId:id,read});
+      return this.composeArtifact(q,fold,{reuseId:id});
+    }
     const anchorGap=(!isolated&&contentful)?this._anchorGap(q,sources):null;
     if(anchorGap)this._beat(id,'warn','“'+anchorGap.missing.join('”, “')+'” '+(anchorGap.missing.length>1?'aren’t':'isn’t')+' in your reading — that part needs the web, or an honest absence.');
     const meta=(read||anchorGap)?{...(read||{researchDrive:0}),anchorGap}:null;
@@ -2937,6 +2955,26 @@ class Component extends DCLogic {
     const backRef=/\b(?:it|its|it's|this|that|those|them|they|one|another|again|more|shorter|longer|instead|version|the\s+(?:poem|story|piece|song|essay|draft|version))\b/i.test(s);
     return !backRef;
   }
+  // THE COMPOSE-CONTINUATION GATE, read off the FRAME BINDING (docs/frame-binding-route.md, Phase 1).
+  // A composing thread CONTINUES composing unless the turn LEFT compose. The decision is one
+  // measurement — the discourse read — not a vote between the regex seed and the warm verdict:
+  // this enacts routeStance's fusion (createMetaRouter over the metacognition's speech) inline,
+  // off the already-computed read.
+  //   · A WARM, non-abstained read decides on its SETTLED route: route==='compose' means the turn
+  //     bound back into the act (a refinement "make it shorter", a repair "what do you mean?") →
+  //     continue; any other settled route (ground / research / isolate) is a genuine switch → leave.
+  //   · A COLD or ABSTAINED read (model down, nothing legible, non-contentful turn) falls to the
+  //     model-free switch SEED (_switchesFromCompose) — the fallback contract, byte-identical to the
+  //     pre-frame-binding behavior: a self-contained question leaves, an anaphor continues.
+  // The regex thus informs, it does not decide — the exact demotion docs/discourse-routing.md's own
+  // docstring prescribed but sendChat never enacted (it reimplemented the fork inline and left the
+  // warm verdict computed-then-discarded). This is why "what do you mean what's his name?" — a repair
+  // the seed wrongly reads as a switch (wh-opener, trailing "?", "his" not in its back-ref list) —
+  // no longer tears the turn out of the story into a research walk on the songs it matched by title.
+  _continuesCompose(q,fold,read){
+    if(read&&!read.abstained&&read.route)return read.route==='compose';
+    return !this._switchesFromCompose(q);
+  }
   // The KIND phrase, kept whole ("emily dickinson poem", "haiku"), length/style words peeled. Used
   // only to label the work ("Writing a haiku…"); the model gets the request itself, not this.
   _composeKind(q){
@@ -2949,26 +2987,41 @@ class Component extends DCLogic {
   // The compose path: hand the request to the model in the plain writer frame and stream the piece
   // into the bubble. Deliberately minimal — no walk, no examples, no extra system constraints. The
   // model already writes the form; the job here is to stop the reading posture from intercepting it.
-  async composeArtifact(q,fold){
+  async composeArtifact(q,fold,opts={}){
     // The enacted compose focus: the KIND that labels the work + the running SUBJECT.
     // A bare "write me one" / "make it shorter" borrows both from the carried fold so
     // "Writing a haiku…" stays a haiku across the thread, not a default poem.
     const focus=this._composeFocus(q,fold);
     const kind=focus.kind;
     const a=/^[aeiou]/i.test(kind)?'an':'a';
-    let id=this.state.activeChat;
+    // REUSE the discourse bubble when sendChat's frame-binding fork already created it (and took
+    // the read) — relabel it as the compose act and keep its trail, instead of appending a second
+    // user echo + bubble. Explicit-compose / steer-accept callers pass no reuseId → own bubble.
+    const reuse=opts.reuseId!=null;
+    let id=reuse?opts.reuseId:this.state.activeChat;
     const prevObj=this.activeChatObj();
-    const prev=((prevObj&&prevObj.messages)||[]).filter(m=>m.text&&!m.pending);
-    this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
-      if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
-      const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
-      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,think:'Writing '+a+' '+kind+'…'}]};
-      return {chats,activeChat:id,chatInput:''};});
+    const prevAll=((prevObj&&prevObj.messages)||[]).filter(m=>m.text&&!m.pending);
+    // On reuse the current user echo is already in the log — drop it so it is not replayed as
+    // history (buildChatMessages appends the question itself, which would duplicate it).
+    const prev=(reuse&&prevAll.length&&prevAll[prevAll.length-1].role==='user')?prevAll.slice(0,-1):prevAll;
+    if(reuse){
+      this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+        if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],think:'Writing '+a+' '+kind+'…'};
+        return {...c,messages:m};})}));
+    }else{
+      this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
+        if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
+        const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
+        chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,think:'Writing '+a+' '+kind+'…'}]};
+        return {chats,activeChat:id,chatInput:''};});
+    }
     this._scrollChat();this._thinkClock();
     // finish settles the turn, tags it `stance:'compose'` with its focus so the fold carries the
-    // compose activity forward — the next "write me one" / "do it" continues it (§2, §5).
+    // compose activity forward — the next "write me one" / "do it" continues it (§2, §5). A reused
+    // bubble carries the read's `research` trail — close it (done:true) so it collapses like the
+    // ground path's does; a fresh bubble has none (the ternary keeps it undefined, a no-op).
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,stance:'compose',register:'creative',focus,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,stance:'compose',register:'creative',focus,research:m[li].research?{...m[li].research,done:true}:m[li].research,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
     const guard=this._stallGuard();
     let model=null;
     try{model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);}catch(e){model=null;}
