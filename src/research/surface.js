@@ -44,6 +44,32 @@ const defaultFetchPage = async (url) => {
   return { url, title: title || url, text };
 };
 
+// The default search for the standalone page: Wikipedia, CORS-direct (no proxy,
+// no key). One call finds the topical titles, one more pulls their plain-text
+// extracts — enough for the gather loop to pin a real corpus. A host with a
+// richer web client (the main app) injects its own via opts.search; any failure
+// degrades to an empty result, and the driver records a measured VOID.
+const WIKI = 'https://en.wikipedia.org/w/api.php';
+const defaultSearch = async (query, { k = 5 } = {}) => {
+  const q = String(query || '').trim();
+  if (!q) return [];
+  let titles = [];
+  try {
+    const p = new URLSearchParams({ action: 'query', list: 'search', srsearch: q, srlimit: String(k), format: 'json', origin: '*' });
+    const j = await (await fetch(WIKI + '?' + p)).json();
+    titles = (j?.query?.search || []).map((x) => x.title).filter(Boolean);
+  } catch { return []; }
+  if (!titles.length) return [];
+  try {
+    const p = new URLSearchParams({ action: 'query', prop: 'extracts', explaintext: '1', exsectionformat: 'plain', redirects: '1', titles: titles.join('|'), format: 'json', origin: '*' });
+    const j = await (await fetch(WIKI + '?' + p)).json();
+    return Object.values(j?.query?.pages || {}).map((pg) => ({
+      url: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(String(pg.title).replace(/ /g, '_')),
+      title: pg.title, text: String(pg.extract || ''),
+    })).filter((x) => x.text.length > 200);
+  } catch { return []; }
+};
+
 const SURFACE_CSS = `
 .drs{display:flex;flex-direction:column;height:100%;background:#f5f6f8;color:#1a1c20;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13.5px}
 .drs *{box-sizing:border-box}
@@ -83,6 +109,22 @@ const SURFACE_CSS = `
 .drs-ask p{margin:6px 0;white-space:pre-wrap}
 .drs-report-wrap{background:#fff;border:1px solid #e5e7eb;border-radius:11px;padding:20px 22px;max-width:820px;margin:0 auto}
 .drs-badgechip{font-family:ui-monospace,monospace;font-size:11px;font-weight:700;border-radius:99px;padding:2px 10px}
+.drs-mark{font-size:14px;font-weight:700;letter-spacing:.01em}
+.drs-hero{max-width:720px;margin:26px auto 8px;padding:8px 18px}
+.drs-hero h1{font-size:27px;margin:0 0 8px;font-weight:700;letter-spacing:-.015em}
+.drs-tagline{margin:0 0 18px;color:#5b6572;font-size:14px;line-height:1.5}
+.drs-hero .drs-q{font-size:16px;padding:13px 15px;border-radius:11px;border:1px solid #d7dbe2;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+.drs-hero .drs-q:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.14)}
+.drs-choices{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;margin-top:16px}
+.drs-choice{display:flex;flex-direction:column;gap:5px}
+.drs-choice-label{font-size:11px;font-weight:700;color:#5b6572;text-transform:uppercase;letter-spacing:.04em}
+.drs-seg{display:inline-flex;background:#eef0f3;border-radius:9px;padding:3px}
+.drs-seg button{border:none;background:none;font:inherit;font-size:13px;font-weight:600;color:#5b6572;padding:6px 13px;border-radius:7px;cursor:pointer}
+.drs-seg button.on{background:#fff;color:#1a1c20;box-shadow:0 1px 2px rgba(16,24,40,.12)}
+.drs-choices .drs-run{margin-left:auto;padding:10px 22px;font-size:14px;border-radius:9px}
+.drs-adv-toggle{display:inline-block;margin-top:16px;border:none;background:none;color:#2563eb;font:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:0}
+.drs-adv{margin-top:10px;border-top:1px solid #eaecef;padding-top:6px}
+@media (max-width:560px){.drs-choices .drs-run{margin-left:0;width:100%}}
 ${REPORT_CSS}
 @media (max-width:700px){.drs-live{grid-template-columns:1fr}}
 `;
@@ -98,6 +140,7 @@ ${REPORT_CSS}
 //   opts.sources    pre-seeded [{ url?, title?, text }] (the app hands over open sources)
 export const mountResearchSurface = (el, opts = {}) => {
   const fetchPage = opts.fetchPage || defaultFetchPage;
+  const search = opts.search || defaultSearch;
   const netFetch = opts.fetch || (typeof fetch !== 'undefined' ? fetch.bind(globalThis) : null);
   const sources = [...(opts.sources || [])];
   const session = opts.session || createResearchSession({ model: opts.model || null, fetch: netFetch, now: () => Date.now() });
@@ -109,55 +152,74 @@ export const mountResearchSurface = (el, opts = {}) => {
   root.appendChild(style);
   root.insertAdjacentHTML('beforeend', `
     <div class="drs-head">
-      <div><h1>Deep research — grounded</h1>
-      <div class="drs-sub">every fact an extractive span at a pinned address; the report is a projection of the log</div></div>
+      <div class="drs-mark">⌕ Deep research</div>
       ${opts.onClose ? '<button class="drs-close" title="Close">✕</button>' : ''}
     </div>
     <div class="drs-body">
-      <div class="drs-panel drs-setup">
-        <label>Research question</label>
-        <input type="text" class="drs-q" placeholder="What happened with … ?" />
-        <label>Sub-questions <span style="font-weight:400;text-transform:none">(optional, one per line — the frame tree)</span></label>
-        <textarea class="drs-subqs" placeholder="Who awarded the contract?&#10;What did the audit find?"></textarea>
-        <label>Pinned corpus</label>
-        <div class="drs-srclist"></div>
-        <div class="drs-row" style="margin-top:6px">
-          <input type="text" class="drs-url" placeholder="https:// … add a source by URL" style="flex:1;min-width:200px" />
-          <button class="drs-btn drs-addurl">Pin URL</button>
-          <button class="drs-btn drs-addpaste">Paste text…</button>
-        </div>
-        <div class="drs-paste" style="display:none;margin-top:6px">
-          <input type="text" class="drs-paste-title" placeholder="Source title (e.g. 'City audit 2021, p.14')" style="margin-bottom:6px" />
-          <textarea class="drs-paste-text" placeholder="Paste the source text…"></textarea>
-          <div class="drs-row" style="margin-top:6px">
-            <button class="drs-btn drs-paste-add">Add pasted source</button>
+      <div class="drs-hero">
+        <h1>What do you want to research?</h1>
+        <p class="drs-tagline">It reads the web, pins every source, and grounds each claim in an exact quote you can click.</p>
+        <input type="text" class="drs-q" placeholder="e.g. dolphins, the 2008 financial crisis, CRISPR…" />
+        <div class="drs-choices">
+          <div class="drs-choice">
+            <span class="drs-choice-label">How much</span>
+            <div class="drs-seg" data-group="size">
+              <button data-value="brief">Brief</button>
+              <button data-value="standard" class="on">Standard</button>
+              <button data-value="deep">Deep</button>
+            </div>
           </div>
+          <div class="drs-choice">
+            <span class="drs-choice-label">How to look</span>
+            <div class="drs-seg" data-group="strategy">
+              <button data-value="breadth" title="Many sources, each read lightly — survey the landscape">Breadth</button>
+              <button data-value="depth" title="Few sources, followed deep — chase one thread far">Depth</button>
+              <button data-value="holonic" class="on" title="Break the topic into facets and research each as its own whole">Holonic</button>
+            </div>
+          </div>
+          <button class="drs-btn drs-btn-acc drs-run">Research</button>
         </div>
         <div class="drs-err" style="display:none"></div>
-        <div class="drs-row" style="margin-top:12px">
-          <label style="margin:0;text-transform:none">Caution
-            <select class="drs-alpha" style="margin-left:6px;font:inherit;border:1px solid #d7dbe2;border-radius:7px;padding:4px 6px">
-              <option value="0.01">ask more (α=0.01)</option>
-              <option value="0.05" selected>balanced (α=0.05)</option>
-              <option value="0.15">ask less (α=0.15)</option>
+        <button class="drs-adv-toggle" type="button">＋ Add your own sources or sub-questions</button>
+        <div class="drs-adv" hidden>
+          <label>Sub-questions <span style="font-weight:400;text-transform:none">(optional, one per line — overrides the automatic breakdown)</span></label>
+          <textarea class="drs-subqs" placeholder="Who awarded the contract?&#10;What did the audit find?"></textarea>
+          <label>Your own sources</label>
+          <div class="drs-srclist"></div>
+          <div class="drs-row" style="margin-top:6px">
+            <input type="text" class="drs-url" placeholder="https:// … add a source by URL" style="flex:1;min-width:200px" />
+            <button class="drs-btn drs-addurl">Pin URL</button>
+            <button class="drs-btn drs-addpaste">Paste text…</button>
+          </div>
+          <div class="drs-paste" style="display:none;margin-top:6px">
+            <input type="text" class="drs-paste-title" placeholder="Source title (e.g. 'City audit 2021, p.14')" style="margin-bottom:6px" />
+            <textarea class="drs-paste-text" placeholder="Paste the source text…"></textarea>
+            <div class="drs-row" style="margin-top:6px">
+              <button class="drs-btn drs-paste-add">Add pasted source</button>
+            </div>
+          </div>
+          <label style="margin-top:12px">How readily it flags gaps
+            <select class="drs-alpha" style="margin-left:6px;font:inherit;border:1px solid #d7dbe2;border-radius:7px;padding:4px 6px;text-transform:none">
+              <option value="0.01">flag more gaps</option>
+              <option value="0.05" selected>balanced</option>
+              <option value="0.15">flag fewer</option>
             </select>
           </label>
-          <button class="drs-btn drs-btn-acc drs-run" style="margin-left:auto">Run grounded research</button>
         </div>
-        <div class="drs-hint" style="margin-top:8px">Offline-honest: no sources → a measured VOID, never an invented report. ${opts.model ? 'A model is connected — each section gets one bind-checked phrasing call.' : 'No model connected — the report stands on exact spans (add the app’s model for phrased summaries).'}</div>
+        <div class="drs-hint" style="margin-top:14px">${opts.model ? 'A model is connected — each section gets one bind-checked summary; every sentence must tie to a real quote or it is greyed.' : 'Grounded and honest: no sources found → it says so, never an invented report.'}</div>
       </div>
       <div class="drs-live" style="display:none">
         <div class="drs-panel">
-          <label style="margin-top:0">Current frame</label>
+          <label style="margin-top:0">Now researching</label>
           <div class="drs-frame-q" style="font-size:12.5px"></div>
           <div class="drs-frame-terms"></div>
           <div class="drs-strainbar"><div style="width:0%"></div></div>
-          <div class="drs-hint">strain toward the next reframe · <span class="drs-badgechip"></span></div>
-          <label>Coverage — filling cell by cell</label>
+          <div class="drs-hint">how settled the picture is · <span class="drs-badgechip"></span></div>
+          <label>What's been covered</label>
           <div class="drs-grid9"></div>
         </div>
         <div class="drs-panel">
-          <label style="margin-top:0">The walk (measured, not narrated)</label>
+          <label style="margin-top:0">What it's reading</label>
           <ol class="drs-feed"></ol>
           <div class="drs-asks"></div>
         </div>
@@ -218,25 +280,19 @@ export const mountResearchSurface = (el, opts = {}) => {
     renderSources();
   });
 
-  // In-flow question cards: the driver's mechanical asks land here and the run
-  // WAITS on the card (siblings would keep running in a threaded driver; the
-  // sequential driver parks on the answer or the skip).
-  const askUserInFlow = (askEvent) => new Promise((resolve) => {
-    const card = document.createElement('div');
-    card.className = 'drs-ask';
-    card.innerHTML = `<span class="drs-trig">${esc(askEvent.trigger)}</span><p>${esc(askEvent.text)}</p>
-      <div class="drs-row"><input type="text" class="drs-ask-in" placeholder="Answer (optional)" style="flex:1;min-width:120px"/>
-      <button class="drs-btn drs-ask-ok">Answer</button><button class="drs-btn drs-ask-skip">Leave open</button></div>`;
-    asksBox.appendChild(card);
-    card.querySelector('.drs-ask-ok').addEventListener('click', () => {
-      const v = card.querySelector('.drs-ask-in').value.trim();
-      card.querySelector('.drs-row').innerHTML = v ? `<div class="drs-hint">↳ ${esc(v)}</div>` : '<div class="drs-hint">left open</div>';
-      resolve(v || null);
-    });
-    card.querySelector('.drs-ask-skip').addEventListener('click', () => {
-      card.querySelector('.drs-row').innerHTML = '<div class="drs-hint">left open</div>';
-      resolve(null);
-    });
+  // The segmented controls (how much · how to look) and the Advanced disclosure.
+  // A blocking mid-run question card belongs in a conversation, not on a one-shot
+  // research page — so the run never parks on a modal here; the questions it
+  // raises surface READ-ONLY in the report's "what to check next" band.
+  const segValue = (group) => $(`.drs-seg[data-group="${group}"] button.on`)?.dataset.value;
+  root.querySelectorAll('.drs-seg').forEach((seg) => seg.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    seg.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  }));
+  $('.drs-adv-toggle').addEventListener('click', () => {
+    const adv = $('.drs-adv');
+    adv.hidden = !adv.hidden;
+    $('.drs-adv-toggle').textContent = (adv.hidden ? '＋' : '－') + ' Add your own sources or sub-questions';
   });
 
   const paintLive = (log) => {
@@ -280,25 +336,30 @@ export const mountResearchSurface = (el, opts = {}) => {
     if (!q) return showErr('A research question first.');
     showErr('');
     const runBtn = $('.drs-run');
-    runBtn.disabled = true; runBtn.textContent = 'Running…';
+    runBtn.disabled = true; runBtn.textContent = 'Researching…';
     asksBox.innerHTML = '';
     $('.drs-live').style.display = '';
     const subQuestions = $('.drs-subqs').value.split('\n').map((s) => s.trim()).filter(Boolean);
     try {
       await session.research(q, {
+        // The gather-to-target loop: the size preset sets how much to gather, the
+        // strategy shapes the search, and `search` is what lets it widen past the
+        // sources you pinned by hand. No search → it stands on your own sources.
         sources: sources.map((s) => ({ ...s })),
         subQuestions,
+        size: segValue('size') || 'standard',
+        strategy: segValue('strategy') || 'holonic',
+        search,
         model: opts.model || null,
         fetch: netFetch,
         now: () => Date.now(),
         alpha: parseFloat($('.drs-alpha').value) || 0.05,
-        ask: askUserInFlow,
       });
       $('.drs-q').value = '';
     } catch (e) {
       showErr('Run failed: ' + (e?.message || e));
     }
-    runBtn.disabled = false; runBtn.textContent = 'Run grounded research';
+    runBtn.disabled = false; runBtn.textContent = 'Research';
   });
 
   const download = (name, content, type) => {
