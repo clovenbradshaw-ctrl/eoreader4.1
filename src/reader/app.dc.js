@@ -4557,6 +4557,15 @@ class Component extends DCLogic {
       _organ:(meta&&meta.doc)||null,audit:(meta&&meta.doc&&meta.doc.audit)||null};
     const pages=[...this.state.pages,page];this.rebuild(pages);
     this.setState(s=>({pages,rev:s.rev+1,selId:s.selId||this.topEntity()}));
+    // The read, into the EOT ledger: a source came in through the PERCEIVER door — the world,
+    // exafference, it can witness. One CON line names what was read and how much of it; the
+    // real EO events the fold minted are counted so the terminal shows the reading's weight.
+    try{const E=(typeof window!=='undefined')&&window.__eot;if(E){
+      E.read({source:url,title,props:propCount,agent:'reader'});
+      const evs=(page.events||[]),ops={};for(const ev of evs)ops[ev.op]=(ops[ev.op]||0)+1;
+      E.record({op:'SYN',door:'perceiver',agent:'reader',kind:'fold',target:'reader:'+(page.events?page.events.length:0),
+        operand:{parts:Object.keys(ops).map(o=>o+'-'+ops[o])},raw:{url,title,propCount,ops}});
+    }}catch(_e){}
     // Second reader: fold the LLM's SVO reading onto the same log, then re-project.
     if(this.state.llm && this.state.llmAvail && this.SVO) this.runSVO(page);
     return {title,sentenceCount:doc.sentences.length,propCount,url};
@@ -5677,8 +5686,17 @@ class Component extends DCLogic {
     const dep=2.4-0.5*Math.max(0,srcs.length-1);if(dep>=1.0)items.push({kind:'deepen',score:dep,label:'Thinly sourced — only '+srcs.length+' source'+(srcs.length!==1?'s':''),query:this.labelOf(id)});
     return items.sort((a,b)=>b.score-a.score).slice(0,6);}
 
-  feedLine(k,t){const e=this._feedEnt!=null?this._feedEnt:null;this.setState(s=>({feed:[...s.feed,{k,t,ent:e}]}));}
+  feedLine(k,t){const e=this._feedEnt!=null?this._feedEnt:null;this.setState(s=>({feed:[...s.feed,{k,t,ent:e}]}));this._eotFeed(k,t);}
   feedSep(t){const e=this._feedEnt!=null?this._feedEnt:null;this.setState(s=>({feed:[...s.feed,{sep:t,ent:e}]}));}
+  // Mirror every human narration line into the EOT ledger (docs/eot-ledger.md), so the
+  // terminal surface holds the same operation stream in the engine's own syntax. Reading /
+  // searching / finding face the WORLD → the perceiver door (they witness); the app's own
+  // commentary (warnings, "done") is the enactor door (its own act). Best-effort: the ledger
+  // may not be mounted yet, and narration must never throw.
+  _eotFeed(k,t){try{const E=(typeof window!=='undefined')&&window.__eot;if(!E)return;
+    const perc=(k==='read'||k==='search'||k==='found'||k==='lead'||k==='graph');
+    E.note({text:String(t||''),door:perc?'perceiver':'enactor',agent:perc?'reader':'app'});
+  }catch(_e){}}
   sleep(ms){return new Promise(r=>setTimeout(r,ms));}
   // ---- location/history: each entry is {t:'web',url} or {t:'ent',id} ----
   _locEq(a,b){return a&&b&&a.t===b.t&&((a.t==='web'||a.t==='site')?a.url===b.url:(a.t==='sites'?true:a.id===b.id));}

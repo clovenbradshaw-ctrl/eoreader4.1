@@ -61,6 +61,49 @@ const html = `<!doctype html>
      works deployed; the app degrades to its old paths if absent. Lives HERE in the builder —
      it was once hand-added to index.html and a rebuild silently dropped it. -->
 <script type="module">import(new URL('src/reader/eo-gen.js', document.baseURI).href).catch(e=>console.warn('eoGen load failed:', e));</script>
+<!-- The EOT ledger + its live terminal surface (src/audit/): every operation the app
+     performs — a read, a search, a route, a prompt, a generation, a bind, a veto — read
+     out as one EOT line the moment it happens, tailed in a terminal drawer (Ctrl+backtick),
+     exportable as a re-parseable .eot document or a .jsonl trail. Exposed as window.__eot;
+     the app's feedLine / ingest mirror into it, and the model bridge is wrapped here so
+     every prompt and generation is captured verbatim (the load-bearing audit artifact). -->
+<script type="module">
+(async function(){
+  try{
+    var base=document.baseURI;
+    var mods=await Promise.all([
+      import(new URL('src/audit/eot-ledger.js', base).href),
+      import(new URL('src/audit/eot-terminal.js', base).href)
+    ]);
+    var ledger=mods[0].createEotLedger({capacity:1000});
+    window.__eot=ledger;
+    mods[1].mountEotTerminal(ledger,{hotkey:true});
+    ledger.record({op:'INS',door:'enactor',agent:'app',target:'reader',operand:{type:'Engine'},kind:'boot'});
+    // Wrap the model bridge so every prompt + generation lands in the ledger, verbatim,
+    // through the ENACTOR door (the model's own act — reafference, it cannot witness).
+    var wrap=function(){
+      var c=window.claude;
+      if(!c||typeof c.complete!=='function'||c.__eotWrapped)return !!(c&&c.__eotWrapped);
+      var orig=c.complete.bind(c),n=0;
+      c.complete=function(p){
+        var rest=Array.prototype.slice.call(arguments,1);
+        var turn='gen'+(++n);
+        try{ledger.prompt({turn:turn,text:typeof p==='string'?p:JSON.stringify(p),agent:'model:bridge'});}catch(e){}
+        var t0=Date.now();
+        return Promise.resolve(orig.apply(null,[p].concat(rest))).then(function(out){
+          try{ledger.generate({turn:turn,text:typeof out==='string'?out:JSON.stringify(out),ms:Date.now()-t0,agent:'model:bridge'});}catch(e){}
+          return out;
+        },function(err){
+          try{ledger.veto({turn:turn,id:'error',from:'generating',to:'failed',message:String((err&&err.message)||err),agent:'model:bridge'});}catch(e){}
+          throw err;
+        });
+      };
+      c.__eotWrapped=true;return true;
+    };
+    if(!wrap()){var tries=0,iv=setInterval(function(){if(wrap()||++tries>40)clearInterval(iv);},500);}
+  }catch(e){console.warn('EOT ledger load failed:',e);}
+})();
+</script>
 </head>
 <body>
 ${view}
