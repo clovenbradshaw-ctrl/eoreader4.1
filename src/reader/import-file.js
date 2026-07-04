@@ -208,6 +208,39 @@ function _whisperUtterances(out, norm) {
   return utterances;
 }
 
+// Transcribe the waveform WINDOW BY WINDOW so the reading can be watched as it happens.
+// Whisper's native context is 30s; we decode one 30s window at a time (a 5s overlap so a
+// word straddling a boundary is still heard whole), offset each window's word times back
+// to the absolute clock, and drop the duplicates the overlap produces. After every window
+// `onPartial({ text, pct })` fires — that is the "see it while it's processing" feed. A
+// clip ≤30s is a single window, byte-for-byte the old one-shot decode.
+export async function _transcribeWindows(asr, mono, SR, duration, norm, { onPartial } = {}) {
+  const WIN = 30, HOP = 25, DEDUP = 0.2;   // seconds: window, hop, overlap-dedup tolerance
+  const denom = Math.max(duration, 0.001);
+  const utterances = [];
+  let lastEnd = -Infinity, acc = '';
+  for (let a = 0; a === 0 || a < duration; a += HOP) {
+    const b = Math.min(a + WIN, Math.max(duration, a + 0.001));   // a ≤30s window; a short clip is one pass
+    const seg = mono.slice(Math.floor(a * SR), Math.max(Math.floor(a * SR) + 1, Math.ceil(b * SR)));
+    const out = await asr(seg, { return_timestamps: true });
+    for (const u of _whisperUtterances(out, norm)) {
+      const words = [];
+      for (const w of u.words) {
+        const ws = w.start + a, we = Math.max(w.end + a, w.start + a);
+        if (ws < lastEnd - DEDUP) continue;             // already heard in the prior window's overlap
+        words.push({ ...w, start: ws, end: we });
+        lastEnd = Math.max(lastEnd, we);
+      }
+      if (words.length) utterances.push({ start: words[0].start, end: words[words.length - 1].end, words });
+    }
+    const text = utterances.map(u => u.words.map(w => w.text).join(' ')).join(' ').trim();
+    if (text.length > acc.length) acc = text;
+    if (typeof onPartial === 'function') { try { onPartial({ text: acc, pct: Math.min(100, Math.round(b / denom * 100)) }); } catch {} }
+    if (b >= duration) break;
+  }
+  return { utterances, text: acc };
+}
+
 async function fromMedia(file, title, name, say, opts = {}) {
   const SR = 16000;
   // Decode to mono 16 kHz — the rate whisper wants — via an offline graph.
@@ -234,8 +267,11 @@ async function fromMedia(file, title, name, say, opts = {}) {
   const witness = `whisper-base · ${dev}`;
 
   say('Transcribing…');
-  const out = await asr(mono, { return_timestamps: true, chunk_length_s: 30, stride_length_s: 5 });
-  const utterances = _whisperUtterances(out, norm);
+  // Live, windowed — the growing transcript streams back through onPartial so the reader
+  // sees it fill in as it lands, instead of watching a spinner until it's all done.
+  const { utterances, text: liveText } = await _transcribeWindows(asr, mono, SR, duration, norm, {
+    onPartial: (p) => { if (typeof opts.onPartial === 'function') opts.onPartial(p); },
+  });
 
   // A transcript is one READING, not the objective truth of the waveform. When "audit readings"
   // is on, take a SECOND witness — the same model relistening with a different chunking — so its
@@ -250,7 +286,7 @@ async function fromMedia(file, title, name, say, opts = {}) {
     } catch (e) { /* the second witness is best-effort; the first reading still stands */ }
   }
 
-  const fullText = (out && out.text ? String(out.text) : utterances.map(u => u.words.map(w => w.text).join(' ')).join(' ')).trim();
+  const fullText = (liveText || utterances.map(u => u.words.map(w => w.text).join(' ')).join(' ')).trim();
   if (!fullText) throw new Error('no speech found in the file');
 
   const { ingestAudio } = await IN();
