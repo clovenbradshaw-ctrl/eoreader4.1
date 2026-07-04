@@ -933,7 +933,10 @@ class Component extends DCLogic {
         const mod=await import(new URL('src/reader/import-file.js',document.baseURI).href);
         // Transcription options ride along: `twoWitness` takes a second whisper pass so the
         // readings can be audited (audio/video only; ignored by the other extractors).
-        r=await mod.importAnyFile(f,{onProgress:say,twoWitness:!!this.state.audioAudit});
+        // onPartial streams the growing transcript back while whisper hears it, window by
+        // window — the pending row shows the words filling in instead of a bare spinner.
+        r=await mod.importAnyFile(f,{onProgress:say,twoWitness:!!this.state.audioAudit,
+          onPartial:(p)=>{const pct=(p&&p.pct)||0;this._patchImport(id,{preview:(p&&p.text)||'',pct,status:'Transcribing… '+pct+'%'});this.feedLine('read','Transcribing… '+pct+'%');}});
       }
       if(!r||!r.text||!r.text.trim()){ this._patchImport(id,{error:'No readable text found.',status:''}); this.feedLine('warn','No text could be read from '+name); return; }
       this._patchImport(id,{status:'Folding into memory…'});
@@ -5979,6 +5982,60 @@ class Component extends DCLogic {
     }
     return out;
   }
+  // ── Transcript export — the heard clip, in the formats a listener keeps ──────────
+  // An audio/video source is read into a timed transcript (organs/in/audio.js): words
+  // with [start,end], breath groups, the witnesses, and the raw operator log. These
+  // hand that reading out as captions (SRT/VTT), prose, timed structure (paragraphs /
+  // sentences / per-word), or the WHOLE process — the first pass, the SEG, the SYN.
+  // The builders live in src/reader/transcript-export.js (pure, tested); this side owns
+  // only reaching the doc, saving the blob, and the menu state.
+  _txPage(){const vu=this.state.viewUrl;return vu?this.pageOf(vu):null;}
+  // The audio organ doc for the open source, but only when it actually carries a timed
+  // transcript — so the Download control never shows over a page that has nothing to give.
+  _transcriptDoc(){
+    const p=this._txPage(),d=p&&p._organ;
+    if(d&&(((d.tokens&&d.tokens.length))||(d.utterances&&d.utterances.some(u=>(u.words||[]).length))))return d;
+    return null;
+  }
+  hasTranscript(){return !!this._transcriptDoc();}
+  async _txModule(){return this._TX||(this._TX=await import(new URL('src/reader/transcript-export.js',document.baseURI).href));}
+  toggleTranscriptMenu(){this.setState(s=>({transcriptOpen:!s.transcriptOpen}));}
+  closeTranscriptMenu(){if(this.state.transcriptOpen)this.setState({transcriptOpen:false});}
+  // Save a text payload as a file — the same Blob→<a download> path exportMemory uses,
+  // with the data-URI fallback for a host with no DOM download.
+  _saveBlob(text,filename,mime){
+    const type=mime||'text/plain;charset=utf-8';
+    try{
+      const blob=new Blob([text],{type});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;a.download=filename;
+      document.body.appendChild(a);a.click();
+      setTimeout(()=>{try{document.body.removeChild(a);URL.revokeObjectURL(url);}catch(e){}},0);
+    }catch(e){
+      const a=document.createElement('a');a.href='data:'+type+','+encodeURIComponent(text);a.download=filename;a.click();
+    }
+  }
+  async downloadTranscript(id){
+    const doc=this._transcriptDoc();this.setState({transcriptOpen:false});
+    if(!doc){this.feedLine('warn','No transcript to download.');return;}
+    try{
+      const M=await this._txModule();
+      const base=((this._txPage()||{}).title)||doc.docId||'transcript';
+      const out=M.buildFormat(doc,id,base);
+      if(!out){this.feedLine('warn','Could not build that format.');return;}
+      this._saveBlob(out.text,out.filename,out.mime);
+      this.feedLine('done','Downloaded '+out.filename);
+    }catch(e){this.feedLine('warn','Transcript download failed — '+((e&&e.message)||e));}
+  }
+  async copyTranscript(){
+    const doc=this._transcriptDoc();this.setState({transcriptOpen:false});
+    if(!doc)return;
+    try{
+      const M=await this._txModule();const text=M.toText(doc);
+      if(typeof navigator!=='undefined'&&navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);this.feedLine('done','Transcript text copied');}
+      else this._saveBlob(text,(((this._txPage()||{}).title)||'transcript')+'.txt','text/plain;charset=utf-8');
+    }catch(e){this.feedLine('warn','Copy failed — '+((e&&e.message)||e));}
+  }
   exportMemory(){
     try{
       const fmt=ts=>{try{return new Date(ts).toISOString();}catch(e){return null;}};
@@ -6964,9 +7021,14 @@ class Component extends DCLogic {
     return (this.state.imports||[]).map(im=>{
       const err=!!im.error;
       const c=err?'#dc2626':'var(--acc)';
+      // The live transcript preview — the tail of what's been heard so far, newest words
+      // shown (the row scrolls its own overflow). Only while transcribing, never on error.
+      const prev=(!err&&im.preview)?String(im.preview):'';
+      const tail=prev.length>240?prev.slice(-240):prev;
       return {
         id:im.id, name:this.truncLabel(im.name||'file',40), kind:im.kind||'File',
         status:err?im.error:(im.status||'Working…'),
+        hasPreview:!!tail, preview:tail,
         isErr:err, ok:!err,
         onDismiss:()=>this.dismissImport(im.id),
         dotStyle:err
@@ -7199,6 +7261,23 @@ class Component extends DCLogic {
         onPrevMark:()=>this.jumpMark(-1),onNextMark:()=>this.jumpMark(1),
         railOn:!!this.state.bookmarkMode&&(this.state.bmRail||[]).length>0,
         marks:(this.state.bmRail||[]).map(m=>({top:(m.frac*100).toFixed(2)+'%',why:m.why||'Something important here',onGo:()=>this.gotoBookmark(m.id)})),
+        // Transcript export — shown only over an audio/video source that was heard into a
+        // timed transcript. A copy action for the prose, plus a download menu of formats
+        // (captions, timed structure, and the full reading process). Labels carry the file
+        // extension the way the menu reads; the ids match transcript-export.js FORMATS.
+        hasTranscript:this.hasTranscript(),transcriptOpen:!!this.state.transcriptOpen,
+        onToggleTranscript:()=>this.toggleTranscriptMenu(),transcriptStyle:pill(!!this.state.transcriptOpen),
+        onCopyTranscript:()=>this.copyTranscript(),
+        transcriptFormats:[
+          {id:'srt',label:'SRT caption (.srt)'},
+          {id:'vtt',label:'VTT caption (.vtt)'},
+          {id:'paras',label:'Paragraphs (.json)'},
+          {id:'sents',label:'Sentences (.json)'},
+          {id:'txt',label:'Transcript text (.txt)'},
+          {id:'words',label:'Word-level timestamps (.json)'},
+          {id:'proc',label:'Full process — pass · SEG · SYN (.md)'},
+        ].map(f=>({label:f.label,onPick:()=>this.downloadTranscript(f.id),
+          rowStyle:'display:block;width:100%;text-align:left;padding:9px 14px;border:none;background:transparent;color:var(--ink2);font-size:12.5px;line-height:1.35;cursor:pointer;white-space:nowrap;'})),
         progressPct:Math.round((this.state.bookProgress||0)*100),progressW:Math.round((this.state.bookProgress||0)*100)+'%'};
     }
     if(vu){

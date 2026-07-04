@@ -257,6 +257,9 @@
             <div style="min-width:0;flex:1;">
               <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ im.name }}</div>
               <div style="font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">{{ im.kind }} · {{ im.status }}</div>
+              <sc-if value="{{ im.hasPreview }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:11px;color:var(--ink2);line-height:1.45;margin-top:6px;padding:7px 9px;background:var(--card);border:1px solid var(--line);border-radius:8px;max-height:66px;overflow:hidden;font-style:italic;">…{{ im.preview }}</div>
+              </sc-if>
             </div>
             <sc-if value="{{ im.isErr }}" hint-placeholder-val="{{ false }}">
               <button onclick="{{ im.onDismiss }}" title="Dismiss" style="{{ im.dismissStyle }}" style-hover="background:#fdecec">✕</button>
@@ -551,6 +554,18 @@
                 <sc-if value="{{ reading.tocOpen }}" hint-placeholder-val="{{ false }}">
                   <div style="position:absolute;top:100%;right:14px;width:min(284px,calc(100% - 28px));max-height:60vh;overflow-y:auto;margin-top:4px;background:var(--card);border:1px solid var(--line);border-radius:11px;box-shadow:0 14px 38px rgba(20,24,30,.2);z-index:20;animation:eopop .12s ease-out;">
                     <sc-for list="{{ reading.toc }}" as="ch" hint-placeholder-count="0"><button onclick="{{ ch.onGo }}" style="{{ ch.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ ch.label }}</button></sc-for>
+                  </div>
+                </sc-if>
+              </sc-if>
+              <sc-if value="{{ reading.hasTranscript }}" hint-placeholder-val="{{ false }}">
+                <div style="flex:0 0 auto;">
+                  <button onclick="{{ reading.onToggleTranscript }}" title="Copy or download this transcript — captions, timed structure, or the full reading process" style="{{ reading.transcriptStyle }}">⤓ Transcript ▾</button>
+                </div>
+                <sc-if value="{{ reading.transcriptOpen }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute;top:100%;right:14px;width:min(300px,calc(100% - 28px));max-height:70vh;overflow-y:auto;margin-top:4px;background:var(--card);border:1px solid var(--line);border-radius:11px;box-shadow:0 14px 38px rgba(20,24,30,.2);z-index:20;animation:eopop .12s ease-out;padding:5px;">
+                    <button onclick="{{ reading.onCopyTranscript }}" style="display:block;width:100%;text-align:left;padding:9px 14px;border:none;background:transparent;color:var(--ink);font-size:12.5px;font-weight:600;line-height:1.35;cursor:pointer;border-radius:8px;" style-hover="background:#f7f8fa">Copy transcript text</button>
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);padding:9px 14px 5px;border-top:1px solid var(--line);margin-top:4px;">Download</div>
+                    <sc-for list="{{ reading.transcriptFormats }}" as="fmt" hint-placeholder-count="0"><button onclick="{{ fmt.onPick }}" style="{{ fmt.rowStyle }}" style-hover="background:#f7f8fa;color:var(--ink)">{{ fmt.label }}</button></sc-for>
                   </div>
                 </sc-if>
               </sc-if>
