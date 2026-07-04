@@ -3245,7 +3245,7 @@ class Component extends DCLogic {
     // question (a fresh topic / a sparse fold), so behaviour never regresses.
     try{const pg=this.groundPropositions(q,scope);
       if(pg&&pg.promptSpans&&pg.promptSpans.length)
-        return {spans:pg.promptSpans,entities:a.entities||[],sources:[...new Set(pg.evidence.map(e=>e.u).filter(Boolean))],relevant:true,evidence:pg.evidence,forks:pg.forks||[],prop:true};
+        return {spans:pg.promptSpans,entities:a.entities||[],sources:[...new Set(pg.evidence.map(e=>e.u).filter(Boolean))],relevant:true,evidence:pg.evidence,forks:pg.forks||[],chain:!!pg.chain,prop:true};
     }catch(e){/* any fault → the keyword path below (never worse than today) */}
     // `relevant` = the question actually matched read text (keyword overlap). Only relevant
     // spans are shown as linked grounding; the fallback below still feeds the model context
@@ -3287,6 +3287,24 @@ class Component extends DCLogic {
       if(qwords.some(w=>lab===w||(lab.length>3&&lab.includes(w))||(w.length>3&&w.includes(lab))))Q.add(this._repOf(e.id));
     }
     if(!Q.size)return null;
+    // CHAIN MODE — depth without breadth. When the question names ≥2 referents joined by a MULTI-HOP
+    // path (X → A → B → Z, with no direct edge), the answer is that PATH, not a flat set: ground on the
+    // ordered links so the model reasons step by step along the chain, each reading following from the
+    // one before. This is the mode that escapes the integration bound — a chain integrates PAIRWISE, so
+    // a long thread fits a small workspace. Falls through to the set selection for one referent or a
+    // directly-connected pair (a 1-hop link is just a proposition the set already surfaces).
+    if(Q.size>=2){
+      const path=this._chainBetween(Q,scope);
+      if(path&&path.length>=2){
+        const spans=[],seen=new Set();
+        for(const step of path){const sent=step.edge.sentIdx;if(sent==null||seen.has(sent))continue;
+          const text=this.norm(this.master.sentences[sent]||'');
+          if(!text||text.length>this.MAX_PASSAGE||!this._proseOk(text.toLowerCase()))continue;
+          seen.add(sent);
+          spans.push({text:this._clipPassage(text),u:this.master.sentenceSource[sent],i:sent,score:1});}
+        if(spans.length>=2)return {promptSpans:spans,evidence:spans.map(s=>({text:s.text,u:s.u,i:s.i,score:1,origins:1})),relevant:true,forks:[],chain:true};
+      }
+    }
     // (2) select the propositions ABOUT a referent; group paraphrases by (endpoints | relation).
     const groups=new Map();
     for(const e of this.graph.edges){
@@ -3310,6 +3328,49 @@ class Component extends DCLogic {
     }
     if(!groups.size)return null;
     return this._rankPropositions([...groups.values()],Q,{budget});
+  }
+  // _chainBetween(Q,scope,{maxLen}) → the shortest MULTI-HOP path of propositions joining two of the
+  // question's referents, as an ordered [{edge,from,to}], or null. Connectivity is measured on the same
+  // graph the set selector uses (in-scope, non-junk, showable edges), undirected — a chain is about
+  // reachability, not arrow direction. Only a path of ≥2 hops is a chain; a direct edge is a plain
+  // proposition the set already carries.
+  _chainBetween(Q,scope,{maxLen=5}={}){
+    if(!this.graph||!this.graph.edges||!(Q&&Q.size>=2))return null;
+    const inScope=i=>!scope.length||scope.includes(this.master.sentenceSource[i]);
+    const adj=new Map();
+    const add=(a,b,e)=>{if(!adj.has(a))adj.set(a,[]);adj.get(a).push({to:b,edge:e});};
+    for(const e of this.graph.edges){
+      if(e.from===e.to||e.sentIdx==null||!inScope(e.sentIdx))continue;
+      const via=e.relType||e.via||e.kind;if(this.junkRel(via))continue;
+      if(!this.showable(e.from)||!this.showable(e.to))continue;
+      if(this.isURLish(this.labelOf(e.from))||this.isURLish(this.labelOf(e.to)))continue;
+      const rf=this._repOf(e.from),rt=this._repOf(e.to);if(rf===rt)continue;
+      add(rf,rt,e);add(rt,rf,e);
+    }
+    const refs=[...Q];let best=null;
+    for(let i=0;i<refs.length;i++)for(let j=0;j<refs.length;j++){
+      if(i===j)continue;
+      const p=this._bfsPath(adj,refs[i],refs[j],maxLen);
+      if(p&&p.length>=2&&(!best||p.length<best.length))best=p;
+    }
+    return best;
+  }
+  // Shortest path a→b over an adjacency map (pure → unit-testable). Returns the ordered edges, or null
+  // if unreachable within maxLen. Breadth-first, so the first hit is a shortest chain.
+  _bfsPath(adj,a,b,maxLen){
+    if(a===b)return null;
+    const queue=[[a,[]]],seen=new Set([a]);
+    while(queue.length){
+      const [node,path]=queue.shift();
+      if(path.length>=maxLen)continue;
+      for(const {to,edge} of (adj.get(node)||[])){
+        if(seen.has(to))continue;
+        const np=path.concat([{edge,from:node,to}]);
+        if(to===b)return np;
+        seen.add(to);queue.push([to,np]);
+      }
+    }
+    return null;
   }
   // The pure rank+render half (no graph reads → unit-testable). A workspace is bought for INTEGRATION,
   // not storage: what matters is that the active set's members can reach each other, so the selector
@@ -3781,13 +3842,15 @@ class Component extends DCLogic {
         ? 'Drawn from the overall shape of what you’ve read, not any one passage — the wording is the model’s own.'
         : 'The model’s own answer — nothing you’ve read bears on it, so it isn’t grounded in a source.'};
   }
-  // The meta-reasoning cue that rides the graph slot for a proposition-grounded turn: empty unless the
-  // selected evidence holds a FORK (sources that contradict each other on the same claim), in which case
-  // the model is told to present the disagreement AS a disagreement — the grey band kept, not resolved.
-  _disagreementCue(ground){
-    return (ground&&ground.forks&&ground.forks.length)
-      ? 'Some of the sources disagree. Where the readings below conflict on the same point, present the competing claims as competing and say the sources disagree — do not resolve the disagreement or pick a side.'
-      : '';
+  // The meta-reasoning cue that rides the (freed) graph slot for a proposition-grounded turn — the one
+  // place we tell the model HOW to reason over the readings rather than just handing them over. Empty
+  // for a plain set; a CHAIN turn asks for step-by-step reasoning along the path; a FORKED turn asks the
+  // model to present the disagreement AS a disagreement (the grey band kept, not resolved). Composable.
+  _groundCue(ground){
+    const bits=[];
+    if(ground&&ground.chain)bits.push('The readings below trace a connection, in order, between the things asked about. Reason step by step along that chain — each reading follows from the one before — to reach the answer.');
+    if(ground&&ground.forks&&ground.forks.length)bits.push('Some of the sources disagree. Where the readings conflict on the same point, present the competing claims as competing and say the sources disagree — do not resolve the disagreement or pick a side.');
+    return bits.join(' ');
   }
   // ── The office veto — a stale role the SOURCES have succeeded ─────────────────
   // The reader's claim-grain check (docs/proposition-audit.md; the engine sibling lives
@@ -4604,7 +4667,7 @@ class Component extends DCLogic {
           // the centrality graph block (which never saw the question) is retired for them — the graph
           // slot now carries only a disagreement cue when the evidence forks, else nothing. The
           // centrality block is kept solely as the fallback when grounding dropped to the keyword path.
-          question:q, spans:ground.spans||[], graph:ground.prop?this._disagreementCue(ground):this.meaningGraph(sources),
+          question:q, spans:ground.spans||[], graph:ground.prop?this._groundCue(ground):this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),
           task:this._isSummaryQ(q)?'summary':'answer',
           conversation:{pastTurns}, now:new Date(), shape,
@@ -5068,7 +5131,7 @@ class Component extends DCLogic {
       // asker, and what even the gathered reading still doesn't hold).
       const shape=grounded?[this._ME.LIBRARIAN_CUE,(this._ME.shapeForScope&&this._ME.shapeForScope(q))||'',this._steerLine(meta)].filter(Boolean).join('\n\n'):'';
       if(grounded){
-        messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:ground.prop?this._disagreementCue(ground):this.meaningGraph(sources),
+        messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:ground.prop?this._groundCue(ground):this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape});
       }else{messages=this._ME.buildChatMessages({question:q,history:[],now:new Date()});}
       this._auditRec(id,'answer-prompt',{prompt:messages.map(mm=>'['+mm.role+']\n'+mm.content).join('\n\n---\n\n')});
