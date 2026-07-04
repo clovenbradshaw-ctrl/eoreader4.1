@@ -231,6 +231,27 @@ test('bind-back: a summary sentence unsupported by any span greys as glue, and V
   assert.equal(glue.boundTo, null, 'glue carries no claim and no citation');
 });
 
+test('a leading instruction-echo is stripped from the rendered prose but kept verbatim in raw', async () => {
+  const model = { phrase: async () => 'Here is a summary of the excerpts in plain prose, 2-5 sentences: The Falcon project budget was 40 million dollars.' };
+  const { report } = await runGroundedResearch('What happened with the Falcon project budget?', { sources: CORPUS, model });
+  const phrase = report.sections[0].phrase;
+  assert.ok(!phrase.sentences.some((s) => /here is a summary/i.test(s.text)), 'the preamble is gone from the rendered sentences');
+  assert.match(phrase.raw, /here is a summary/i, 'the raw model output still carries it (the audit is honest)');
+  assert.ok(phrase.sentences.some((s) => /40 million/.test(s.text)), 'the real content survives the strip');
+});
+
+test('onSectionToken streams each section as the model phrases it, and the run is byte-identical without it', async () => {
+  const model = { phrase: async (messages, opts) => { const out = 'The Falcon project budget was 40 million dollars.'; if (opts && opts.onToken) for (const w of out.split(' ')) opts.onToken(w + ' '); return out; } };
+  const streamed = [];
+  const { report } = await runGroundedResearch('What happened with the Falcon project budget?', {
+    sources: CORPUS, model, onSectionToken: (frameId, piece) => streamed.push([frameId, piece]),
+  });
+  assert.ok(streamed.length > 1, 'the section streamed in several pieces');
+  assert.ok(streamed.every(([fid]) => fid === 'root'), 'each piece is tagged with its section frame');
+  assert.equal(streamed.map(([, p]) => p).join('').trim(), 'The Falcon project budget was 40 million dollars.', 'the pieces reassemble to the full section');
+  assert.ok(report.sections[0].phrase, 'the phrased section still lands in the projection exactly as before');
+});
+
 test('the chat reply quotes the exact span under every citation number — the link is never severed', async () => {
   const model = { phrase: async () => 'The Falcon project budget was 40 million dollars.' };
   const { report } = await runGroundedResearch('What happened with the Falcon project budget?', { sources: CORPUS, model });
