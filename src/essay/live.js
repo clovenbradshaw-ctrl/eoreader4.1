@@ -48,10 +48,14 @@ export const liveView = (log, cursor = null) => {
     // visible cue for a human to step in at the next seam.
     churn: p.churn,
 
-    // The prose lane, ambient below the state.
+    // The prose lane, ambient below the state — each entry in its slot's own
+    // modality, with the seam that led into it.
     proseLane: p.sections
       .filter((s) => s.state === 'accepted')
-      .map((s) => Object.freeze({ sectionId: s.id, prose: s.prose, terminalClaim: s.terminalClaim })),
+      .map((s) => Object.freeze({
+        sectionId: s.id, prose: s.prose, terminalClaim: s.terminalClaim,
+        modality: s.modality, surface: s.surface, seam: s.seam,
+      })),
 
     findings: p.findings,
     verify: p.verify,

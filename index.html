@@ -3433,34 +3433,52 @@ class Component extends DCLogic {
   // cited reply; the SURFACE (onOpenDeepResearch) is a LIVE panel — projectReport
   // over the same append-only session log, so every further research ask via chat
   // keeps populating and adjusting it. Never a dead artifact.
-  async _drLib(){
+  // A holon import is a fetch of a ~200-module graph, and ONE transient hiccup
+  // anywhere in it rejects the whole dynamic import ("Failed to fetch
+  // dynamically imported module" — the dolpinhs audit, 2026-07-04). Two rules,
+  // both learned there: retry once with a cache-busting query (so a browser
+  // that cached the failed resolution cannot serve the failure back), and
+  // NEVER cache a rejected promise — the old _drLib memoized its first
+  // rejection, which left research dead for the whole session after a single
+  // dropped fetch.
+  async _importRetry(rel){
+    const href=new URL(rel,document.baseURI).href;
+    try{return await import(href);}
+    catch(e){
+      await new Promise(r=>setTimeout(r,400));
+      return import(href+(href.includes('?')?'&':'?')+'r='+Date.now());
+    }
+  }
+  _drLib(){
     if(this._drLibP)return this._drLibP;
-    this._drLibP=import(new URL('src/research/index.js',document.baseURI).href);
+    this._drLibP=this._importRetry('src/research/index.js');
+    this._drLibP.catch(()=>{this._drLibP=null;});   // a failure never poisons the next ask
     return this._drLibP;
   }
   // THE QUERY BRAIN — the modular engine's LLM query formulator (src/turn/web.js), loaded the same
   // way _drLib loads the projection lib (the app already imports src/turn/* at runtime by baseURI —
   // see _discourseRead's meta-route.js import). ONE shared formulator for chat research and the
   // deep-research gather, so a walk never again fires the raw chat sentence at Wikipedia.
-  async _webLib(){
+  _webLib(){
     if(this._webLibP)return this._webLibP;
-    this._webLibP=import(new URL('src/turn/web.js',document.baseURI).href);
+    this._webLibP=this._importRetry('src/turn/web.js');
+    this._webLibP.catch(()=>{this._webLibP=null;});
     return this._webLibP;
   }
   // THE WALK ENGINE — the modular curiosity walk + facet planner (src/turn/research.js,
   // deep-research.js), loaded by baseURI like _drLib. runCuriousResearch/runDeepResearch are the
   // one shared walk; modelPlanner/planQueries are the one shared facet brain. Merged into one lib
   // object so the reader has a single handle to the engine's gather primitives.
-  async _walkLib(){
+  _walkLib(){
     if(this._walkLibP)return this._walkLibP;
     this._walkLibP=(async()=>{
-      const base=document.baseURI;
       const [research,deep]=await Promise.all([
-        import(new URL('src/turn/research.js',base).href),
-        import(new URL('src/turn/deep-research.js',base).href),
+        this._importRetry('src/turn/research.js'),
+        this._importRetry('src/turn/deep-research.js'),
       ]);
       return {...research,...deep};
     })();
+    this._walkLibP.catch(()=>{this._walkLibP=null;});
     return this._walkLibP;
   }
   // _planFacets(subject,seed,cur) → the BATTERY of angle QUERIES to open the walk from — the shared
@@ -4206,9 +4224,19 @@ class Component extends DCLogic {
     a.download='eo-audit-'+(String(c.title||c.id).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,48)||'chat')+'.json';
     document.body.appendChild(a);a.click();setTimeout(()=>{try{URL.revokeObjectURL(a.href);a.remove();}catch(e){}},0);
   }
+  // A bare interjection is conversational repair, not a subject — it must never
+  // become a research anchor. The dolpinhs audit shows the failure plainly:
+  // "huh?" was read as contentful, formulated into facets ("huh expression",
+  // "huh confused"), walked into Wikipedia, and came back as Huh Kyung-young
+  // with 149 junk entities in the graph. An interjection routes as a plain
+  // follow-up: the model answers from the conversation, nothing is gathered.
+  _bareInterjection(q){
+    return /^(?:huh|hm+|mm+|hmm+|eh+|uh+|um+|oh+|ah+|ooh+|whoa+|woah+|wow+|wait|what|wat|wut|why|how|really|seriously|no way|come on|c'?mon|wtf|say what|excuse me|pardon(?: me)?)[\s.!?…~-]*$/i.test(this.norm(q||''));
+  }
   _shouldWeb(q,sources,isolated,meta){
     // No web on/off switch any more — the reach is emergent: the measured gates
     // below (live fact, anchor gap, discourse route, coverage) decide per turn.
+    if(this._bareInterjection(q))return false;              // "huh?" is repair, not a subject
     if(this.mechanicalAnswer(q))return false;               // a clock question answers itself
     // A LIVE FACT (weather, price, score, headline) is an ask about the world's NOW — a
     // no-brainer web turn. Gated before every coverage check: no reading covers tomorrow's
@@ -4540,7 +4568,7 @@ class Component extends DCLogic {
     // live trail from the first frame. The compose-continuation, web, and ground paths all REUSE
     // this one bubble (composeArtifact via {reuseId}, _deepResearch, chatResearch via pre.id),
     // never a second one.
-    const contentful=amode!=='creative'&&!this.mechanicalAnswer(q)&&this._researchTerms(q).length>0;
+    const contentful=amode!=='creative'&&!this.mechanicalAnswer(q)&&!this._bareInterjection(q)&&this._researchTerms(q).length>0;
     const seedThink=contentful?'Reading the conversation…':'Thinking…';
     let id=this.state.activeChat;
     this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
@@ -4555,6 +4583,24 @@ class Component extends DCLogic {
     // bare pleasantries (nothing to read); null on any failure — null means today's behavior.
     const read=contentful?await this._discourseRead(id,q,cur,fold):null;
     if(this._stopGen)return;
+    // THE MEASURED UPGRADE (docs/discourse-routing.md): the regex read that
+    // seeded this._turnRead is the keystroke preview and the cold floor — it
+    // informs, it does not decide. The discourse read is the physics: the
+    // route relaxed from Born-weighted currents with the fold's stance as
+    // incumbent, the length demand read off the metacognition's own speech
+    // (lengthDemandOf — 'develop' | 'brief' | abstain). When it lands, the
+    // turn's config upgrades to it; when it abstained, the floor rules,
+    // byte-identical to the regex-only turn. Register keeps the floor's
+    // value: the speculative/creative split has no measured direction yet
+    // (a named seam — a REGISTER_EXEMPLARS basis alongside the length one).
+    if(read&&!read.abstained){
+      const depth={develop:'obsessive',brief:'shallow'}[read.lengthDemand]||this._turnRead.depth;
+      this._turnRead={...this._turnRead,
+        research:read.route==='research'||this._turnRead.research,
+        depth,
+        strategy:read.route==='research'?'holonic':this._turnRead.strategy,
+      };
+    }
     // THE POP (docs/frame-holon.md, Phase B): when a digression stands on the frame stack — a
     // mid-compose question was PUSHED as a child frame, so the composition is a suspended
     // ancestor, not a lost stance — a turn that binds BACK to that composing ancestor ("ok,
@@ -4740,9 +4786,12 @@ class Component extends DCLogic {
   // finally answers, grounded in everything it gathered. One thread per hop, never a fan-out.
   // ── THE EMERGENT READ (design/chat-redesign/REVISIONS.md) ──────────────────
   // Every composer setting is READ OFF THE ASK, never selected — EO's own
-  // thesis ("it is all physics, not decisions") applied to the UI. The same
-  // read renders live in the composer readout as you type and derives the
-  // turn's config at send time (sendChat sets this._turnRead):
+  // thesis ("it is all physics, not decisions") applied to the UI. This
+  // lexical read is the KEYSTROKE PREVIEW and the cold floor only: it renders
+  // the readout live (no model per keystroke) and seeds this._turnRead at
+  // send time — and the moment the discourse read lands, the turn's config
+  // UPGRADES to the measured route and length demand (sendChat; meta-route's
+  // "seeds inform, they do not decide"). Fields:
   //   intent   — a relational/causal ask relaxes into research; a lookup stays
   //              a single answer.
   //   register — speculative wording leaves the library (creative); otherwise
@@ -5343,9 +5392,21 @@ class Component extends DCLogic {
       // UNCALIBRATED walk: no page has frozen the topic frame yet, so the next read decides what
       // "on topic" means for every later hop. Read the candidate whose TITLE names the subject
       // first (the Dolphin article before "Whale (film)"), instead of trusting search rank.
-      if(!topicFrozen&&!isUrl&&links.length>1){
-        const score=new Map(links.map(u=>[u,this._titleAnchorScore(u,anchorWords)]));
-        links=links.map((u,i)=>[u,i]).sort((a,b)=>(score.get(b[0])-score.get(a[0]))||(a[1]-b[1])).map(x=>x[0]);
+      if(!topicFrozen&&!isUrl&&links.length){
+        // THE SPELLING RESCUE (the dolpinhs audit): the search engine already
+        // resolved the typo — a search for "dolpinhs" returns the Dolphin
+        // article — but the anchor gate would still measure every page against
+        // the literal misspelling and set aside the very pages the search
+        // resolved to, one by one, until the walk starved. When no candidate
+        // title contains an anchor stem exactly but one sits within edit
+        // distance 2, adopt the resolved stem ALONGSIDE the typed one (never
+        // replacing it), and say so in the trail. Fires only when the anchor
+        // is otherwise unmatchable — a correctly spelled subject never enters.
+        this._respellAnchor(anchorWords,links,step);
+        if(links.length>1){
+          const score=new Map(links.map(u=>[u,this._titleAnchorScore(u,anchorWords)]));
+          links=links.map((u,i)=>[u,i]).sort((a,b)=>(score.get(b[0])-score.get(a[0]))||(a[1]-b[1])).map(x=>x[0]);
+        }
       }
       if(!links.length){if(!isUrl)step('warn','No fresh sources on that thread.');hops.push({query:node.query||node.url,term:node.term,got:0,next:null,empty:true});if(++stray>=cfg.patience)break;continue;}
       const want=isUrl?1:(node.term?cfg.want:cfg.wantSeed);let got=0,attempts=0;const keptText=[];
@@ -5650,6 +5711,44 @@ class Component extends DCLogic {
   // How many of the anchor's stems the candidate's title names — the rank the seed hop reads in.
   // Ordering only: it decides which candidate to FETCH first; the fold decides what is kept.
   _titleAnchorScore(url,anchorStems){let n=0;for(const w of this._titleTerms(url)){if(anchorStems.has(w))n++;}return n;}
+  // Adopt a resolved spelling into the anchor set when the typed one matches no
+  // candidate title but a title token is within edit distance 2 (see the call
+  // site in the walk's seed hop). Mutates anchorStems in place; loud in the trail.
+  _respellAnchor(anchorStems,links,step){
+    if(!anchorStems||!anchorStems.size||!links||!links.length)return;
+    const titleTokens=new Set();
+    for(const u of links.slice(0,6))for(const w of this._titleTerms(u))titleTokens.add(w);
+    if(!titleTokens.size)return;
+    for(const a of [...anchorStems]){
+      if(a.length<4||titleTokens.has(a))continue;   // short, or already matched exactly
+      let best=null,bestD=3;
+      for(const t of titleTokens){
+        if(Math.abs(t.length-a.length)>2)continue;
+        const d=this._editDist(a,t);
+        if(d<bestD){bestD=d;best=t;}
+      }
+      if(best!=null&&bestD<=(a.length>=5?2:1)){
+        anchorStems.add(best);
+        step('lead','Reading “'+a+'” as “'+best+'” — the search resolved the spelling');
+      }
+    }
+  }
+  // Plain Levenshtein, capped: anything past 2 reports 3 (the rescue never wants more).
+  _editDist(a,b){
+    const m=a.length,n=b.length;
+    if(Math.abs(m-n)>2)return 3;
+    let prev=Array.from({length:n+1},(_,j)=>j);
+    for(let i=1;i<=m;i++){
+      const cur=[i];let rowMin=i;
+      for(let j=1;j<=n;j++){
+        cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));
+        if(cur[j]<rowMin)rowMin=cur[j];
+      }
+      if(rowMin>2)return 3;
+      prev=cur;
+    }
+    return Math.min(prev[n],3);
+  }
   // The graph's canonical id for an entity (label merges resolve here) — identity is the
   // graph's own, so two pages "share a figure" by mentioning the SAME merged entity.
   _repOf(x){return (this.graph&&this.graph.representative)?this.graph.representative(x):x;}

@@ -19,22 +19,35 @@ export const SECTION_STATES = Object.freeze(['pending', 'exploring', 'consolidat
 const freeze = Object.freeze;
 const list = (xs) => freeze([...(xs || [])]);
 
+// Which projection a section renders, and how the seam INTO it may render.
+// Modality is a property of the SLOT in the schema — the form chooses, never
+// the model. 'auto' seams resolve in the driver: a phrased transition when a
+// model is on hand, an honest divider when not.
+export const SECTION_MODALITIES = Object.freeze(['text', 'chart', 'pullquote']);
+export const SEAM_MODALITIES = Object.freeze(['auto', 'text', 'divider', 'pullquote', 'chart']);
+
 // A section intent. `anchors` seed retrieval; `dependsOn` are the coherence
 // edges re-illuminated on entry; `opens` are the promises this section makes
 // (threads, with their due points); `divergence` sets the section's policy
 // when candidates diverge after veto: 'commit' (the spine breaks the tie) or
 // 'surface' (the divergence is the finding — write it as content).
+// `modality` names the projection this slot renders; `seam` names how the
+// transition into this section renders (null = auto).
 export const makeSection = ({
   id, intent, anchors = [], dependsOn = [], order = 0,
   state = 'pending', opens = [], divergence = 'commit',
+  modality = 'text', seam = null,
 } = {}) => {
   if (!id) throw new TypeError('makeSection: id required');
   if (!intent) throw new TypeError('makeSection: intent required');
   if (!SECTION_STATES.includes(state)) throw new TypeError(`makeSection: state must be one of ${SECTION_STATES.join('|')}`);
   if (divergence !== 'commit' && divergence !== 'surface') throw new TypeError('makeSection: divergence must be commit|surface');
+  if (!SECTION_MODALITIES.includes(modality)) throw new TypeError(`makeSection: modality must be one of ${SECTION_MODALITIES.join('|')}`);
+  if (seam != null && !SEAM_MODALITIES.includes(seam.modality)) throw new TypeError(`makeSection: seam.modality must be one of ${SEAM_MODALITIES.join('|')}`);
   return freeze({
     id, intent: String(intent), anchors: list(anchors), dependsOn: list(dependsOn),
-    order: order | 0, state, divergence,
+    order: order | 0, state, divergence, modality,
+    seam: seam == null ? null : freeze({ modality: seam.modality }),
     opens: freeze((opens || []).map((o) => freeze({ text: String(o.text ?? ''), dueBy: o.dueBy ?? null }))),
   });
 };

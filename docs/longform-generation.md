@@ -87,10 +87,21 @@ workspace, so the spine holds the shape and the carry holds the running state.
 
 ### Commitment
 
-The atomic unit. A claim bound to spans. The essay is a sequence of these.
+The atomic unit. A typed proposition bound to spans — the payload sits BELOW
+language. The claim string is the payload's text projection, one surface among
+many; a chart datum is another projection of the same payload. The essay is a
+sequence of these.
 
 ```
-Commitment = { claim: string, spanRefs: [spanId], sectionId }
+Commitment = {
+  prop: {                       // the pre-linguistic payload
+    relation, entities: [...],
+    quantities: [{ value, unit }],
+    time
+  },
+  claim: string,                // the TEXT PROJECTION of prop
+  spanRefs: [spanId], sectionId
+}
 ```
 
 ### Carry
@@ -182,12 +193,64 @@ section.
 
 The check after render is where the grains meet. Each rendered sentence is
 re-bound at claim grain: a sentence that cites a span keeps its citation;
-connective tissue that made lexical contact rides as glue, marked; an
-assertive sentence bound to nothing — an embellishment smuggled in while
-writing — is struck; and a sentence that contradicts the ledger is struck
-whatever it cites. Coarse generation, fine verification. The accepted section
-carries its per-sentence verdicts into the log, so the accept event states
-its own generative honesty.
+connective tissue that made lexical contact rides as glue, marked — unless it
+denies, because an unbound negative is an assertion of absence, the claim
+that needs grounding most; a sentence with no contact at all is prose from
+nowhere — struck, however fluent; and a sentence that contradicts the ledger
+or alters a quantity is struck whatever it cites. Coarse generation, fine
+verification, every threshold the binder's own. The accepted section carries
+its per-sentence verdicts into the log, so the accept event states its own
+generative honesty.
+
+## Omnimodal rendering
+
+Omnimodal output proves the commitment was never text. As long as a commitment
+is a claim string, text is privileged: the proposition is already rendered
+into words, and every other modality is a translation out of text. The first
+chart forces the commitment below language — and that single move buys fluency
+across any number of calls and modalities.
+
+- **The commitment is pre-linguistic.** A typed proposition — relation,
+  entities, quantities, time — with span refs. The claim string is its text
+  projection; the bar is its chart projection. Same commitment, different
+  surface. Commitments before prose, generalized to commitments before
+  surface.
+- **Fluency is structural, not negotiated.** The number in the caption and
+  the number in the bar are the same field of the same proposition. Bind both
+  surfaces to one commitment and they cannot disagree; cross-modal
+  consistency is a deterministic validator — a predicate over surface versus
+  payload — never a hope that two generators matched.
+- **Multiple prompts are a fan-out, not a chain.** Every generation call
+  conditions on the shared commitment graph, never on a sibling's rendered
+  surface. A chart cannot roll on the previous paragraph's sentences, which
+  is the proof the fan-out was never optional: no call inherits another
+  call's unverified output, so nothing snowballs across calls. Fluency across
+  calls is the shared spine and carry.
+- **Modality is a property of the slot.** The schema names each slot's
+  modality; per-modality renderers all fold the same commitment graph, the
+  way the reads all fold one log. A non-text slot renders as a deterministic
+  projection of its payloads — no model call at all. A figure is a holon the
+  way a section is a holon; the DAG's edges interleave the modalities and set
+  render order.
+
+The residual is surface continuity: two fluent paragraphs rendered
+independently can still jar at the seam. The fix is the omnimodal one —
+never let two generators smooth a seam by talking to each other; give the
+FORM explicit transition slots between content slots. The handoff gate stops
+being only a check and becomes a productive slot: the seam renders
+conditioned on both neighbors — the terminal commitment on the left, the
+target commitment on the right — and the form chooses the seam's modality.
+Sometimes the fluent move from A to B is a sentence; sometimes it is a pull
+quote, a chart of both neighbors' quantities, or a divider. A phrased seam is
+connective tissue by construction: it may reuse only its neighbors'
+vocabulary, carry no numbers, and contradict nothing it connects — else it
+falls back to the divider, loudly.
+
+The net is one sentence: fluency stops being something you generate and
+becomes something you preserve, because every surface, in every modality,
+across every call, is a projection of one pre-linguistic source, and
+projections of one source cannot contradict. One log, many folds; one
+commitment graph, many renderers.
 
 ## Revision discipline
 
@@ -378,6 +441,10 @@ where corrections to frozen accepted sections land.
   Everything else is in the log.
 - Every open thread is paid or deferred with a due point. None are dropped
   silently.
+- Every generation call conditions on the commitment graph, never on a
+  sibling's rendered surface.
+- Every surface, in any modality, validates against the payload it bound —
+  nothing appears on a surface without a payload source under it.
 
 ## Failure modes this prevents
 
@@ -433,6 +500,8 @@ legibility came with it. The bottleneck is the window.
 | the carry (init · update · cap · replan) | `src/essay/carry.js` |
 | the five coherence gates | `src/essay/gates.js` |
 | the mechanical term reading (contradiction/repeat) | `src/essay/terms.js` |
+| the pre-linguistic payload + projections | `src/essay/proposition.js` |
+| per-modality renderers + the cross-modal validator | `src/essay/renderers.js` |
 | the projection — `projectEssay(log, cursor)` | `src/essay/project.js` |
 | the live panel fold — `liveView(log, cursor)` | `src/essay/live.js` |
 | the section loop — `runEssay`, the only writer | `src/essay/driver.js` |

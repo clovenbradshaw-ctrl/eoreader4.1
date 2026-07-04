@@ -10,7 +10,8 @@
 // model in the loop. Soft failures (repeats) name drops rather than failing
 // the section.
 
-import { termsOf, termSimilarity, contradicts, repeats } from './terms.js';
+import { termsOf, termSimilarity, contradicts, repeats, claimSimilarity } from './terms.js';
+import { propsConflict } from './proposition.js';
 
 export const GATE_IDS = Object.freeze([
   'spine-advance', 'ledger-consistency', 'thread-accounting', 'dependency-coherence', 'handoff',
@@ -50,7 +51,11 @@ const ledgerConsistency = ({ commitments, carry }, th) => {
   const drops = [];
   for (const c of commitments) {
     for (const l of carry.ledger) {
-      if (contradicts(c.claim, l.claim, { simFloor: th.contradictSim })) {
+      // Two contradiction readings: string (flipped polarity over shared
+      // vocabulary) and numeric (the typed payloads report the same relation
+      // at the same time with disjoint quantities — proposition.js).
+      if (contradicts(c.claim, l.claim, { simFloor: th.contradictSim })
+        || (claimSimilarity(c.claim, l.claim).sim >= th.contradictSim && propsConflict(c.prop, l.prop))) {
         return {
           gate: 'ledger-consistency', pass: false, hard: true,
           reason: `"${c.claim}" contradicts bound claim "${l.claim}" (${l.sectionId})`,

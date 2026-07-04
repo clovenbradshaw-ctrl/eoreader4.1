@@ -15,10 +15,27 @@
 // section it revises and folds again.
 
 import { contradicts, repeats, termsOf, termSimilarity } from './terms.js';
+import { validateSurface } from './renderers.js';
 
 export const reconcile = (essay, { thesisFloor = 0.1 } = {}) => {
   const findings = [];
   const accepted = essay.sections.filter((s) => s.state === 'accepted');
+
+  // The validator holds whatever the modality, at the global pass too: every
+  // non-text surface (a section's chart or pull quote, a seam's) must still
+  // match the payloads it bound — a mismatch here means a renderer bug or a
+  // tampered log, and it is named, not smoothed over.
+  const allCommitments = accepted.flatMap((s) => s.commitments);
+  for (const s of accepted) {
+    if (s.surface) {
+      const check = validateSurface(s.surface, s.commitments);
+      if (!check.ok) findings.push({ kind: 'surface-mismatch', sectionId: s.id, detail: { violations: check.violations } });
+    }
+    if (s.seam && s.seam.modality !== 'divider' && s.seam.modality !== 'text') {
+      const check = validateSurface(s.seam, allCommitments);
+      if (!check.ok) findings.push({ kind: 'surface-mismatch', sectionId: s.id, detail: { seam: true, violations: check.violations } });
+    }
+  }
 
   // Contradiction across sections — and, separately, redundancy: the same
   // claim bound in two places with nothing new under it.

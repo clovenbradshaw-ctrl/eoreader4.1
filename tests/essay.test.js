@@ -10,6 +10,7 @@ import {
   initCarry, updateCarry, capCarry,
   claimBound, candidateVetoed, threadDeferred, reconcileFinding, spineRevised,
   projectEssay, liveView, describeEvent, reconcile, runEssay, EKIND,
+  propositionOf, validateSurface,
 } from '../src/essay/index.js';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
@@ -397,8 +398,10 @@ test('render: the one prose pass is bound back to the spans it was given', async
 
 test('asymmetric granularity: a smuggled assertion is struck, glue rides marked', async () => {
   // The talker writes fluently at paragraph grain — and smuggles in one
-  // contentful assertion from nowhere plus one short connective.
-  const model = excerptEcho('Space aliens are probably responsible. So the record holds.');
+  // assertion with zero span contact plus one connective that touches the
+  // spans' own vocabulary below the citation bar (the binder's contact
+  // floor tells them apart).
+  const model = excerptEcho('Space aliens are probably responsible. So the logbook question stays open to interpretation.');
   const { log, essay, report } = await run({ model });
 
   const struck = log.find((e) => e.kind === EKIND.VETO && e.reason === 'render-unbound');
@@ -424,6 +427,224 @@ test('asymmetric granularity: a rendered sentence contradicting the ledger is st
   assert.ok(!essay.includes('never records'), 'a struck contradiction never ships');
 });
 
+// ── omnimodal: the commitment below language ─────────────────────────────────
+
+test('propositionOf: the payload is typed — quantities, time, entities, relation', () => {
+  const p = propositionOf('Felony camping arrests rose to 148 during the 2021 heat event.');
+  assert.equal(p.relation, 'change');
+  assert.deepEqual(p.quantities.map((q) => q.value), [148]);
+  assert.equal(p.time, '2021');
+  assert.ok(Object.isFrozen(p));
+  // A citation is markup, not content — its digits are never a quantity.
+  const q = propositionOf('The tower was rebuilt. [s3]');
+  assert.deepEqual([...q.quantities], []);
+});
+
+test('a chart slot renders as a projection of the same payloads — agreement by construction', async () => {
+  const spans = [
+    { idx: 0, text: 'Felony camping arrests rose to 148 during the 2021 heat event.' },
+    { idx: 1, text: 'Felony camping arrests fell to 61 after the shelters opened.' },
+  ];
+  const plan = {
+    thesis: 'felony camping arrests across the heat event',
+    sections: [{ id: 'sec:fig', intent: 'felony camping arrests during and after the heat event', modality: 'chart' }],
+  };
+  const { log, report } = await runEssay({ spine: plan, spans });
+  const accept = log.find((e) => e.kind === EKIND.ACCEPT);
+  assert.equal(accept.modality, 'chart');
+  assert.deepEqual(accept.surface.data.map((d) => d.value), [148, 61]); // the bars ARE the payload quantities
+  assert.ok(accept.prose.includes('148'));                              // the caption is the text projection
+  // The validator is a predicate, and it holds by construction here.
+  const sec = report.sections.find((s) => s.id === 'sec:fig');
+  assert.equal(validateSurface(sec.surface, sec.commitments).ok, true);
+});
+
+test('the cross-modal validator refuses a doctored surface', async () => {
+  const spans = [{ idx: 0, text: 'Felony camping arrests rose to 148 during the 2021 heat event.' }];
+  const { report } = await runEssay({
+    spine: { thesis: 'felony camping arrests', sections: [{ id: 'a', intent: 'felony camping arrests in the heat event' }] },
+    spans,
+  });
+  const commitments = report.sections[0].commitments;
+  const doctored = { modality: 'chart', kind: 'bar', data: [{ label: 'felony camping arrests', value: 999 }], caption: '' };
+  const check = validateSurface(doctored, commitments);
+  assert.equal(check.ok, false);
+  assert.match(check.violations[0], /999/);
+  // And a text surface that alters the figure is refused the same way.
+  assert.equal(validateSurface({ modality: 'text', text: 'Arrests rose to 150.' }, commitments).ok, false);
+});
+
+test('a cited sentence that alters a quantity is struck after render', async () => {
+  const spans = [
+    { idx: 0, text: 'Felony camping arrests rose to 148 during the 2021 heat event.' },
+    { idx: 1, text: 'The heat event closed the felony camping shelters for a week.' },
+  ];
+  const model = {
+    name: 'scripted',
+    phrase: async (messages) => {
+      const user = messages.find((m) => m.role === 'user')?.content || '';
+      if (!user.includes('What I found reading it:')) return '';
+      // The talker paraphrases — and quietly changes 148 to 150.
+      return 'Felony camping arrests rose to 150 during the 2021 heat event. The heat event closed the felony camping shelters for a week.';
+    },
+  };
+  const { log, essay } = await runEssay({
+    spine: { thesis: 'felony camping arrests', sections: [{ id: 'a', intent: 'felony camping arrests in the heat event' }] },
+    spans, model,
+  });
+  const struck = log.find((e) => e.kind === EKIND.VETO && e.reason === 'render-alters-quantity');
+  assert.ok(struck, 'the altered figure should be struck');
+  assert.ok(!essay.includes('150'), 'the altered figure never ships');
+});
+
+test('every render call conditions on the commitment graph, never on a sibling surface', async () => {
+  const { log } = await run({ model: excerptEcho() });
+  const accepts = log.filter((e) => e.kind === EKIND.ACCEPT);
+  assert.ok(accepts.length >= 2);
+  // The fan-out invariant: the RENDERED surface (the cited form) never
+  // crosses into a sibling's prompt — only commitments cross (the carry's
+  // terminal claim may legitimately appear, as bare claim text).
+  const firstSurface = accepts[0].prose; // carries its [sN] citations
+  assert.match(firstSurface, /\[s\d+\]/);
+  const laterPrompts = accepts.slice(1).map((a) => JSON.stringify(a.prompt));
+  for (const p of laterPrompts) assert.ok(!p.includes(firstSurface), 'a sibling surface leaked into a render prompt');
+});
+
+test('an injected classifier replaces the lexical payload reading wholesale', async () => {
+  const { log } = await run({
+    classify: (claim) => ({ relation: 'witnessed', entities: ['the keeper'], quantities: [], time: null }),
+  });
+  const bind = log.find((e) => e.kind === EKIND.BIND);
+  assert.equal(bind.prop.relation, 'witnessed');
+  assert.deepEqual([...bind.prop.entities], ['the keeper']);
+});
+
+test('the payload catches a numeric contradiction no negation marks', async () => {
+  const spans = [
+    { idx: 0, text: 'Felony camping arrests rose to 148 during the 2021 heat event.' },
+    { idx: 1, text: 'A later tally said felony camping arrests rose to 152 during the 2021 heat event.' },
+    { idx: 2, text: 'The heat event lasted nine days across the headland.' },
+  ];
+  const { log } = await runEssay({
+    spine: {
+      thesis: 'felony camping arrests in the heat event',
+      sections: [
+        { id: 'a', intent: 'felony camping arrests during the 2021 heat event' },
+        { id: 'b', intent: 'the tally of felony camping arrests' },
+      ],
+    },
+    spans,
+    explore: async ({ section }) => (section.id === 'a'
+      ? ['Felony camping arrests rose to 148 during the 2021 heat event.',
+         'The heat event lasted nine days across the headland.']
+      : ['Felony camping arrests rose to 152 during the 2021 heat event.']),
+  });
+  // Same words, same polarity — the string check is blind here; the typed
+  // payloads (change · 2021 · {148} vs {152}) are not.
+  const veto = log.find((e) => e.kind === EKIND.VETO && e.reason.startsWith('contradicts-ledger'));
+  assert.ok(veto, 'expected the numeric contradiction to be struck');
+  assert.match(veto.claim, /152/);
+});
+
+test('the DAG interleaves modalities: a chart slot sits mid-spine, gated like any section', async () => {
+  const spans = [
+    { idx: 0, text: 'The heat event closed the granite headland camps in 2021.' },
+    { idx: 1, text: 'Felony camping arrests rose to 148 during the heat event.' },
+    { idx: 2, text: 'The arrests fell after the camps reopened past the heat event.' },
+  ];
+  const claimFor = { a: spans[0].text, fig: spans[1].text, c: spans[2].text };
+  const { report } = await runEssay({
+    spine: {
+      thesis: 'the heat event, the camps, and the arrests',
+      sections: [
+        { id: 'a', intent: 'the heat event and the headland camps' },
+        { id: 'fig', intent: 'felony camping arrests during the heat event', modality: 'chart', dependsOn: ['a'] },
+        { id: 'c', intent: 'the arrests after the camps reopened', dependsOn: ['fig'] },
+      ],
+    },
+    spans,
+    explore: async ({ section }) => [claimFor[section.id]],
+  });
+  assert.deepEqual(report.order, ['a', 'fig', 'c']);
+  const fig = report.sections.find((s) => s.id === 'fig');
+  assert.equal(fig.state, 'accepted');
+  assert.equal(fig.modality, 'chart');
+  assert.deepEqual(fig.surface.data.map((d) => d.value), [148]);
+  assert.equal(report.sections.find((s) => s.id === 'c').state, 'accepted');
+});
+
+// ── seams: the form owns the transition ─────────────────────────────────────
+
+test('a declared chart seam projects both neighbors’ quantities', async () => {
+  const spans = [
+    { idx: 0, text: 'Felony camping arrests rose to 148 during the 2021 heat event.' },
+    { idx: 1, text: 'Shelter capacity reached 90 beds by the winter of 2021.' },
+  ];
+  const claimFor = { a: spans[0].text, b: spans[1].text };
+  const { log } = await runEssay({
+    spine: {
+      thesis: 'arrests and shelter capacity of beds',
+      sections: [
+        { id: 'a', intent: 'felony camping arrests during the heat event' },
+        { id: 'b', intent: 'shelter capacity of beds in winter', seam: { modality: 'chart' } },
+      ],
+    },
+    spans,
+    explore: async ({ section }) => [claimFor[section.id]],
+  });
+  const accepts = log.filter((e) => e.kind === EKIND.ACCEPT);
+  assert.equal(accepts[1].seam.modality, 'chart');
+  assert.deepEqual(accepts[1].seam.data.map((d) => d.value).sort((x, y) => x - y), [90, 148]);
+});
+
+test('seams: divider without a model; a declared pullquote seam quotes the left terminal claim', async () => {
+  const plan = {
+    ...PLAN,
+    sections: [
+      PLAN.sections[0],
+      PLAN.sections[1],
+      { ...PLAN.sections[2], seam: { modality: 'pullquote' } },
+    ],
+  };
+  const { log } = await run({ spine: plan });
+  const accepts = log.filter((e) => e.kind === EKIND.ACCEPT);
+  assert.equal(accepts[0].seam, null);                    // the first section opens the essay
+  assert.equal(accepts[1].seam.modality, 'divider');      // auto, no model → the honest divider
+  assert.equal(accepts[2].seam.modality, 'pullquote');
+  assert.equal(accepts[2].seam.text, accepts[1].terminalClaim); // the left neighbor, verbatim
+});
+
+test('seams: a phrased transition reuses only its neighbors; a smuggling seam falls back to the divider', async () => {
+  const seamText = 'From the lighthouse built on the granite headland to keeper Alvarez and the logbook.';
+  const smuggle = 'Meanwhile pirates raided the merchant convoys.';
+  let call = 0;
+  const model = {
+    name: 'scripted',
+    phrase: async (messages) => {
+      const user = messages.find((m) => m.role === 'user')?.content || '';
+      if (user.includes('Write the one transition sentence')) {
+        call += 1;
+        return call === 1 ? seamText : smuggle;
+      }
+      // Section renders: echo the excerpts (the faithful talker).
+      const at = user.indexOf('What I found reading it:');
+      const lines = [];
+      for (const l of user.slice(at).split('\n').slice(1)) { if (!l.trim()) break; lines.push(l.trim()); }
+      return lines.slice(0, 2).join(' ');
+    },
+  };
+  const { log, report } = await run({ model });
+  const accepts = log.filter((e) => e.kind === EKIND.ACCEPT);
+  assert.equal(accepts[1].seam.modality, 'text');
+  assert.equal(accepts[1].seam.text, seamText);
+  assert.ok(report.assembled.includes(seamText), 'the phrased seam leads its section in');
+  // The second seam smuggled content — struck, and the divider stands in.
+  const veto = log.find((e) => e.kind === EKIND.VETO && e.reason === 'seam-unbound');
+  assert.ok(veto);
+  assert.equal(accepts[2].seam.modality, 'divider');
+  assert.ok(!report.assembled.includes('pirates'));
+});
+
 // ── reconciliation ───────────────────────────────────────────────────────────
 
 test('reconcile: names cross-section contradiction, redundancy, and off-thesis sections', () => {
@@ -441,4 +662,20 @@ test('reconcile: names cross-section contradiction, redundancy, and off-thesis s
   assert.ok(findings.some((f) => f.kind === 'contradiction' && f.sectionId === 'b'));
   assert.ok(findings.some((f) => f.kind === 'redundancy' && f.sectionId === 'c'));
   assert.ok(findings.some((f) => f.kind === 'off-thesis' && f.sectionId === 'd'));
+});
+
+test('reconcile: a surface that stopped matching its payloads is named, whatever the modality', () => {
+  const claim = 'Arrests rose to 148 in 2021.';
+  const commitments = [{ claim, prop: propositionOf(claim), spanRefs: ['s0'], sectionId: 'a' }];
+  const fake = {
+    thesis: 'arrests',
+    openThreads: [],
+    sections: [{
+      id: 'a', state: 'accepted', commitments,
+      surface: { modality: 'chart', kind: 'bar', data: [{ label: 'arrests', value: 999 }], caption: '' },
+      seam: null,
+    }],
+  };
+  const findings = reconcile(fake);
+  assert.ok(findings.some((f) => f.kind === 'surface-mismatch' && f.sectionId === 'a'));
 });
