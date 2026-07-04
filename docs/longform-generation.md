@@ -193,12 +193,14 @@ section.
 
 The check after render is where the grains meet. Each rendered sentence is
 re-bound at claim grain: a sentence that cites a span keeps its citation;
-connective tissue that made lexical contact rides as glue, marked; an
-assertive sentence bound to nothing — an embellishment smuggled in while
-writing — is struck; and a sentence that contradicts the ledger is struck
-whatever it cites. Coarse generation, fine verification. The accepted section
-carries its per-sentence verdicts into the log, so the accept event states
-its own generative honesty.
+connective tissue that made lexical contact rides as glue, marked — unless it
+denies, because an unbound negative is an assertion of absence, the claim
+that needs grounding most; a sentence with no contact at all is prose from
+nowhere — struck, however fluent; and a sentence that contradicts the ledger
+or alters a quantity is struck whatever it cites. Coarse generation, fine
+verification, every threshold the binder's own. The accepted section carries
+its per-sentence verdicts into the log, so the accept event states its own
+generative honesty.
 
 ## Omnimodal rendering
 

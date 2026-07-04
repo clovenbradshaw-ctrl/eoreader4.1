@@ -4583,6 +4583,24 @@ class Component extends DCLogic {
     // bare pleasantries (nothing to read); null on any failure — null means today's behavior.
     const read=contentful?await this._discourseRead(id,q,cur,fold):null;
     if(this._stopGen)return;
+    // THE MEASURED UPGRADE (docs/discourse-routing.md): the regex read that
+    // seeded this._turnRead is the keystroke preview and the cold floor — it
+    // informs, it does not decide. The discourse read is the physics: the
+    // route relaxed from Born-weighted currents with the fold's stance as
+    // incumbent, the length demand read off the metacognition's own speech
+    // (lengthDemandOf — 'develop' | 'brief' | abstain). When it lands, the
+    // turn's config upgrades to it; when it abstained, the floor rules,
+    // byte-identical to the regex-only turn. Register keeps the floor's
+    // value: the speculative/creative split has no measured direction yet
+    // (a named seam — a REGISTER_EXEMPLARS basis alongside the length one).
+    if(read&&!read.abstained){
+      const depth={develop:'obsessive',brief:'shallow'}[read.lengthDemand]||this._turnRead.depth;
+      this._turnRead={...this._turnRead,
+        research:read.route==='research'||this._turnRead.research,
+        depth,
+        strategy:read.route==='research'?'holonic':this._turnRead.strategy,
+      };
+    }
     // THE POP (docs/frame-holon.md, Phase B): when a digression stands on the frame stack — a
     // mid-compose question was PUSHED as a child frame, so the composition is a suspended
     // ancestor, not a lost stance — a turn that binds BACK to that composing ancestor ("ok,
@@ -4768,9 +4786,12 @@ class Component extends DCLogic {
   // finally answers, grounded in everything it gathered. One thread per hop, never a fan-out.
   // ── THE EMERGENT READ (design/chat-redesign/REVISIONS.md) ──────────────────
   // Every composer setting is READ OFF THE ASK, never selected — EO's own
-  // thesis ("it is all physics, not decisions") applied to the UI. The same
-  // read renders live in the composer readout as you type and derives the
-  // turn's config at send time (sendChat sets this._turnRead):
+  // thesis ("it is all physics, not decisions") applied to the UI. This
+  // lexical read is the KEYSTROKE PREVIEW and the cold floor only: it renders
+  // the readout live (no model per keystroke) and seeds this._turnRead at
+  // send time — and the moment the discourse read lands, the turn's config
+  // UPGRADES to the measured route and length demand (sendChat; meta-route's
+  // "seeds inform, they do not decide"). Fields:
   //   intent   — a relational/causal ask relaxes into research; a lookup stays
   //              a single answer.
   //   register — speculative wording leaves the library (creative); otherwise

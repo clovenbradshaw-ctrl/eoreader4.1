@@ -398,8 +398,10 @@ test('render: the one prose pass is bound back to the spans it was given', async
 
 test('asymmetric granularity: a smuggled assertion is struck, glue rides marked', async () => {
   // The talker writes fluently at paragraph grain — and smuggles in one
-  // contentful assertion from nowhere plus one short connective.
-  const model = excerptEcho('Space aliens are probably responsible. So the record holds.');
+  // assertion with zero span contact plus one connective that touches the
+  // spans' own vocabulary below the citation bar (the binder's contact
+  // floor tells them apart).
+  const model = excerptEcho('Space aliens are probably responsible. So the logbook question stays open to interpretation.');
   const { log, essay, report } = await run({ model });
 
   const struck = log.find((e) => e.kind === EKIND.VETO && e.reason === 'render-unbound');
@@ -506,6 +508,15 @@ test('every render call conditions on the commitment graph, never on a sibling s
   assert.match(firstSurface, /\[s\d+\]/);
   const laterPrompts = accepts.slice(1).map((a) => JSON.stringify(a.prompt));
   for (const p of laterPrompts) assert.ok(!p.includes(firstSurface), 'a sibling surface leaked into a render prompt');
+});
+
+test('an injected classifier replaces the lexical payload reading wholesale', async () => {
+  const { log } = await run({
+    classify: (claim) => ({ relation: 'witnessed', entities: ['the keeper'], quantities: [], time: null }),
+  });
+  const bind = log.find((e) => e.kind === EKIND.BIND);
+  assert.equal(bind.prop.relation, 'witnessed');
+  assert.deepEqual([...bind.prop.entities], ['the keeper']);
 });
 
 test('the payload catches a numeric contradiction no negation marks', async () => {

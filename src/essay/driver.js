@@ -31,8 +31,8 @@ import {
 import { makeSpine, sectionOf, renderOrder, withState, insert as spineInsert, split as spineSplit, merge as spineMerge, replan as spineReplan } from './spine.js';
 import { initCarry, updateCarry, capCarry, replanCarry, threadsDue } from './carry.js';
 import { runGates } from './gates.js';
-import { termsOf, termSimilarity, contradicts, repeats, claimSimilarity } from './terms.js';
-import { propositionOf, numbersIn, propsConflict } from './proposition.js';
+import { termsOf, termSimilarity, contradicts, repeats, claimSimilarity, polarityOf } from './terms.js';
+import { makeProposition, propositionOf, numbersIn, propsConflict } from './proposition.js';
 import { renderChart, renderPullquote, renderDivider, validateSurface } from './renderers.js';
 import { projectEssay } from './project.js';
 import { reconcile } from './reconcile.js';
@@ -53,7 +53,6 @@ export const KNOB_DEFAULTS = Object.freeze({
   sectionFloor: 60,        // render budget (advisory floor, hard ceiling)
   sectionCeiling: 360,     // paragraph or more — the grain of GENERATION, never of verification
   renderBindFloor: 0.5,    // below this bound fraction the render regenerates once
-  glueTerms: 4,            // an unbound sentence this short is connective tissue, not an assertion
   carry: Object.freeze({ maxLedger: 64 }),
   gate: Object.freeze({}),
   reconcilePasses: 1,
@@ -66,7 +65,7 @@ export const END = 'end';
 export const runEssay = async ({
   spine: spineIn = null, thesis = '', sections = null, frame = null,
   spans = [], retrieve = null, explore = null, threads: threadHook = null,
-  replan: replanFold = null, model = null, doc = null,
+  replan: replanFold = null, model = null, doc = null, classify = null,
   knobs: knobsIn = {}, onEvent = null, log = [], carry: carryIn = null,
   pauseAfter = null, signal = null,
 } = {}) => {
@@ -145,7 +144,7 @@ export const runEssay = async ({
     let corrective = '';
     for (let attempt = 0; attempt < 2; attempt++) {
       pass = await explorePass({
-        section, spine, carry, deps, secSpans, bindPool, explore, doc, knobs, corrective,
+        section, spine, carry, deps, secSpans, bindPool, explore, doc, classify, knobs, corrective,
         mint: () => `claim:${claimN++}`, emit, tick: () => t++, attempt,
       });
       if (signal?.aborted) return result(false);
@@ -365,7 +364,7 @@ export const runEssay = async ({
 // different arrest (a different offset into the ranked supply), so a
 // different set of spans crosses threshold. An injected `explore` replaces
 // the proposer wholesale (frame/envelope perturbation live there).
-const explorePass = async ({ section, spine, carry, deps, secSpans, bindPool, explore, doc, knobs, corrective, mint, emit, tick, attempt }) => {
+const explorePass = async ({ section, spine, carry, deps, secSpans, bindPool, explore, doc, classify, knobs, corrective, mint, emit, tick, attempt }) => {
   const n = Math.max(1, knobs.candidates | 0);
   let candidateSets;
   if (explore) {
@@ -407,9 +406,15 @@ const explorePass = async ({ section, spine, carry, deps, secSpans, bindPool, ex
     }
     // The payload drops below language here: the claim string is the text
     // projection of a typed proposition, and every other modality projects
-    // the same payload (proposition.js). The lexical fallback reading is
-    // deterministic; an injected classifier can replace it wholesale.
-    const commitment = { claimId, claim, prop: propositionOf(claim), spanRefs, sectionId: section.id };
+    // the same payload (proposition.js). An injected `classify` — the
+    // phasepost/graph reader when one is warm — replaces the lexical fallback
+    // WHOLESALE, the same contract as the research driver's addressOf; the
+    // shape is enforced either way (makeProposition), so the cue lists never
+    // decide when a real reader is on hand.
+    const prop = classify
+      ? makeProposition(await classify(claim, { spanRefs, spans: bindPool }))
+      : propositionOf(claim);
+    const commitment = { claimId, claim, prop, spanRefs, sectionId: section.id };
     // A bound claim that contradicts the THESIS is un-vetoable — it is the
     // replan trigger, not a candidate to strike.
     if (contradicts(claim, spine.thesis)) {
@@ -701,10 +706,14 @@ const render = async ({ section, pass, secSpans, model, doc, carry, knobs, signa
       continue;
     }
     if (b.citation) { kept.push({ text: b.claim, boundTo: b.citation, glue: false }); continue; }
-    // Unbound: a short connective rides as glue, marked; a contentful
-    // assertion bound to nothing is an embellishment smuggled in while
-    // writing — struck, however fluent.
-    if (termsOf(b.claim).length < knobs.glueTerms) {
+    // Unbound: CONTACT is the measurement, not length — the binder's own
+    // floor (ground/bind.js): a sentence whose amplitude made lexical contact
+    // with the spans is connective tissue or a sub-threshold paraphrase and
+    // rides as glue, marked; zero contact is prose from nowhere — struck,
+    // however fluent. One carve-out, the seam rule again: connective tissue
+    // may not DENY — an unbound negative is an assertion of absence (the
+    // claim that needs grounding most), never glue.
+    if (b.score > 0 && polarityOf(b.claim) === '+') {
       kept.push({ text: b.claim, boundTo: null, glue: true });
       continue;
     }
