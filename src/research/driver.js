@@ -250,6 +250,10 @@ export const runGroundedResearch = async (question, opts = {}) => {
     model = null, ask = null, fetch: netFetch = null, now = null, save = true,
     alpha = ANSWERABLE_ALPHA, addressOf = addressOfSentence,
     maxSpansPerSource = 6, maxPerSection = 12,
+    // compose:'essay' — let the model WRITE a flowing essay from the grounded
+    // excerpts (one composition, no imposed section types) instead of the terse
+    // per-section summary. Absent → the summary phrasing, byte-identical to before.
+    compose = null,
     onEvent = null,
     // The per-section streaming seam: when the host wants to show a section's
     // summary as the model writes it (not only when the whole run lands), it
@@ -573,16 +577,26 @@ export const runGroundedResearch = async (question, opts = {}) => {
     // span above the null or it is greyed as glue. No model → no summary; the
     // section stands on its spans (never worse than today).
     if (model?.phrase && frameProps.length) {
+      // compose:'essay' lets the model WRITE from the grounded excerpts (a flowing,
+      // multi-paragraph essay) instead of the terse per-section summary — no imposed
+      // section types, the composition is the model's. Still excerpt-confined and
+      // bind-checked: claim sentences carry a citation, connective prose reads as
+      // glue. Absent → the exact 2-5-sentence summary as before.
+      const essay = compose === 'essay';
       const messages = [
-        { role: 'system', content: 'Summarize ONLY from the numbered excerpts. Do not add facts, names, numbers, or dates that are not in them. Plain prose, 2-5 sentences.' },
-        { role: 'user', content: `Question: ${fq}\n\nExcerpts:\n${frameProps.map((p, i) => `${i + 1}. ${p.sentence}`).join('\n')}` },
+        { role: 'system', content: essay
+          ? 'Using ONLY the facts in the numbered excerpts, write a flowing, well-organized essay on the topic. Do NOT add facts, names, numbers, or dates that are not in them — draw the essay together from what the excerpts say. Write connected paragraphs, an essay, not a list.'
+          : 'Summarize ONLY from the numbered excerpts. Do not add facts, names, numbers, or dates that are not in them. Plain prose, 2-5 sentences.' },
+        { role: 'user', content: `${essay ? 'Topic' : 'Question'}: ${fq}\n\nExcerpts:\n${frameProps.map((p, i) => `${i + 1}. ${p.sentence}`).join('\n')}` },
       ];
       let out = '';
       // Stream this section's deltas to the host when it asked (onSectionToken);
-      // otherwise call phrase() with no opts, exactly as before.
+      // otherwise call phrase() with no opts, exactly as before. An essay wants room
+      // to breathe, so lift the token budget when composing one.
+      const baseOpts = essay ? { maxTokens: 900 } : null;
       const phraseOpts = onSectionToken
-        ? { onToken: (piece) => { try { onSectionToken(frame.id, String(piece || '')); } catch { /* a view error never stops the run */ } } }
-        : null;
+        ? { ...(baseOpts || {}), onToken: (piece) => { try { onSectionToken(frame.id, String(piece || '')); } catch { /* a view error never stops the run */ } } }
+        : baseOpts;
       try { out = String(await (phraseOpts ? model.phrase(messages, phraseOpts) : model.phrase(messages)) || ''); } catch { out = ''; }
       if (out.trim()) {
         // Drop the instruction-echo the small model sometimes prepends ("Here is a

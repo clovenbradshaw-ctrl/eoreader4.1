@@ -2764,16 +2764,11 @@ class Component extends DCLogic {
     // (An isolated / net-new chat skips the reading-scoped gate entirely — there is nothing in
     // scope to be absent from, and it must not consult the library.)
     if(!isolated&&amode!=='creative'&&!this._subjectsKnown(q,sources)){finish(this._noSubjectPatch(q,sources));return;}
-    // 1b) OPT-IN LONGFORM, offline too: an essay/report/"N words" ask over what's ALREADY been read
-    // (web off, or the reading already covers it) becomes a multi-section grounded piece — the arc
-    // over the in-scope sources — becomes DEEP RESEARCH: the grounded projection over the
-    // reading (src/research/driver.js), every claim tethered to a pinned span, instead of
-    // the essay walk this gate used to summon. The opt-in stays PHYSICS, not a keyword
-    // cliff: _wantsLongform reads the develop/brief demand off the discourse metacognition
-    // (the `read` above), with the keyword _longformIntent kept only as the cold-model floor.
-    if(!isolated&&amode!=='creative'&&this._wantsLongform(q,read)&&(sources.length||!!(this.graph&&this.graph.entities&&this.graph.entities.size))){
-      return this._deepResearch(id,q,cur,{noWalk:true});   // the web gate below never ran — stand on the reading
-    }
+    // 1b) MVP: a longform/essay ask over what's ALREADY been read no longer forks into
+    // the facet-decomposed grounded projection. It falls through to the ordinary
+    // conversational grounded answer below, steered by the discourse read (the one
+    // steering line folded into the prompt). Shape and length stay emergent from the
+    // read — not a depth/type dial.
     // 2) the spans that surface for this question, scoped to the chat's sources (none when
     //    isolated — and none in the CREATIVE register, which answers from the model alone)
     const ground=(isolated||amode==='creative')?{spans:[],entities:[],sources:[],relevant:false}:this.groundNotes(q,sources);
@@ -3059,7 +3054,7 @@ class Component extends DCLogic {
     // Answer about the SUBJECT (not the literal "do more research" message) grounded in what was
     // read. The longform intent rides from the ORIGINAL turn ("write me an essay…") so stripping
     // the framing off the subject (now just "dolphins") doesn't lose the essay shape.
-    await this._answerInto(id,formulated,[...new Set(walk.readUrls)],{longform:this._wantsLongform(q,pre&&pre.meta),meta:pre&&pre.meta});
+    await this._answerInto(id,formulated,[...new Set(walk.readUrls)],{meta:pre&&pre.meta});
   }
   // Synthesize the grounded answer into the existing pending bubble (which already carries the
   // research trail). Mirrors sendChat's answer path; grounded in whatever the chat is About
@@ -3283,13 +3278,11 @@ class Component extends DCLogic {
     }catch(e){return draft;}                                 // any trouble → keep the first go
   }
   async _answerInto(id,q,gathered,opts){
-    // OPT-IN LONGFORM (the arc, in the reader's own primitives): SEG the gathered evidence into one
-    // section per source (a fold), CON each grounded ONLY in that source's spans (re-prompt per
-    // fold), EVA each fold for new coverage and NUL when it would only re-cite, then assemble. Any
-    // other ask — or thin supply — takes the ordinary single answer. Length stays EMERGENT.
-    // `opts.longform` lets the caller carry the intent from the ORIGINAL turn when `q` has been
-    // reduced to a bare subject (research strips "write me an essay about" down to "dolphins").
-    if((opts&&opts.longform)||this._wantsLongform(q,opts&&opts.meta))return this._deepResearch(id,q,this.activeChatObj(),{noWalk:true});   // the walk already ran — project the grounded report over what it pinned
+    // MVP: research content answers CONVERSATIONALLY — one natural, grounded reply
+    // steered by the discourse read (_answerSingle folds in _steerLine(meta)), not a
+    // facet-decomposed grounded report. The old opt-in longform fork into the grounded
+    // projection is retired here; length and shape stay emergent from the steer, never
+    // from a form/type dial.
     return this._answerSingle(id,q,gathered,opts&&opts.meta);
   }
   async _answerSingle(id,q,gathered,meta){
