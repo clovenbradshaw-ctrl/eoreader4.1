@@ -2208,6 +2208,7 @@ class Component extends DCLogic {
       // decision off the discourse PHYSICS (meta-route.js) rather than a keyword cliff.
       return {speech,route:measure.route,kind:measure.kind,steerKind:measure.steerKind,verdict:measure.verdict,abstained:measure.abstained,
         researchDrive:measure.researchDrive||0,lengthDemand:measure.lengthDemand||'',developDrive:measure.developDrive||0,
+        registerDemand:measure.registerDemand||'',creativeDrive:measure.creativeDrive||0,
         leads:M.leadsOf(speech,{known:q+' '+exchange}).slice(0,3)};
     }catch(e){
       // Fails soft by contract — but keep the WHY inspectable (window.__eoApp._readErr) so a
@@ -2601,11 +2602,14 @@ class Component extends DCLogic {
     // The grounding scope for this turn: isolated (net-new, ground nothing from reading),
     // everything (sources:[]), or the tagged sources. An isolated chat answers plainly.
     const _sc=this._answerScope(cur,null);const isolated=_sc.isolated;const sources=_sc.sources;
-    // THE REGISTER this turn runs at — emergent, from the read above. Creative
-    // gathers nothing and grounds on nothing — the point is the model speaking for
-    // itself — so the web walk, the subject gate, the discourse read, and the
-    // grounded frame are all bypassed below.
-    const amode=this._turnRead.register||'auto';
+    // THE REGISTER this turn runs at — emergent. The floor read seeds it (a
+    // floor-creative ask skips the discourse read entirely: the point is the
+    // model speaking for itself, and a strong lexical signal takes the fast
+    // path); a floor-auto ask lets the MEASURED register upgrade it below,
+    // once the discourse read lands. Creative gathers nothing and grounds on
+    // nothing, so the web walk, the subject gate, and the grounded frame are
+    // all bypassed downstream.
+    let amode=this._turnRead.register||'auto';
     const prev=cur?cur.messages.filter(m=>m.text&&!m.pending):[];
     // An EXPLICIT research request ("research dolphins", "look into X") is a performed transition
     // INTO grounding — a structural marker (§5), not an anaphor — so it breaks continuation and
@@ -2635,19 +2639,25 @@ class Component extends DCLogic {
     // seeded this._turnRead is the keystroke preview and the cold floor — it
     // informs, it does not decide. The discourse read is the physics: the
     // route relaxed from Born-weighted currents with the fold's stance as
-    // incumbent, the length demand read off the metacognition's own speech
-    // (lengthDemandOf — 'develop' | 'brief' | abstain). When it lands, the
-    // turn's config upgrades to it; when it abstained, the floor rules,
-    // byte-identical to the regex-only turn. Register keeps the floor's
-    // value: the speculative/creative split has no measured direction yet
-    // (a named seam — a REGISTER_EXEMPLARS basis alongside the length one).
+    // incumbent, the length demand AND the register demand read off the
+    // metacognition's own speech (lengthDemandOf, registerDemandOf — each
+    // two-direction, crosstalk-nulled, abstaining). When it lands, the turn's
+    // config upgrades to it; when it abstained, the floor rules,
+    // byte-identical to the regex-only turn. A measured 'grounded' maps to
+    // auto (grounded-with-honest-fallback): the strict declining register
+    // stays a deliberate ask, never a hint's side effect.
     if(read&&!read.abstained){
       const depth={develop:'obsessive',brief:'shallow'}[read.lengthDemand]||this._turnRead.depth;
+      const register=read.registerDemand==='creative'?'creative'
+        :read.registerDemand==='grounded'?'auto'
+        :this._turnRead.register;
       this._turnRead={...this._turnRead,
         research:read.route==='research'||this._turnRead.research,
         depth,
         strategy:read.route==='research'?'holonic':this._turnRead.strategy,
+        register,
       };
+      amode=register||amode;
     }
     // THE POP (docs/frame-holon.md, Phase B): when a digression stands on the frame stack — a
     // mid-compose question was PUSHED as a child frame, so the composition is a suspended

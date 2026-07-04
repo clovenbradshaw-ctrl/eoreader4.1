@@ -206,6 +206,36 @@ export const LENGTH_EXEMPLARS = Object.freeze({
   ],
 });
 
+// REGISTER_EXEMPLARS — the last composer setting still decided by a regex (the reader's
+// speculative word list in _read): does the discourse want the model WRITING FREELY — an
+// invention, a speculation, its own voice — or an answer CHECKED against the reading? As bare
+// keywords ("imagine", "what if") this misfires both ways: "imagine my surprise when the
+// treaty failed" is a grounded ask, and a paraphrased invitation to speculate carries no
+// trigger word at all. Here the metacognition RE-SPEAKS the want ("they want me to make
+// something up" vs "they want what the sources actually say") and the same Born overlap,
+// crosstalk-nulled against its contrast, measures it. `registerDemand` rides out of metaRoute
+// on every route — a compose turn and a ground turn both carry a register — with '' when the
+// speech is register-neutral, so the caller's floor rules exactly as the length contract does.
+// Two members so the null is finite and the pair holds each other apart (creative ⟂ grounded).
+export const REGISTER_EXEMPLARS = Object.freeze({
+  creative: [
+    'they want me to make something up — invent it freely',
+    'a speculation, a what-if, imagined rather than looked up',
+    'write from imagination, not from the sources',
+    'they are asking for my own invented take, a flight of fancy',
+    'a hypothetical scenario to dream up, unmoored from the reading',
+    'play it out creatively — no facts required',
+  ],
+  grounded: [
+    'they want what the sources actually say, checked against the reading',
+    'an answer grounded in the documents, with citations',
+    'stick to the facts that were read, nothing invented',
+    'a factual reply anchored to the material at hand',
+    'verify it against what has been read before asserting',
+    'report the record faithfully, not an invention',
+  ],
+});
+
 // Tuning. The Born weights of a 2–3 sentence paragraph against a ~20-term basis live around
 // 0.02–0.15, so GAIN lifts a clear signal to ~1 where it competes with the resting potentials.
 // REST is the incumbent's head start (continuation-by-default as physics: a transition current
@@ -247,7 +277,7 @@ const crosstalkNull = (profiles, dir, exemplars) => {
 // buildBases(routeExemplars?, formExemplars?) → { route, form, vocab } — profiles + nulls,
 // computed once. Injectable so a caller can grow a direction's exemplars (the tending surface
 // that replaces regex-patching) or swap the space entirely.
-export const buildBases = (routeExemplars = ROUTE_EXEMPLARS, formExemplars = FORM_EXEMPLARS, kindExemplars = KIND_EXEMPLARS, lengthExemplars = LENGTH_EXEMPLARS) => {
+export const buildBases = (routeExemplars = ROUTE_EXEMPLARS, formExemplars = FORM_EXEMPLARS, kindExemplars = KIND_EXEMPLARS, lengthExemplars = LENGTH_EXEMPLARS, registerExemplars = REGISTER_EXEMPLARS) => {
   const group = (exemplars) => {
     const profiles = new Map();
     for (const [dir, phrases] of Object.entries(exemplars)) profiles.set(dir, profileOf(phrases));
@@ -261,9 +291,10 @@ export const buildBases = (routeExemplars = ROUTE_EXEMPLARS, formExemplars = FOR
   const form = group(formExemplars);
   const kind = group(kindExemplars);
   const length = group(lengthExemplars);
+  const register = group(registerExemplars);
   const vocab = new Set();
-  for (const g of [route, form, kind, length]) for (const b of g.values()) for (const t of b.profile.keys()) vocab.add(t);
-  return { route, form, kind, length, vocab };
+  for (const g of [route, form, kind, length, register]) for (const b of g.values()) for (const t of b.profile.keys()) vocab.add(t);
+  return { route, form, kind, length, register, vocab };
 };
 
 let _DEFAULT = null;
@@ -357,6 +388,33 @@ export const lengthDemandOf = (speech, bases = defaultBases()) => {
   return demand;
 };
 
+// registerDemandOf(speech, bases) → 'creative' | 'grounded' | '' — the REGISTER demand read
+// off the same paragraph, argmax over the null-gated register weights, orthogonal to the
+// route exactly as the length demand is. 'creative' = the speech asks for invention, the
+// model's own voice; 'grounded' = it asks for the reading, checked; '' when neither clears
+// its null (register-neutral speech), so the caller's floor rules. Robust to bases from an
+// older buildBases (no register group) → ''.
+export const registerDemandOf = (speech, bases = defaultBases()) => {
+  if (!bases || !bases.register) return '';
+  const terms = new Set(tok(String(speech || '')));
+  let demand = '', best = 0;
+  for (const [k, b] of bases.register) {
+    const w = bornSalience(b.profile, terms);
+    if (w > b.null && w > best) { best = w; demand = k; }
+  }
+  return demand;
+};
+
+// creativeDrive(speech, bases) → the null-gated `creative` current as a graded scalar,
+// exposed regardless of the winner — the register-side twin of developDrive, so a caller can
+// threshold a number instead of pattern-matching "imagine"/"what if".
+export const creativeDrive = (speech, bases = defaultBases()) => {
+  const b = bases && bases.register && bases.register.get('creative');
+  if (!b) return 0;
+  const w = bornSalience(b.profile, new Set(tok(String(speech || ''))));
+  return w > b.null ? w : 0;
+};
+
 // developDrive(speech, bases) → the null-gated `develop` current, exposed as a graded scalar
 // REGARDLESS of the route the paragraph settled on — the length-side twin of `researchDrive`. A
 // ground turn and a compose turn both have a length; this is that pull, measured, so the caller
@@ -382,6 +440,11 @@ export const developDrive = (speech, bases = defaultBases()) => {
 //                  flow from the measurement instead of matching the user's own adverbs.
 //   developDrive   the graded `develop` current behind that label — the length-side twin of
 //                  researchDrive, exposed regardless of the winner.
+//   registerDemand 'creative' | 'grounded' | '' — the register demand, orthogonal to the
+//                  route like the length demand: does the discourse want invention or the
+//                  checked reading? Read on every route, so the composer's register flows
+//                  from the measurement instead of a speculative word list.
+//   creativeDrive  the graded `creative` current behind that label.
 //   weights/currents/activations  the audit — which current won and by how much.
 export const metaRoute = (speech, fold = null, { bases = defaultBases(), seed = {} } = {}) => {
   const { weights, currents } = speechCurrents(speech, bases);
@@ -399,6 +462,8 @@ export const metaRoute = (speech, fold = null, { bases = defaultBases(), seed = 
     researchDrive: currents.research || 0,
     lengthDemand: lengthDemandOf(speech, bases),
     developDrive: developDrive(speech, bases),
+    registerDemand: registerDemandOf(speech, bases),
+    creativeDrive: creativeDrive(speech, bases),
     abstained: settled.abstained,
     weights,
     currents: settled.currents,
