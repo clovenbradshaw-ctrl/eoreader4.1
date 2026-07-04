@@ -8,6 +8,10 @@ export { parseEOT, eotDoc } from './eot.js';
 // — every ready event read out in the same line syntax a model writes, deduped, no-ops dropped,
 // only vocabulary-remap RECs surfaced; what EOT cannot express is reported, never silently lost.
 export { emitEot, eotText, tupleToEotLine, tuplesToEot, valueLiteral } from './eot-emit.js';
+// Read an ingested doc INTO EoT, layered with what the reading THINKS: the structure it
+// extracted (round-trippable canonical EoT) beside its prediction and surprise at every
+// turning point — every predictive channel the engine has, run at the moment of ingest.
+export { readIngest, attachReading } from './read.js';
 // Web pages as groundable sources: admit a fetched payload as a provenance-tagged prose doc
 // that drops into the answer scope, cited + veto-checked like any source (docs/web-search.md).
 export { admitWebSource, createWebStore, webRecord, webContentHash,

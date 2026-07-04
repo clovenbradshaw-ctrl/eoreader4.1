@@ -25,6 +25,7 @@ import { createLog }         from '../../core/index.js';
 import { projectGraph }      from '../../core/index.js';
 import { createConventions } from '../../core/conventions/index.js';
 import { tok }               from '../../perceiver/parse/index.js';
+import { attachReading }     from '../../ingest/index.js';
 
 const slug = (s) => String(s || 'block').toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 24) || 'block';
 
@@ -86,6 +87,12 @@ export const assembleDocument = ({ name = `doc-${Date.now()}`, modality = 'docum
   // wants to name the passage a claim rests on.
   doc.spanAt = (charOffset) => spans.find(s => charOffset >= s.charStart && charOffset < s.charEnd) || null;
   doc.spanText = (i) => spans[i]?.text ?? '';
+
+  // Every layout-bearing source gets the same lazy predictive read as a parsed-text one:
+  // a memoised `doc.reading()` that renders the blocks into layered EoT — structure beside
+  // prediction and surprise at the turning points (ingest/read.js). Lazy, so assembly cost
+  // is unchanged until a caller reads.
+  attachReading(doc);
 
   // Cached per embedder organ (see organs/in/text.js — spaces are not interchangeable).
   const vecByOrgan = new Map();

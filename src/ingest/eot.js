@@ -18,6 +18,7 @@
 
 import { isOperator, mintHash, terrainOf, createLog, fromEnactor, fromPerceiver } from '../core/index.js';
 import { tok } from '../perceiver/parse/index.js';
+import { attachReading } from './read.js';
 
 // ── Site / decal derivation (Appendix B) ──────────────────────────────────────
 // The Act face is the operator (Mode × Domain). The SITE is WHERE it lands — the target's
@@ -298,12 +299,16 @@ export const eotDoc = (text, context = {}) => {
     }
   }
 
-  return Object.freeze({
+  const doc = {
     docId: log.docId, log, eot: true,
     sentences: lines,
     tokensBySentence: lines.map((l) => new Set(tok(l))),
     signs: anchors, diagnostics,
-  });
+  };
+  // An EoT document reads itself: the same lazy `doc.reading()` accessor, so a reloaded EoT
+  // spine also carries its prediction and surprise, not only its structure (ingest/read.js).
+  attachReading(doc);
+  return Object.freeze(doc);
 };
 
 // parse the !rec remap body (§5.5): set form `{a,b} => {c,d}` or map form `=> {k:[...]}`.
