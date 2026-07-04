@@ -32,6 +32,8 @@ import { makeSpine, sectionOf, renderOrder, withState, insert as spineInsert, sp
 import { initCarry, updateCarry, capCarry, replanCarry, threadsDue } from './carry.js';
 import { runGates } from './gates.js';
 import { termsOf, termSimilarity, contradicts, repeats, claimSimilarity } from './terms.js';
+import { propositionOf, numbersIn } from './proposition.js';
+import { renderChart, renderPullquote, renderDivider, validateSurface } from './renderers.js';
 import { projectEssay } from './project.js';
 import { reconcile } from './reconcile.js';
 
@@ -96,10 +98,15 @@ export const runEssay = async ({
     return id;
   };
 
-  // Re-illumination material for accepted sections (rebuilt on resume).
+  // Re-illumination material for accepted sections (rebuilt on resume), and
+  // the LEFT NEIGHBOR the next seam renders from (last accepted, by time).
   const acceptedMaterial = new Map();
+  let prevAccepted = null;
   if (prior) for (const s of prior.sections) {
-    if (s.state === 'accepted') acceptedMaterial.set(s.id, { id: s.id, commitments: s.commitments, prose: s.prose });
+    if (s.state !== 'accepted') continue;
+    const mat = { id: s.id, intent: s.intent, terminalClaim: s.terminalClaim, commitments: s.commitments, prose: s.prose };
+    acceptedMaterial.set(s.id, mat);
+    if (!prevAccepted || (s.acceptedAt ?? 0) > (prevAccepted.acceptedAt ?? 0)) prevAccepted = { ...mat, acceptedAt: s.acceptedAt };
   }
   const failed = new Set((prior?.findings || []).filter((f) => f.kind === 'gate-failed').map((f) => f.sectionId));
 
@@ -207,7 +214,7 @@ export const runEssay = async ({
     // Commitments become events only now — after divergence and revision have
     // settled which claims are THIS section's.
     for (const c of pass.survivors) {
-      emit(claimBound({ sectionId: section.id, claimId: c.claimId, claim: c.claim, spanRefs: c.spanRefs, t: t++ }));
+      emit(claimBound({ sectionId: section.id, claimId: c.claimId, claim: c.claim, prop: c.prop, spanRefs: c.spanRefs, t: t++ }));
     }
 
     // Threads: pay, defer (with a new due point — never dropped), open.
@@ -221,18 +228,27 @@ export const runEssay = async ({
       emit(threadOpened({ threadId: th.id, text: th.text, openedAt: th.openedAt, dueBy: th.dueBy, t: t++ }));
     }
 
-    // render — the ONE prose pass, from the surviving commitments, at
-    // paragraph grain; then the claim-grain verify strikes what it smuggled.
+    // render — the ONE pass in the slot's OWN modality, from the surviving
+    // commitments; the claim-grain verify strikes what a text render smuggled,
+    // and a non-text surface is a deterministic projection of the same
+    // payloads, checked by the cross-modal validator.
     const rendered = await render({ section, pass, secSpans, model, doc, carry, knobs, signal, emit, tick: () => t++ });
+
+    // The seam INTO this section — a form-owned transition slot, rendered
+    // from both neighbors (the productive half of the handoff gate).
+    const seam = await renderSeam({ prev: prevAccepted, section, survivors: pass.survivors, carry, model, knobs, signal, emit, tick: () => t++ });
 
     // accept → update the carry → flush at the doorway (checkpoint).
     emit(sectionAccepted({
       sectionId: section.id, terminalClaim: pass.terminalClaim, prose: rendered.prose,
       sentences: rendered.sentences, dropped: rendered.dropped,
+      modality: section.modality, surface: rendered.surface ?? null, seam,
       model: model?.name ?? (model ? 'model' : null), prompt: rendered.prompt, raw: rendered.raw, t: t++,
     }));
     spine = withState(spine, section.id, 'accepted');
-    acceptedMaterial.set(section.id, { id: section.id, commitments: pass.survivors, prose: rendered.prose });
+    const mat = { id: section.id, intent: section.intent, terminalClaim: pass.terminalClaim, commitments: pass.survivors, prose: rendered.prose };
+    acceptedMaterial.set(section.id, mat);
+    prevAccepted = mat;
 
     carry = capCarry(updateCarry(carry, {
       terminalClaim: pass.terminalClaim,
@@ -389,7 +405,11 @@ const explorePass = async ({ section, spine, carry, deps, secSpans, bindPool, ex
       status.set(claimId, null);
       continue;
     }
-    const commitment = { claimId, claim, spanRefs, sectionId: section.id };
+    // The payload drops below language here: the claim string is the text
+    // projection of a typed proposition, and every other modality projects
+    // the same payload (proposition.js). The lexical fallback reading is
+    // deterministic; an injected classifier can replace it wholesale.
+    const commitment = { claimId, claim, prop: propositionOf(claim), spanRefs, sectionId: section.id };
     // A bound claim that contradicts the THESIS is un-vetoable — it is the
     // replan trigger, not a candidate to strike.
     if (contradicts(claim, spine.thesis)) {
@@ -615,7 +635,22 @@ const render = async ({ section, pass, secSpans, model, doc, carry, knobs, signa
     }
     return { prose: pass.survivors.map((c) => c.claim).join(' '), sentences, dropped: 0 };
   };
-  if (!model) return { ...extractive(), prompt: null, raw: null };
+
+  // A non-text slot renders as a deterministic PROJECTION of the payloads —
+  // no model call at all: by render time the propositions are chosen and
+  // bound, so a chart is read off their quantities and a pull quote is a
+  // bound claim verbatim. The cross-modal validator holds even these (a
+  // regression tripwire — agreement is by construction, so a violation means
+  // a renderer bug, and the slot falls back to the text projection).
+  if (section.modality === 'chart' || section.modality === 'pullquote') {
+    const surface = section.modality === 'chart'
+      ? renderChart(pass.survivors)
+      : renderPullquote(pass.survivors[pass.survivors.length - 1]);
+    const check = validateSurface(surface, pass.survivors, { spans: secSpans });
+    return { ...extractive(), surface: check.ok ? surface : null, prompt: null, raw: null };
+  }
+
+  if (!model) return { ...extractive(), surface: null, prompt: null, raw: null };
 
   const refs = new Set(pass.survivors.flatMap((c) => c.spanRefs));
   const boundSpans = secSpans.filter((s) => refs.has(`s${s.idx}`));
@@ -632,7 +667,18 @@ const render = async ({ section, pass, secSpans, model, doc, carry, knobs, signa
     if (retry.boundFraction >= bv.boundFraction) bv = retry;
   }
 
-  // The claim-grain verify over the paragraph-grain render.
+  // The claim-grain verify over the paragraph-grain render. `allowed` is the
+  // quantity vocabulary the payloads and their bound spans license — a cited
+  // sentence whose number appears nowhere in them ALTERED a figure while
+  // paraphrasing, the quiet cross-modal hallucination a citation alone
+  // would let through.
+  const allowed = new Set();
+  for (const c of pass.survivors) {
+    for (const q of c.prop?.quantities || []) allowed.add(q.value);
+    if (c.prop?.time != null) allowed.add(+c.prop.time);
+  }
+  for (const s of boundSpans) for (const n of numbersIn(s.text)) allowed.add(n.value);
+
   const kept = [];
   let dropped = 0;
   for (const b of bv.bound) {
@@ -640,6 +686,11 @@ const render = async ({ section, pass, secSpans, model, doc, carry, knobs, signa
       || pass.survivors.find((c) => contradicts(b.claim, c.claim));
     if (clash) {
       emit(candidateVetoed({ sectionId: section.id, claimId: null, claim: b.claim, reason: 'render-contradicts-ledger', t: tick() }));
+      dropped += 1;
+      continue;
+    }
+    if (numbersIn(b.claim).some((n) => !allowed.has(n.value))) {
+      emit(candidateVetoed({ sectionId: section.id, claimId: null, claim: b.claim, reason: 'render-alters-quantity', t: tick() }));
       dropped += 1;
       continue;
     }
@@ -659,10 +710,63 @@ const render = async ({ section, pass, secSpans, model, doc, carry, knobs, signa
   // falls back to the commitments themselves: ungrounded fluency never ships
   // over bound claims.
   if (bv.refuse || !kept.some((k) => k.boundTo)) {
-    return { ...extractive(), dropped, prompt: out.messages, raw: out.rawOutput };
+    return { ...extractive(), surface: null, dropped, prompt: out.messages, raw: out.rawOutput };
   }
   const prose = kept.map((k) => (k.boundTo ? `${k.text} [${k.boundTo}]` : k.text)).join(' ');
-  return { prose, sentences: kept, dropped, prompt: out.messages, raw: out.rawOutput };
+  return { prose, surface: null, sentences: kept, dropped, prompt: out.messages, raw: out.rawOutput };
+};
+
+// ── the seam — a form-owned transition slot, rendered from BOTH neighbors ───
+// Two generators never smooth a seam by talking to each other; the FORM owns
+// the slot and chooses its modality, never the model. A declared seam is
+// honored; 'auto' phrases one connective sentence when a model is on hand and
+// sets an honest divider when not. A phrased seam is connective tissue by
+// construction: it may reuse only its neighbors' vocabulary and no numbers at
+// all — one alien content term of slack, then it falls back to the divider,
+// loudly. Sometimes the fluent move between two ideas IS a divider or the
+// left neighbor's terminal claim pulled out as a quote.
+const renderSeam = async ({ prev, section, survivors, carry, model, knobs, signal, emit, tick }) => {
+  if (!prev) return null; // the first section opens the essay — no seam into it
+  const declared = section.seam?.modality || 'auto';
+  const mode = declared === 'auto' ? (model ? 'text' : 'divider') : declared;
+  if (mode === 'divider') return renderDivider();
+  if (mode === 'pullquote') {
+    const src = (prev.commitments || []).find((c) => c.claim === prev.terminalClaim)
+      || (prev.commitments || [])[prev.commitments.length - 1];
+    return src ? renderPullquote(src) : renderDivider();
+  }
+  if (!model) return renderDivider();
+
+  const left = prev.terminalClaim || '';
+  const right = section.intent;
+  const messages = [
+    { role: 'system', content: 'You write one short connective sentence that carries a reader from one point to the next. Use only the ideas already on the page; add no new facts, names, or numbers.' },
+    { role: 'user', content: `The previous section ended on: ${left}\nThe next section takes up: ${right}\nWrite the one transition sentence.` },
+  ];
+  let raw = '';
+  try { raw = String((await model.phrase(messages, { maxTokens: 60, signal })) || ''); } catch { raw = ''; }
+  const sentence = (raw.trim().split(/(?<=[.!?])\s+/)[0] || '').trim();
+  const allowedTerms = new Set([
+    ...termsOf(left), ...termsOf(right),
+    ...(prev.commitments || []).flatMap((c) => termsOf(c.claim)),
+    ...survivors.flatMap((c) => termsOf(c.claim)),
+  ]);
+  const alien = termsOf(sentence).filter((w) => !allowedTerms.has(w));
+  if (!sentence || alien.length > 1 || numbersIn(sentence).length) {
+    if (sentence) emit(candidateVetoed({ sectionId: section.id, claimId: null, claim: sentence, reason: 'seam-unbound', t: tick() }));
+    return renderDivider();
+  }
+  // Vocabulary subset is blind to polarity — a seam built from its neighbors'
+  // own words can still DENY them. Connective tissue may not contradict what
+  // it connects, nor anything the ledger holds.
+  const denies = (prev.commitments || []).some((c) => contradicts(sentence, c.claim))
+    || survivors.some((c) => contradicts(sentence, c.claim))
+    || carry.ledger.some((l) => contradicts(sentence, l.claim));
+  if (denies) {
+    emit(candidateVetoed({ sectionId: section.id, claimId: null, claim: sentence, reason: 'seam-contradicts-ledger', t: tick() }));
+    return renderDivider();
+  }
+  return Object.freeze({ modality: 'text', text: sentence });
 };
 
 const rawSpine = (spine) => ({

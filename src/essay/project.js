@@ -46,6 +46,7 @@ const computeEssay = (log, at) => {
         id, intent: '', state: 'pending', order: sectionOrderSeen.length, dependsOn: [],
         deps: [], relit: [], spanIds: [], proposed: [], commitments: [], vetoed: [],
         prose: null, terminalClaim: null, acceptedAt: null, sentences: [], dropped: 0,
+        modality: 'text', surface: null, seam: null,
       });
       sectionOrderSeen.push(id);
     }
@@ -94,7 +95,7 @@ const computeEssay = (log, at) => {
       case EKIND.BIND: {
         const r = recOf(e.sectionId);
         if (r.state === 'exploring') r.state = 'consolidating';
-        r.commitments.push({ claimId: e.claimId, claim: e.claim, spanRefs: [...e.spanRefs], sectionId: e.sectionId });
+        r.commitments.push({ claimId: e.claimId, claim: e.claim, prop: e.prop ?? null, spanRefs: [...e.spanRefs], sectionId: e.sectionId });
         break;
       }
       case EKIND.VETO: {
@@ -136,6 +137,9 @@ const computeEssay = (log, at) => {
         r.acceptedAt = e.t;
         r.sentences = [...(e.sentences || [])];
         r.dropped = e.dropped | 0;
+        r.modality = e.modality || 'text';
+        r.surface = e.surface ?? null;
+        r.seam = e.seam ?? null;
         if (active === e.sectionId) active = null; // the doorway flush
         if (spine) spine = withState(spine, e.sectionId, 'accepted');
         break;
@@ -160,7 +164,17 @@ const computeEssay = (log, at) => {
   const secList = order.map((id) => sections.get(id)).filter(Boolean);
 
   const accepted = secList.filter((s) => s.state === 'accepted');
-  const assembled = accepted.map((s) => s.prose || '').filter(Boolean).join('\n\n');
+  // The TEXT PROJECTION of the whole essay: each section's prose behind its
+  // seam's text form (a phrased transition leads in; a pull-quote seam reads
+  // as a quote line; a divider is just the paragraph break it always was).
+  // Non-text section surfaces ride on the section records for a richer
+  // renderer to lay out — the assembled string is one projection, not the essay.
+  const assembled = accepted.map((s) => {
+    const lead = s.seam?.modality === 'text' ? `${s.seam.text} `
+      : s.seam?.modality === 'pullquote' ? `> ${s.seam.text}\n\n`
+      : '';
+    return lead + (s.prose || '');
+  }).filter(Boolean).join('\n\n');
   const ledger = accepted.flatMap((s) => s.commitments);
   const openThreads = [...threads.values()].filter((th) => !th.paidBy);
 

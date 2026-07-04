@@ -10,6 +10,7 @@ import {
   initCarry, updateCarry, capCarry,
   claimBound, candidateVetoed, threadDeferred, reconcileFinding, spineRevised,
   projectEssay, liveView, describeEvent, reconcile, runEssay, EKIND,
+  propositionOf, validateSurface,
 } from '../src/essay/index.js';
 
 // ── fixtures ─────────────────────────────────────────────────────────────────
@@ -422,6 +423,139 @@ test('asymmetric granularity: a rendered sentence contradicting the ledger is st
   const struck = log.find((e) => e.kind === EKIND.VETO && e.reason === 'render-contradicts-ledger');
   assert.ok(struck, 'the contradicting sentence should be struck after render');
   assert.ok(!essay.includes('never records'), 'a struck contradiction never ships');
+});
+
+// ── omnimodal: the commitment below language ─────────────────────────────────
+
+test('propositionOf: the payload is typed — quantities, time, entities, relation', () => {
+  const p = propositionOf('Felony camping arrests rose to 148 during the 2021 heat event.');
+  assert.equal(p.relation, 'change');
+  assert.deepEqual(p.quantities.map((q) => q.value), [148]);
+  assert.equal(p.time, '2021');
+  assert.ok(Object.isFrozen(p));
+  // A citation is markup, not content — its digits are never a quantity.
+  const q = propositionOf('The tower was rebuilt. [s3]');
+  assert.deepEqual([...q.quantities], []);
+});
+
+test('a chart slot renders as a projection of the same payloads — agreement by construction', async () => {
+  const spans = [
+    { idx: 0, text: 'Felony camping arrests rose to 148 during the 2021 heat event.' },
+    { idx: 1, text: 'Felony camping arrests fell to 61 after the shelters opened.' },
+  ];
+  const plan = {
+    thesis: 'felony camping arrests across the heat event',
+    sections: [{ id: 'sec:fig', intent: 'felony camping arrests during and after the heat event', modality: 'chart' }],
+  };
+  const { log, report } = await runEssay({ spine: plan, spans });
+  const accept = log.find((e) => e.kind === EKIND.ACCEPT);
+  assert.equal(accept.modality, 'chart');
+  assert.deepEqual(accept.surface.data.map((d) => d.value), [148, 61]); // the bars ARE the payload quantities
+  assert.ok(accept.prose.includes('148'));                              // the caption is the text projection
+  // The validator is a predicate, and it holds by construction here.
+  const sec = report.sections.find((s) => s.id === 'sec:fig');
+  assert.equal(validateSurface(sec.surface, sec.commitments).ok, true);
+});
+
+test('the cross-modal validator refuses a doctored surface', async () => {
+  const spans = [{ idx: 0, text: 'Felony camping arrests rose to 148 during the 2021 heat event.' }];
+  const { report } = await runEssay({
+    spine: { thesis: 'felony camping arrests', sections: [{ id: 'a', intent: 'felony camping arrests in the heat event' }] },
+    spans,
+  });
+  const commitments = report.sections[0].commitments;
+  const doctored = { modality: 'chart', kind: 'bar', data: [{ label: 'felony camping arrests', value: 999 }], caption: '' };
+  const check = validateSurface(doctored, commitments);
+  assert.equal(check.ok, false);
+  assert.match(check.violations[0], /999/);
+  // And a text surface that alters the figure is refused the same way.
+  assert.equal(validateSurface({ modality: 'text', text: 'Arrests rose to 150.' }, commitments).ok, false);
+});
+
+test('a cited sentence that alters a quantity is struck after render', async () => {
+  const spans = [
+    { idx: 0, text: 'Felony camping arrests rose to 148 during the 2021 heat event.' },
+    { idx: 1, text: 'The heat event closed the felony camping shelters for a week.' },
+  ];
+  const model = {
+    name: 'scripted',
+    phrase: async (messages) => {
+      const user = messages.find((m) => m.role === 'user')?.content || '';
+      if (!user.includes('What I found reading it:')) return '';
+      // The talker paraphrases — and quietly changes 148 to 150.
+      return 'Felony camping arrests rose to 150 during the 2021 heat event. The heat event closed the felony camping shelters for a week.';
+    },
+  };
+  const { log, essay } = await runEssay({
+    spine: { thesis: 'felony camping arrests', sections: [{ id: 'a', intent: 'felony camping arrests in the heat event' }] },
+    spans, model,
+  });
+  const struck = log.find((e) => e.kind === EKIND.VETO && e.reason === 'render-alters-quantity');
+  assert.ok(struck, 'the altered figure should be struck');
+  assert.ok(!essay.includes('150'), 'the altered figure never ships');
+});
+
+test('every render call conditions on the commitment graph, never on a sibling surface', async () => {
+  const { log } = await run({ model: excerptEcho() });
+  const accepts = log.filter((e) => e.kind === EKIND.ACCEPT);
+  assert.ok(accepts.length >= 2);
+  // The fan-out invariant: the RENDERED surface (the cited form) never
+  // crosses into a sibling's prompt — only commitments cross (the carry's
+  // terminal claim may legitimately appear, as bare claim text).
+  const firstSurface = accepts[0].prose; // carries its [sN] citations
+  assert.match(firstSurface, /\[s\d+\]/);
+  const laterPrompts = accepts.slice(1).map((a) => JSON.stringify(a.prompt));
+  for (const p of laterPrompts) assert.ok(!p.includes(firstSurface), 'a sibling surface leaked into a render prompt');
+});
+
+// ── seams: the form owns the transition ─────────────────────────────────────
+
+test('seams: divider without a model; a declared pullquote seam quotes the left terminal claim', async () => {
+  const plan = {
+    ...PLAN,
+    sections: [
+      PLAN.sections[0],
+      PLAN.sections[1],
+      { ...PLAN.sections[2], seam: { modality: 'pullquote' } },
+    ],
+  };
+  const { log } = await run({ spine: plan });
+  const accepts = log.filter((e) => e.kind === EKIND.ACCEPT);
+  assert.equal(accepts[0].seam, null);                    // the first section opens the essay
+  assert.equal(accepts[1].seam.modality, 'divider');      // auto, no model → the honest divider
+  assert.equal(accepts[2].seam.modality, 'pullquote');
+  assert.equal(accepts[2].seam.text, accepts[1].terminalClaim); // the left neighbor, verbatim
+});
+
+test('seams: a phrased transition reuses only its neighbors; a smuggling seam falls back to the divider', async () => {
+  const seamText = 'From the lighthouse built on the granite headland to keeper Alvarez and the logbook.';
+  const smuggle = 'Meanwhile pirates raided the merchant convoys.';
+  let call = 0;
+  const model = {
+    name: 'scripted',
+    phrase: async (messages) => {
+      const user = messages.find((m) => m.role === 'user')?.content || '';
+      if (user.includes('Write the one transition sentence')) {
+        call += 1;
+        return call === 1 ? seamText : smuggle;
+      }
+      // Section renders: echo the excerpts (the faithful talker).
+      const at = user.indexOf('What I found reading it:');
+      const lines = [];
+      for (const l of user.slice(at).split('\n').slice(1)) { if (!l.trim()) break; lines.push(l.trim()); }
+      return lines.slice(0, 2).join(' ');
+    },
+  };
+  const { log, report } = await run({ model });
+  const accepts = log.filter((e) => e.kind === EKIND.ACCEPT);
+  assert.equal(accepts[1].seam.modality, 'text');
+  assert.equal(accepts[1].seam.text, seamText);
+  assert.ok(report.assembled.includes(seamText), 'the phrased seam leads its section in');
+  // The second seam smuggled content — struck, and the divider stands in.
+  const veto = log.find((e) => e.kind === EKIND.VETO && e.reason === 'seam-unbound');
+  assert.ok(veto);
+  assert.equal(accepts[2].seam.modality, 'divider');
+  assert.ok(!report.assembled.includes('pirates'));
 });
 
 // ── reconciliation ───────────────────────────────────────────────────────────

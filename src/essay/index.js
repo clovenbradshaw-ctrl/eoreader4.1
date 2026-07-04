@@ -22,9 +22,13 @@ export {
 } from './events.js';
 
 export {
-  SECTION_STATES, makeSection, makeSpine, sectionOf, renderOrder, withState,
+  SECTION_STATES, SECTION_MODALITIES, SEAM_MODALITIES,
+  makeSection, makeSpine, sectionOf, renderOrder, withState,
   reorder, insert, split, merge, replan,
 } from './spine.js';
+
+export { makeProposition, propositionOf, numbersIn, surfaceAgrees } from './proposition.js';
+export { renderChart, renderPullquote, renderDivider, validateSurface } from './renderers.js';
 
 export { initCarry, updateCarry, capCarry, replanCarry, threadsDue } from './carry.js';
 export { GATE_IDS, GATE_DEFAULTS, runGates } from './gates.js';

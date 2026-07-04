@@ -22,8 +22,12 @@ const freezeThread = (th) => freeze({
   id: th.id, text: String(th.text ?? ''), openedAt: th.openedAt, dueBy: th.dueBy ?? null,
 });
 
+// `prop` — the pre-linguistic payload (proposition.js) — rides the carry in
+// full: it IS the contradiction-relevant core, and it is what a non-text
+// renderer folds. Compression drops the spanRefs texture, never the payload.
 const freezeCommitment = (c) => freeze({
-  claim: String(c.claim ?? ''), spanRefs: list(c.spanRefs), sectionId: c.sectionId,
+  claim: String(c.claim ?? ''), prop: c.prop ?? null,
+  spanRefs: list(c.spanRefs), sectionId: c.sectionId,
   ...(c.compressed ? { compressed: true } : {}),
 });
 
@@ -62,7 +66,7 @@ export const capCarry = (carry, { maxLedger = 64 } = {}) => {
   const cut = carry.ledger.length - maxLedger;
   const ledger = carry.ledger.map((c, i) => (
     i < cut && !c.compressed
-      ? freezeCommitment({ claim: c.claim, spanRefs: [], sectionId: c.sectionId, compressed: true })
+      ? freezeCommitment({ claim: c.claim, prop: c.prop, spanRefs: [], sectionId: c.sectionId, compressed: true })
       : c
   ));
   return freeze({ ...carry, ledger: freeze(ledger) });

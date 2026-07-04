@@ -86,11 +86,15 @@ export const claimProposed = ({ sectionId, claimId, claim, t = 0 }) => {
 };
 
 // A claim bound to spans — a Commitment, the atomic unit of the essay.
-// No unbound assertion survives veto, so spanRefs is required non-empty.
-export const claimBound = ({ sectionId, claimId, claim, spanRefs = [], t = 0 }) => {
+// `prop` is the PRE-LINGUISTIC payload (proposition.js): the claim string is
+// its text projection, one surface among many — a chart datum is another
+// projection of the same payload, which is why the modalities cannot
+// disagree. No unbound assertion survives veto, so spanRefs is required
+// non-empty.
+export const claimBound = ({ sectionId, claimId, claim, prop = null, spanRefs = [], t = 0 }) => {
   if (!sectionId || !claimId) throw new TypeError('claimBound: sectionId and claimId required');
   if (!spanRefs || !spanRefs.length) throw new TypeError('claimBound: spanRefs required (every claim binds to at least one span)');
-  return freeze({ kind: EKIND.BIND, sectionId, claimId, claim: String(claim ?? ''), spanRefs: list(spanRefs), t });
+  return freeze({ kind: EKIND.BIND, sectionId, claimId, claim: String(claim ?? ''), prop: prop ?? null, spanRefs: list(spanRefs), t });
 };
 
 export const candidateVetoed = ({ sectionId, claimId = null, claim, reason, t = 0 }) => {
@@ -136,7 +140,13 @@ export const spineRevised = ({ op, sectionIds = [], detail = null, t = 0 }) => {
 // glue: bool } per kept sentence, `dropped` counting the smuggled assertions
 // struck after render. `prompt`/`raw` embed the one generative call's audit,
 // so the accept event states its own generative honesty from the log alone.
-export const sectionAccepted = ({ sectionId, terminalClaim, prose = '', sentences = [], dropped = 0, model = null, prompt = null, raw = null, t = 0 }) => {
+// `modality` names which projection this section rendered (a slot property of
+// the schema, never the model's choice); `surface` carries the non-text
+// projection when there is one (the chart object, the pull quote) while
+// `prose` stays the text projection so the assembled essay always reads.
+// `seam` is the form-owned transition INTO this section — rendered from both
+// neighbors, in whatever modality the form chose (text · divider · pullquote).
+export const sectionAccepted = ({ sectionId, terminalClaim, prose = '', sentences = [], dropped = 0, modality = 'text', surface = null, seam = null, model = null, prompt = null, raw = null, t = 0 }) => {
   if (!sectionId) throw new TypeError('sectionAccepted: sectionId required');
   const ss = (sentences || []).map((s) => freeze({
     text: String(s.text ?? ''), boundTo: s.boundTo ?? null, glue: !!s.glue,
@@ -144,6 +154,7 @@ export const sectionAccepted = ({ sectionId, terminalClaim, prose = '', sentence
   return freeze({
     kind: EKIND.ACCEPT, sectionId, terminalClaim: String(terminalClaim ?? ''),
     prose: String(prose ?? ''), sentences: Object.freeze(ss), dropped: dropped | 0,
+    modality: String(modality || 'text'), surface: surface ?? null, seam: seam ?? null,
     model, prompt: prompt ?? null, raw: raw ?? null, t,
   });
 };
