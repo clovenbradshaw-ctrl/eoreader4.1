@@ -5,6 +5,7 @@
 import { parseText }    from '../../perceiver/parse/index.js';
 import { projectGraph } from '../../core/index.js';
 import { areDisjoint }  from '../../core/index.js';
+import { attachReading } from '../../ingest/index.js';
 
 // §4 — the coordinated-subject reading rides behind RULES_REV (the same flag the gated
 // talker reads, organs/out/speech/index.js). Read locally so the input organ stays
@@ -62,6 +63,13 @@ export const ingestText = async (file, opts = {}) => {
     }
     return vecByOrgan.get(key);
   };
+
+  // The predictive read the moment of ingest OWNS: a lazy, memoised `doc.reading()` that
+  // renders this document into layered EoT — the structure it extracted beside its
+  // prediction and surprise at every turning point. Nothing runs until a caller asks, so
+  // the parse stays byte-identical; but from here the reading is a property of the doc,
+  // not something a later consumer has to remember to compute (ingest/read.js).
+  attachReading(doc);
 
   return doc;
 };
