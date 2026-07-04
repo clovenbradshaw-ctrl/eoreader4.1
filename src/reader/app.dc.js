@@ -1536,7 +1536,9 @@ class Component extends DCLogic {
   // importance, coverage, and the decision to ask are all mechanical and logged.
   _drModelOf(model){
     if(!model||typeof model.phrase!=='function')return null;
-    return {name:this.state.backend||'model',phrase:(messages)=>model.phrase(messages)};
+    // Forward opts (the driver hands per-section {onToken} when the host streams);
+    // absent opts → the backend's own defaults, exactly as before.
+    return {name:this.state.backend||'model',phrase:(messages,opts)=>model.phrase(messages,opts)};
   }
   // Reconstruct the pinned corpus from the reading: each in-scope source's parsed
   // sentences, joined. Offline-honest — only what was actually read and folded.
@@ -1627,13 +1629,45 @@ class Component extends DCLogic {
       }
       return out;
     };
+    // LIVE WRITE-UP: stream each section into the bubble as the model phrases it,
+    // instead of hiding the whole grounded projection behind the spinner until it
+    // lands. The session assigns this run's rootId as `root` (first run) or `rN`;
+    // compute the same id up front so the partial render can scope to this run's
+    // sections. Tokens accrue per frame; a `phrase` event means that section is
+    // done (its bound sentences now live in the projection), so its live buffer is
+    // dropped and the projected version takes over. finish() sets the final cited
+    // text, so a late paint must not clobber it (liveDone).
+    const myRootId=sess.runs===0?'root':('r'+sess.runs);
+    const liveText=new Map();
+    let rafPend=0,liveDone=false;
+    const stripLead=(x)=>String(x||'').replace(/^\s*here\s+(?:is|are)\b[^:]{0,200}\bsummar[^:]{0,200}:\s*/i,'').replace(/^\s*(?:in\s+)?summary\s*:\s*/i,'');
+    const paintPartial=()=>{rafPend=0;if(liveDone)return;
+      let rep;try{rep=sess.report();}catch(e){return;}
+      const secs=rep.sections.filter(sx=>sx.frameId===myRootId||sx.frameId.indexOf(myRootId+'.')===0);
+      const parts=[];
+      for(const sec of secs){
+        const done=sec.phrase?sec.phrase.sentences.map(s=>s.text).join(' '):'';
+        const body=done||stripLead(liveText.get(sec.frameId)||'');
+        if(!body.trim())continue;
+        if(sec.frameId!==myRootId)parts.push('**'+sec.question+'**');
+        parts.push(this.norm(body));
+      }
+      const text=parts.join('\n\n');if(!text.trim())return;
+      this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+        if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text,think:this._composeTick(text)};
+        return {...c,messages:m};})}),()=>this._scrollChat());};
+    const schedulePaint=()=>{if(rafPend||liveDone)return;rafPend=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paintPartial):setTimeout(paintPartial,48);};
     try{
       const {report,rootId}=await sess.research(subject,{
         sources,model,size,strategy,
         search:useWeb?drSearch:null,
         onGather:(query,have,want)=>this._beat(id,'search','Gathering “'+query+'” — '+have+'/'+want+' sources'),
-        onEvent:(ev)=>{if(ev&&(ev.kind==='rec'||ev.kind==='void'||ev.kind==='pin'))this._beat(id,ev.kind==='pin'?'read':'lead',lib.describeEvent(ev));},
+        onSectionToken:(frameId,piece)=>{if(this._stopGen||liveDone)return;liveText.set(frameId,(liveText.get(frameId)||'')+piece);schedulePaint();},
+        onEvent:(ev)=>{if(!ev)return;
+          if(ev.kind==='phrase'){liveText.delete(ev.frameId);schedulePaint();}
+          else if(ev.kind==='rec'||ev.kind==='void'||ev.kind==='pin')this._beat(id,ev.kind==='pin'?'read':'lead',lib.describeEvent(ev));},
       });
+      liveDone=true;if(rafPend&&typeof cancelAnimationFrame!=='undefined')cancelAnimationFrame(rafPend);
       const text=lib.formatChatReply(report,rootId);
       const secs=report.sections.filter(sx=>sx.frameId===rootId||sx.frameId.indexOf(rootId+'.')===0);
       const props=secs.reduce((a,sx)=>a.concat(sx.propositions),[]);
@@ -1644,7 +1678,7 @@ class Component extends DCLogic {
       finish({text:text+'\n\n_The full grounded report — every span, pin, and the audit trail — is on the Surface (⌕)._',
         passages,sources:[...new Set(props.map(p=>{const pin=report.pinById[p.pinId];return pin&&pin.url;}).filter(Boolean))]});
       this.setState({drHasLog:true});
-    }catch(e){finish({text:'Deep research failed: '+((e&&e.message)||e)});}
+    }catch(e){liveDone=true;finish({text:'Deep research failed: '+((e&&e.message)||e)});}
   }
   // THE SURFACE — the live report panel: a claude-artifact-like overlay that is
   // never dead. It mounts src/research/surface.js on the SAME session log the

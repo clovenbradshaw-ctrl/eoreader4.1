@@ -135,7 +135,11 @@ const OP_FACETS = {
 const HOLON_FACETS = [
   (s) => `origins and history of ${s}`,
   (s) => `types and forms of ${s}`,
-  (s) => `how ${s} works`,
+  // A NOUN-PHRASE heading (not "how ${s} works"): the subject's grammatical number
+  // is unknown here, so a finite verb would mis-agree on a plural subject ("how
+  // dolphins works"). The nominal form reads correctly for a singular or plural
+  // subject alike.
+  (s) => `the inner workings of ${s}`,
   (s) => `criticism and controversy around ${s}`,
   (s) => `impact and significance of ${s}`,
   (s) => `${s} compared with related subjects`,
@@ -236,6 +240,12 @@ export const runGroundedResearch = async (question, opts = {}) => {
     alpha = ANSWERABLE_ALPHA, addressOf = addressOfSentence,
     maxSpansPerSource = 6, maxPerSection = 12,
     onEvent = null,
+    // The per-section streaming seam: when the host wants to show a section's
+    // summary as the model writes it (not only when the whole run lands), it
+    // passes onSectionToken(frameId, piece) and each decoded delta of that
+    // section's ONE phrasing call is forwarded live. Absent → the phrase call is
+    // made exactly as before (no onToken), so every offline test is byte-identical.
+    onSectionToken = null,
     // The LIVE-surface seam: pass an existing log to APPEND this run to it — the
     // surface is a projection of the whole log, so further research via chat
     // keeps populating the same report (never a dead artifact). `rootId`
@@ -557,9 +567,19 @@ export const runGroundedResearch = async (question, opts = {}) => {
         { role: 'user', content: `Question: ${fq}\n\nExcerpts:\n${frameProps.map((p, i) => `${i + 1}. ${p.sentence}`).join('\n')}` },
       ];
       let out = '';
-      try { out = String(await model.phrase(messages) || ''); } catch { out = ''; }
+      // Stream this section's deltas to the host when it asked (onSectionToken);
+      // otherwise call phrase() with no opts, exactly as before.
+      const phraseOpts = onSectionToken
+        ? { onToken: (piece) => { try { onSectionToken(frame.id, String(piece || '')); } catch { /* a view error never stops the run */ } } }
+        : null;
+      try { out = String(await (phraseOpts ? model.phrase(messages, phraseOpts) : model.phrase(messages)) || ''); } catch { out = ''; }
       if (out.trim()) {
-        const sentences = splitSentences(out).map((sTxt) => {
+        // Drop the instruction-echo the small model sometimes prepends ("Here is a
+        // summary … in plain prose, 2-5 sentences:") — it is the prompt bouncing
+        // back, not content, and would otherwise render as a glue sentence. The
+        // raw output is preserved verbatim in the event (audit); only the rendered
+        // sentences are cleaned.
+        const sentences = splitSentences(stripInstructionPreamble(out)).map((sTxt) => {
           const sTerms = researchTerms(sTxt);
           let best = null, bestShared = 0;
           for (const p of frameProps) {
@@ -583,6 +603,17 @@ export const runGroundedResearch = async (question, opts = {}) => {
 };
 
 const safeAsk = async (ask, ev) => { try { return await ask(ev); } catch { return null; } };
+// Strip a leading instruction-echo the small model prepends to its summary — the
+// system prompt bounced back ("Here is a summary of … in plain prose, 2-5
+// sentences:", a bare "Summary:"/"In summary:"). Only a LEADING framing clause up
+// to its first colon is removed; never strips to empty (a summary that legitimately
+// opens with such a clause and nothing after keeps its text).
+const stripInstructionPreamble = (text) => {
+  let t = String(text || '');
+  t = t.replace(/^\s*here\s+(?:is|are)\b[^:]{0,200}\bsummar[^:]{0,200}:\s*/i, '');
+  t = t.replace(/^\s*(?:in\s+)?summary\s*:\s*/i, '');
+  return t.trim() || String(text || '').trim();
+};
 // Split into sentences WITHOUT breaking inside a decimal ("9.5 m"), an
 // abbreviation ("e.g."), or an initial — the period between two digits (or the
 // dots in a short lower-case abbreviation) is not a sentence boundary. Guarding
