@@ -3,9 +3,10 @@ import assert from 'node:assert/strict';
 
 import {
   ROUTE_ALPHABET, ROUTE_EXEMPLARS, FORM_EXEMPLARS, KIND_EXEMPLARS, LENGTH_EXEMPLARS,
-  REGISTER_EXEMPLARS,
+  REGISTER_EXEMPLARS, CLARIFY_EXEMPLARS,
   buildBases, defaultBases, speechCurrents, relaxRoute, formKindOf, steerKindOf,
   lengthDemandOf, developDrive, registerDemandOf, creativeDrive,
+  clarifyDemandOf, clarifyDrive,
   metaRoute, createMetaRouter, discoursePrompt, leadsOf,
 } from '../src/turn/meta-route.js';
 import { routeStance, isExplicitCompose } from '../src/core/conversation-fold.js';
@@ -174,6 +175,55 @@ test('registerDemand rides out of metaRoute on any route', () => {
   assert.ok(m.creativeDrive > 0, 'the graded creative current is exposed regardless of the winner');
   const factual = metaRoute('A factual question about the document; report what the reading holds, checked against the sources.', groundFold);
   assert.equal(factual.registerDemand, 'grounded');
+});
+
+// ---------------------------------------------------------------------------
+// The CLARIFY grain — the USER-gap, orthogonal to the route. The complement of
+// `research` ("the world has to answer"): the ask is underspecified in a way only the
+// user can resolve, so the turn should ASK a clarifying question instead of guessing.
+// Closes the loop the metacognition opens when it says it would need to learn from the
+// user but nothing ever asked.
+
+test('every clarify direction gets a finite crosstalk null', () => {
+  const bases = defaultBases();
+  for (const k of Object.keys(CLARIFY_EXEMPLARS)) {
+    assert.ok(bases.clarify && bases.clarify.get(k), k + ' clarify basis exists');
+    assert.ok(Number.isFinite(bases.clarify.get(k).null), k + ' clarify null is finite');
+  }
+});
+
+test('clarify self-recovery: ambiguous vs actionable speech reads the demand it names', () => {
+  const ambiguous  = 'The request is ambiguous — only the user can say which of the two they mean; I would have to ask them to clarify what they intend.';
+  const actionable = 'The request is clear and specific; I already know what they want and can act on it as it stands.';
+  assert.equal(clarifyDemandOf(ambiguous), 'clarify');
+  assert.equal(clarifyDemandOf(actionable), 'actionable');
+});
+
+test('clarify abstains on clarify-neutral speech (no ambiguity named)', () => {
+  assert.equal(clarifyDemandOf('The user is asking a factual question about the loaded document.'), '');
+  assert.equal(clarifyDemandOf(''), '');
+  assert.equal(clarifyDemandOf(null), '');
+});
+
+test('clarifyDemandOf tolerates bases with no clarify group (older buildBases) → ""', () => {
+  const legacy = { route: new Map(), form: new Map(), kind: new Map(), length: new Map(), register: new Map() }; // no `clarify`
+  assert.equal(clarifyDemandOf('which one do they mean — ambiguous, I would have to ask them', legacy), '');
+  assert.equal(clarifyDrive('which one do they mean — ambiguous, I would have to ask them', legacy), 0);
+});
+
+test('clarifyDrive is a graded current, exposed on any route', () => {
+  // A GROUND turn (a document question) that is ALSO underspecified: the route settles ground,
+  // and the clarify demand rides out regardless — the ask-the-user fork reads it.
+  const speech = 'A question about the loaded document, but it is ambiguous which chapter they mean; only the user can say, so I would have to ask them to clarify.';
+  const m = metaRoute(speech, groundFold);
+  assert.equal(m.route, 'ground');
+  assert.equal(m.clarifyDemand, 'clarify', 'the clarify demand rides out on a ground route');
+  assert.ok(m.clarifyDrive > 0, 'the graded clarify current is exposed regardless of the winner');
+  // A clear ground turn carries no clarify demand — a definite ask is never questioned back.
+  const clear = metaRoute('A factual question about the document; the intent is plain and I can answer it directly.', groundFold);
+  assert.equal(clear.route, 'ground');
+  assert.notEqual(clear.clarifyDemand, 'clarify');
+  assert.equal(clear.clarifyDrive, 0);
 });
 
 test('developDrive is a graded current, exposed on any route', () => {

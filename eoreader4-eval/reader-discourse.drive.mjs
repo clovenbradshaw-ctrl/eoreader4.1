@@ -57,11 +57,24 @@ const main = async () => {
     await page.evaluate(() => {
       const app = window.__eoApp;
       app.__walks = 0;
-      let turn = 0;
-      const READS = [
-        'The user wants a factual answer from the document they loaded; the reading should hold it. Nothing needs to be found out.',
-        'They are asking about recent news the reading cannot cover — this has to be found out on the web, a search for current information.',
-      ];
+      // The read the fake metacognition returns is keyed off the user message embedded in the
+      // discourse prompt (robust to turn order): a plain doc question, a world-gap (research), a
+      // live fact, and an AMBIGUOUS ask whose read says only the user can close the gap (clarify).
+      const READS = {
+        ground:    'The user wants a factual answer from the document they loaded; the reading should hold it. Nothing needs to be found out.',
+        worldgap:  'They are asking about recent news the reading cannot cover — this has to be found out on the web, a search for current information.',
+        weather:   'They are asking about the weather right now, a live fact about the world that has to be found out on the web.',
+        ambiguous: 'The request is ambiguous — they ask which book to read but never say which books or on what criteria; only the user can say, so I would have to ask them to clarify what they mean.',
+      };
+      // Key off the CURRENT user message only (the discourse prompt also embeds the last
+      // exchange, so matching the whole prompt would bleed a prior turn's words into this read).
+      const readFor = (p) => {
+        const said = (String(p).match(/The user just said: "([^"]*)"/) || [, ''])[1];
+        return /election last week/i.test(said) ? READS.worldgap
+          : /weather/i.test(said) ? READS.weather
+          : /which book/i.test(said) ? READS.ambiguous
+          : READS.ground;
+      };
       app.ensureChatModel = async () => ({ id: 'mock' });
       // The mount-time prewarm (componentDidMount: ensureChatModel().catch()) was already past its
       // `if(!this._ME)` guard when this mock lands; when its module import resolves it would
@@ -77,7 +90,9 @@ const main = async () => {
         buildChatMessages: ({ question }) => [{ role: 'user', content: question }],
         streamPhrase: async (model, messages, opts) => {
           const p = (messages && messages[messages.length - 1] && messages[messages.length - 1].content) || '';
-          if (/watching one conversation/i.test(p)) return READS[Math.min(turn++, READS.length - 1)];
+          if (/watching one conversation/i.test(p)) return readFor(p);
+          // The clarify prompt asks for ONE clarifying question — answer it as one.
+          if (/clarifying question/i.test(p)) { const qq = 'Which book do you mean — is there one in particular you have in mind?'; if (opts && opts.onToken) opts.onToken(qq); return qq; }
           if (opts && opts.onToken) opts.onToken('The answer, from the reading.');
           return 'The answer, from the reading.';
         },
@@ -155,6 +170,27 @@ const main = async () => {
     check(/It is now /.test(t3.readPrompt) && new RegExp(String(new Date().getFullYear())).test(t3.readPrompt), 'turn 3: the discourse read is anchored to the current date/time');
     check(t3.prose.data === true && t3.prose.junk === false && t3.prose.stub === false, 'measurement lines survive _proseOk; junk and stubs still die', JSON.stringify(t3.prose));
 
+    // ── Turn 4: an AMBIGUOUS ask. The read says only the user can close the gap (clarifyDrive,
+    // no researchDrive) → the turn ASKS a clarifying question and ends, instead of guessing an
+    // answer or spending a web walk. This is the loop the metacognition opened but never closed.
+    await page.evaluate(() => { const a = window.__eoApp; a.setState({ chatInput: 'which book should I read?' }); return a.sendChat(); });
+    await page.waitForFunction(() => {
+      const c = window.__eoApp.activeChatObj();
+      const m = c && c.messages[c.messages.length - 1];
+      return m && m.role === 'asst' && !m.pending;
+    }, { timeout: 20000 });
+    const t4 = await page.evaluate(() => {
+      const c = window.__eoApp.activeChatObj();
+      const m = c.messages[c.messages.length - 1];
+      return { text: m.text, groundKind: m.groundKind, stance: m.stance || null,
+        audit: (m.audit || []).map(a => a.stage), walks: window.__eoApp.__walks,
+        readErr: window.__eoApp._readErr || '' };
+    });
+    check(t4.walks === 2, 'turn 4: the ambiguous ask did NOT spend a web walk', 'walks=' + t4.walks + (t4.readErr ? ' readErr=' + t4.readErr.slice(0, 200) : ''));
+    check(t4.groundKind === 'clarify', 'turn 4: the turn is a clarifying question, not an answer', 'groundKind=' + t4.groundKind);
+    check(/\?\s*$/.test((t4.text || '').trim()) && /book/i.test(t4.text || ''), 'turn 4: the assistant actually asked the user a question', JSON.stringify(t4.text));
+    check(JSON.stringify(t4.audit) === JSON.stringify(['discourse-read', 'clarify-prompt', 'clarify-raw']), 'turn 4: audit carries discourse-read → clarify-prompt → clarify-raw (no answer)', t4.audit.join(','));
+    check(t4.stance === null, 'turn 4: the clarify bubble carries no stance — the fold treats it transparently', 'stance=' + t4.stance);
 
     // ── Export: the chat audit JSON carries questions, verbatim prompts, raw outputs, steps.
     const exp = await page.evaluate(() => {
@@ -167,7 +203,7 @@ const main = async () => {
       document.createElement = orig;
       return fetch(captured.href).then(r => r.json()).then(j => ({ name: captured.name, turns: j.turns.length, stages: j.turns.flatMap(t => t.audit.map(a => a.stage)), hasPrompt: j.turns.some(t => t.audit.some(a => /steering only/i.test(a.prompt || ''))), hasRaw: j.turns.some(t => t.audit.some(a => (a.output || '').includes('The answer, from the reading'))) }));
     });
-    check(exp.turns === 3 && exp.name.startsWith('eo-audit-'), 'export: one JSON, all three turns', exp.name);
+    check(exp.turns === 4 && exp.name.startsWith('eo-audit-'), 'export: one JSON, all four turns', exp.name);
     check(exp.stages.includes('discourse-read') && exp.hasPrompt && exp.hasRaw, 'export: verbatim prompts and raw outputs ride along', exp.stages.join(','));
 
     const pageErrs = errs.filter(e => !/favicon|eoGen load failed|net::ERR/.test(e));

@@ -97,6 +97,30 @@ the embedder. The bases stay injectable (`buildBases`) so the space can be swapp
   Downstream the kind stays a *flag* in `expectAnswer`'s constraint terms, never a gate
   (`answer-expectation.md`: the engine must not pretend to grade poetry).
 
+## Asking back — the gap only the user can close
+
+`research` names one kind of "has to be found out": the **world** has to answer (recent news, a
+live fact). Its complement was missing. The metacognition's own prompt asks it to say "what would
+have to be found out that neither the conversation nor the reading holds" — and its honest answer
+is often *"I'd have to ask **them**"*: the request is ambiguous or underspecified, and only the
+user can settle which one, whose, or what exactly they mean. Nothing acted on that. The turn
+guessed, or reached to the web for something the web doesn't carry — the metacognition would *say*
+it needed to learn from the user, but never asked.
+
+`CLARIFY_EXEMPLARS` (`clarify ⟂ actionable`, two members so the crosstalk null is finite) measures
+that gap exactly as the register/length grains do. `clarifyDrive` is the gated `clarify` current
+— the **user-side twin of `researchDrive`**, exposed *regardless of the winning route* (a `ground`
+turn can be underspecified too), and `clarifyDemand` is the `'clarify' | 'actionable' | ''`
+argmax. When the read comes back `clarify`, the turn poses **one** clarifying question and ends,
+waiting for the reply, instead of answering past the ambiguity (`_clarifyingTurn` in
+`app.dc.js`). The `actionable` contrast keeps a clear ask from ever being questioned back, and the
+consumer fires **only** when the world can't close the gap instead — no research current, not an
+explicit research ask, the route didn't settle on `research`/`compose`, and not the creative
+register (invention answers freely; it never asks). The finished bubble carries no stance, so the
+fold treats the question transparently and the user's next message reads as completing the
+original ask. Fails soft on every edge (cold model → a plain question built from `leadsOf`), so
+the loop closes rather than silently regressing to a guess.
+
 ## The fallback contract (unchanged, now continuous)
 
 `createMetaRouter` adapts the measurement onto `routeStance`'s **existing** `opts.model` seam —
@@ -123,7 +147,10 @@ discipline the reading side runs everywhere else.
 ## Files
 
 - the measurement + the prompt: `src/turn/meta-route.js` (`metaRoute`, `speechCurrents`,
-  `relaxRoute`, `formKindOf`, `discoursePrompt`, `leadsOf`, `createMetaRouter`)
+  `relaxRoute`, `formKindOf`, `discoursePrompt`, `leadsOf`, `createMetaRouter`,
+  `clarifyDemandOf`, `clarifyDrive`, `CLARIFY_EXEMPLARS`)
+- the ask-back consumer: `src/reader/app.dc.js` (`_clarifyingTurn`, and the `clarifyDemand` fork
+  in `sendChat` before the web/answer path — `_discourseRead` carries the current through)
 - the discourse gap at the proposer: `src/turn/propose.js` (`ctx.discourse.researchDrive`)
 - the seam it plugs into, untouched: `src/core/conversation-fold.js` (`routeStance` `opts.model`)
 - the mechanics reused: `longgen/relax.js` (relaxation), `surfer/salience.js` (Born),

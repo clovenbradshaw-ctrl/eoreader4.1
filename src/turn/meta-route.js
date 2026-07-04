@@ -236,6 +236,37 @@ export const REGISTER_EXEMPLARS = Object.freeze({
   ],
 });
 
+// CLARIFY_EXEMPLARS — the gap the WORLD cannot close because it is the USER's to close. The
+// `research` direction already names one kind of "has to be found out": the world has to answer
+// (recent news, a live fact). This names the complementary kind the router was blind to — the
+// ask itself is UNDERSPECIFIED, and only the user can resolve it (which one they mean, whose,
+// what exactly, a preference no reading or web page holds). The metacognition's own prompt asks
+// it to say "what would have to be found out that neither the conversation nor the reading holds"
+// — and when its honest answer is "I'd have to ask THEM," nothing acted on it: the turn guessed,
+// or reached to the web for a fact the web doesn't carry. `clarifyDrive` is that current, the
+// USER-side twin of `researchDrive`, exposed regardless of the winning route so a caller can
+// turn around and ASK rather than answer past the ambiguity. Two members so the null is finite
+// and the pair holds each other apart (clarify ⟂ actionable); abstains on unambiguous speech, so
+// a clear ask never gets a needless question back.
+export const CLARIFY_EXEMPLARS = Object.freeze({
+  clarify: [
+    'only the user can say which one they mean',
+    'the request is ambiguous — I would have to ask them to clarify',
+    'underspecified: which one, whose, what precisely — they must tell me',
+    'it depends on a choice only they can make, their own preference',
+    'I need them to pin down what they intend before I can answer',
+    'unclear what they are after — ask them to narrow it down',
+  ],
+  actionable: [
+    'the request is clear and specific — I can act on it as it stands',
+    'no ambiguity here; I already know what they want',
+    'their intent is plain, nothing needs asking back',
+    'I can proceed and answer without checking anything with them',
+    'the ask is self-contained and fully determined',
+    'it is obvious what they mean, so just go ahead',
+  ],
+});
+
 // Tuning. The Born weights of a 2–3 sentence paragraph against a ~20-term basis live around
 // 0.02–0.15, so GAIN lifts a clear signal to ~1 where it competes with the resting potentials.
 // REST is the incumbent's head start (continuation-by-default as physics: a transition current
@@ -277,7 +308,7 @@ const crosstalkNull = (profiles, dir, exemplars) => {
 // buildBases(routeExemplars?, formExemplars?) → { route, form, vocab } — profiles + nulls,
 // computed once. Injectable so a caller can grow a direction's exemplars (the tending surface
 // that replaces regex-patching) or swap the space entirely.
-export const buildBases = (routeExemplars = ROUTE_EXEMPLARS, formExemplars = FORM_EXEMPLARS, kindExemplars = KIND_EXEMPLARS, lengthExemplars = LENGTH_EXEMPLARS, registerExemplars = REGISTER_EXEMPLARS) => {
+export const buildBases = (routeExemplars = ROUTE_EXEMPLARS, formExemplars = FORM_EXEMPLARS, kindExemplars = KIND_EXEMPLARS, lengthExemplars = LENGTH_EXEMPLARS, registerExemplars = REGISTER_EXEMPLARS, clarifyExemplars = CLARIFY_EXEMPLARS) => {
   const group = (exemplars) => {
     const profiles = new Map();
     for (const [dir, phrases] of Object.entries(exemplars)) profiles.set(dir, profileOf(phrases));
@@ -292,9 +323,10 @@ export const buildBases = (routeExemplars = ROUTE_EXEMPLARS, formExemplars = FOR
   const kind = group(kindExemplars);
   const length = group(lengthExemplars);
   const register = group(registerExemplars);
+  const clarify = group(clarifyExemplars);
   const vocab = new Set();
-  for (const g of [route, form, kind, length, register]) for (const b of g.values()) for (const t of b.profile.keys()) vocab.add(t);
-  return { route, form, kind, length, register, vocab };
+  for (const g of [route, form, kind, length, register, clarify]) for (const b of g.values()) for (const t of b.profile.keys()) vocab.add(t);
+  return { route, form, kind, length, register, clarify, vocab };
 };
 
 let _DEFAULT = null;
@@ -415,6 +447,36 @@ export const creativeDrive = (speech, bases = defaultBases()) => {
   return w > b.null ? w : 0;
 };
 
+// clarifyDemandOf(speech, bases) → 'clarify' | 'actionable' | '' — does the metacognition say the
+// gap is the USER's to close (the ask is ambiguous, only they can resolve it) or that the ask is
+// clear enough to act on? Argmax over the null-gated clarify weights, ORTHOGONAL to the route
+// (a ground turn and a compose turn can each be underspecified). '' when neither clears its null
+// (the speech names no ambiguity), so the caller answers as it would today. Robust to bases from
+// an older buildBases (no clarify group) → ''.
+export const clarifyDemandOf = (speech, bases = defaultBases()) => {
+  if (!bases || !bases.clarify) return '';
+  const terms = new Set(tok(String(speech || '')));
+  let demand = '', best = 0;
+  for (const [k, b] of bases.clarify) {
+    const w = bornSalience(b.profile, terms);
+    if (w > b.null && w > best) { best = w; demand = k; }
+  }
+  return demand;
+};
+
+// clarifyDrive(speech, bases) → the null-gated `clarify` current as a graded scalar, exposed
+// REGARDLESS of the winning route — the USER-side twin of `researchDrive`. Where researchDrive
+// says "the WORLD has to answer this," clarifyDrive says "the USER has to — I'd have to ask
+// them." A caller thresholds it to turn around and pose a clarifying question instead of
+// answering past the ambiguity. 0 when the clarify basis is absent or the speech does not clear
+// its crosstalk null.
+export const clarifyDrive = (speech, bases = defaultBases()) => {
+  const b = bases && bases.clarify && bases.clarify.get('clarify');
+  if (!b) return 0;
+  const w = bornSalience(b.profile, new Set(tok(String(speech || ''))));
+  return w > b.null ? w : 0;
+};
+
 // developDrive(speech, bases) → the null-gated `develop` current, exposed as a graded scalar
 // REGARDLESS of the route the paragraph settled on — the length-side twin of `researchDrive`. A
 // ground turn and a compose turn both have a length; this is that pull, measured, so the caller
@@ -445,6 +507,13 @@ export const developDrive = (speech, bases = defaultBases()) => {
 //                  checked reading? Read on every route, so the composer's register flows
 //                  from the measurement instead of a speculative word list.
 //   creativeDrive  the graded `creative` current behind that label.
+//   clarifyDemand  'clarify' | 'actionable' | '' — the USER-gap demand, orthogonal to the route:
+//                  is the ask underspecified in a way only the user can resolve, or clear enough
+//                  to act on? When it reads 'clarify', the caller can ASK a question back instead
+//                  of answering past the ambiguity — closing the loop the metacognition opens when
+//                  it says it would need to learn something only the user holds.
+//   clarifyDrive   the graded `clarify` current behind that label — the USER-side twin of
+//                  researchDrive, exposed regardless of the winner.
 //   weights/currents/activations  the audit — which current won and by how much.
 export const metaRoute = (speech, fold = null, { bases = defaultBases(), seed = {} } = {}) => {
   const { weights, currents } = speechCurrents(speech, bases);
@@ -464,6 +533,8 @@ export const metaRoute = (speech, fold = null, { bases = defaultBases(), seed = 
     developDrive: developDrive(speech, bases),
     registerDemand: registerDemandOf(speech, bases),
     creativeDrive: creativeDrive(speech, bases),
+    clarifyDemand: clarifyDemandOf(speech, bases),
+    clarifyDrive: clarifyDrive(speech, bases),
     abstained: settled.abstained,
     weights,
     currents: settled.currents,
@@ -503,7 +574,9 @@ export const discoursePrompt = (message, fold = null, { exchange = '', now = nul
     'The user just said: "' + String(message || '') + '"\n' +
     'In two or three plain sentences, say what the user is doing, what would satisfy them, ' +
     'and what — if anything — would have to be found out that neither the conversation nor ' +
-    'the loaded reading already holds. Speak naturally.'
+    'the loaded reading already holds. If that gap is something only the user can settle — ' +
+    'their request is ambiguous or underspecified and you would have to ask them to clarify ' +
+    'which one, whose, or what exactly they mean — say so. Speak naturally.'
   );
 };
 

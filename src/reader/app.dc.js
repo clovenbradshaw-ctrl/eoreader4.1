@@ -2231,12 +2231,15 @@ class Component extends DCLogic {
       // FULL (no truncation): the whole read is what the turn runs on, so the reader sees all of it.
       this._liveThink(id,'My read of this turn: '+speech,true);
       this._auditRec(id,'discourse-read',{prompt,output:speech,
-        note:'route='+(measure.route||'abstained')+' · kind='+(measure.kind||'—')+' · length='+(measure.lengthDemand||'—')+' · researchDrive='+Number(measure.researchDrive||0).toFixed(3)+' · developDrive='+Number(measure.developDrive||0).toFixed(3)});
+        note:'route='+(measure.route||'abstained')+' · kind='+(measure.kind||'—')+' · length='+(measure.lengthDemand||'—')+' · researchDrive='+Number(measure.researchDrive||0).toFixed(3)+' · developDrive='+Number(measure.developDrive||0).toFixed(3)+' · clarify='+(measure.clarifyDemand||'—')+'/'+Number(measure.clarifyDrive||0).toFixed(3)});
       // The read carries lengthDemand + developDrive so _wantsLongform can key the essay/longform
-      // decision off the discourse PHYSICS (meta-route.js) rather than a keyword cliff.
+      // decision off the discourse PHYSICS (meta-route.js) rather than a keyword cliff. It also
+      // carries clarifyDemand + clarifyDrive — the USER-gap current — so a turn the metacognition
+      // reads as underspecified asks a question back instead of guessing (_clarifyingTurn).
       return {speech,route:measure.route,kind:measure.kind,steerKind:measure.steerKind,verdict:measure.verdict,abstained:measure.abstained,
         researchDrive:measure.researchDrive||0,lengthDemand:measure.lengthDemand||'',developDrive:measure.developDrive||0,
         registerDemand:measure.registerDemand||'',creativeDrive:measure.creativeDrive||0,
+        clarifyDemand:measure.clarifyDemand||'',clarifyDrive:measure.clarifyDrive||0,
         leads:M.leadsOf(speech,{known:q+' '+exchange}).slice(0,3)};
     }catch(e){
       // Fails soft by contract — but keep the WHY inspectable (window.__eoApp._readErr) so a
@@ -2244,6 +2247,49 @@ class Component extends DCLogic {
       try{this._readErr=String((e&&e.stack)||e);}catch(_){/* diagnostics only */}
       return null;
     }
+  }
+  // ── ASKING BACK — the loop the metacognition opens when only the USER can close the gap ───────
+  // The discourse read (meta-route.js) exposes `clarifyDrive`, the USER-side twin of researchDrive:
+  // where research says "the world has to answer this," clarify says "the user does — the ask is
+  // ambiguous and I'd have to ask them." Until now nothing acted on it — the turn guessed, or
+  // reached to the web for something the web can't hold. This closes that loop: when the read says
+  // the gap is the user's to close, POSE ONE clarifying question and end the turn, waiting for their
+  // reply, instead of answering past the ambiguity. The read's own words are what the question is
+  // BUILT from (a legitimate use — this voices the gap, it is not an answer smuggling the read in).
+  // The finished bubble carries NO stance, so the fold treats it transparently (conversation-fold
+  // turnsOf skips stance-less turns): the user's next message is read as completing THIS ask, not a
+  // new thread. Fails soft — a cold/stalled model falls back to a plain question built from the
+  // read's leads, so the loop closes either way rather than silently regressing to a guess.
+  async _clarifyingTurn(id,q,read,cur){
+    const leads=((read&&read.leads)||[]).filter(Boolean).slice(0,3);
+    const fallback='Before I answer — could you say a bit more about what you mean'+(leads.length?(' (for instance: '+leads.join(', ')+')'):'')+'? A little more detail and I’ll get you the right thing.';
+    const commit=(text)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
+      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,text:this.normMd(text)||text,think:'',groundKind:'clarify',
+        disclosure:'I asked a clarifying question — your request was underspecified, so I’d rather ask than guess.',
+        research:m[li].research?{...m[li].research,done:true}:undefined};
+      return {...c,messages:m};})}),()=>this._scrollChat());
+    this._setThink(id,'This turn is underspecified — asking what you mean rather than guessing…');
+    const guard=this._stallGuard(45000);
+    try{
+      const model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);
+      const prevMsgs=((cur&&cur.messages)||[]).filter(m=>m.text&&!m.pending);
+      const exchange=prevMsgs.slice(-2).map(m=>((m.role==='user')?'user: ':'assistant: ')+this.truncLabel(this.norm(m.text),240)).join('\n');
+      const prompt='You are helping in one ongoing conversation.\n'+
+        (exchange?('The last exchange:\n'+exchange+'\n'):'')+
+        'The user just said: "'+String(q||'')+'"\n'+
+        'Your read of it: '+String((read&&read.speech)||'')+'\n'+
+        'This request is underspecified — you cannot answer it well until the user says what they mean. '+
+        'Ask them ONE short, friendly clarifying question that would let you proceed. '+
+        'Ask only the question — no preamble, no answer, no apology, one sentence.';
+      let acc='',raf=0;
+      const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,think:'Asking what you mean…'};return {...c,messages:m};})}),()=>this._scrollChat());};
+      const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+      this._auditRec(id,'clarify-prompt',{prompt});
+      const raw=await Promise.race([this._ME.streamPhrase(model,[{role:'user',content:prompt}],{maxTokens:64,temperature:0.3,onToken,signal:guard.signal}),guard.race]);
+      guard.clear();
+      this._auditRec(id,'clarify-raw',{output:String(raw||'')});
+      commit(this.norm(raw)||fallback);
+    }catch(e){guard.clear();commit(fallback);}
   }
   // THE ZERO-MASS ANCHOR (model-free) — a multi-anchor question with one anchor the reading holds
   // and one it never mentions ("the difference between it and harry potter" over a Golden Compass
@@ -2742,6 +2788,19 @@ class Component extends DCLogic {
     if(read&&read.route==='compose'&&read.kind==='poem'){
       const sfold={...fold,stance:'compose',focus:{kind:read.kind,subject:(fold&&fold.focus&&fold.focus.subject)||null}};
       return this.composeArtifact(q,sfold,{reuseId:id});
+    }
+    // ASK BACK, don't guess (docs/discourse-routing.md): the metacognition's clarify current — the
+    // USER-side twin of researchDrive — has said this turn is underspecified in a way only the user
+    // can close (`clarifyDemand==='clarify'`). This is exactly the loop the read opens when it says
+    // it would need to learn something from the user; before now nothing acted on it, so the turn
+    // guessed. Fire ONLY when the world can't close the gap instead (no research current, not an
+    // explicit research ask, the route didn't settle on research/compose) and not in the creative
+    // register (invention answers freely, it never asks) — so a clear ask is never questioned back.
+    // Same soft contract as every fork here: no read / abstained clarify → falls straight through.
+    if(read&&read.clarifyDemand==='clarify'&&!read.researchDrive&&!researchIntent
+        &&read.route!=='research'&&read.route!=='compose'&&amode!=='creative'){
+      await this._clarifyingTurn(id,q,read,cur);
+      return;
     }
     // WEB AS BRAIN (default on): rather than let the small model answer from its own thin knowledge,
     // a question it can't ground in what's been read+folded sends the engine to the web first — it
