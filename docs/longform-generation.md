@@ -391,6 +391,24 @@ accepted for coherence is the same limit that makes the process legible. We
 did not add transparency. We forced the workspace small for integration, and
 legibility came with it. The bottleneck is the window.
 
+## Where it lives
+
+| concern | file |
+|---|---|
+| the event log (14 kinds, frozen, logical time) | `src/essay/events.js` |
+| the spine DAG + bounded motions | `src/essay/spine.js` |
+| the carry (init · update · cap · replan) | `src/essay/carry.js` |
+| the five coherence gates | `src/essay/gates.js` |
+| the mechanical term reading (contradiction/repeat) | `src/essay/terms.js` |
+| the projection — `projectEssay(log, cursor)` | `src/essay/project.js` |
+| the live panel fold — `liveView(log, cursor)` | `src/essay/live.js` |
+| the section loop — `runEssay`, the only writer | `src/essay/driver.js` |
+| global reconciliation | `src/essay/reconcile.js` |
+| the public face | `src/essay/index.js` |
+| tests | `tests/essay.test.js` |
+| reused: bind/veto | `src/ground/bind.js`, `src/ground/section.js` |
+| reused: the one render call per section | `src/arc/generate.js` (`generateSection`) |
+
 ## EO reading
 
 Optional, for the framework. The spine is a DEF over the log, a definition of
