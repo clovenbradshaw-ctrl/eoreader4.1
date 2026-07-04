@@ -459,24 +459,23 @@
             <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}">
               <div style="{{ chat.statusStyle }}"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
             </sc-if>
-            <div style="max-width:720px;margin:0 auto 8px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
-              <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
-              <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)"><span style="font-family:'Phosphor';font-size:13px;line-height:1;margin-right:5px;">{{ depthBtnIcon }}</span>{{ depthBtnLabel }}</button>
-              <button onclick="{{ onCycleStrategy }}" title="{{ strategyTitle }}" style="{{ strategyStyle }}" style-hover="border-color:var(--accline)">{{ strategyBtnLabel }}</button>
-              <!-- THE REGISTER SWITCH: auto / grounded / creative — how the next answers are written;
-                   every answer is badged with the register it ACTUALLY used. Cycles on click. -->
-              <button onclick="{{ onCycleAnswerMode }}" title="{{ answerModeTitle }}" style="{{ answerModeStyle }}" style-hover="border-color:var(--accline)"><span style="font-family:'Phosphor';font-size:13px;line-height:1;margin-right:5px;">{{ answerModeIcon }}</span>{{ answerModeLabel }}</button>
-              <!-- PROVENANCE DISPLAY: how per-span source/model marks show on answers — hover (clean) / lines / off. -->
-              <button onclick="{{ onCycleProvMode }}" title="{{ provModeTitle }}" style="{{ provModeStyle }}" style-hover="border-color:var(--accline)">{{ provModeLabel }}</button>
-              <!-- THE RESEARCH CONTROL — deep research replaced the essay output picker. The
-                   accent half runs grounded deep research on the box text; the neutral half opens
-                   the SURFACE: the live report panel (src/research/surface.js) over the session's
-                   append-only research log, which keeps populating as research is asked in chat. -->
-              <span style="position:relative;flex:0 0 auto;display:inline-flex;align-items:stretch;">
-                <button onclick="{{ onOutputGo }}" title="{{ outputGoTitle }}" style="{{ outputGoStyle }}" style-hover="background:var(--acc);color:#fff"><span style="font-family:'Phosphor';font-size:13px;line-height:1;">{{ outputGoIcon }}</span>{{ outputWriteLabel }}</button>
-                <button onclick="{{ onOutputMenu }}" title="{{ outputMenuTitle }}" style="{{ outputChooserStyle }}" style-hover="background:var(--accbg);color:var(--acc)">{{ outputCurrentLabel }} ▸</button>
-              </span>
-              <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
+            <!-- THE EMERGENT READOUT (design/chat-redesign/REVISIONS.md) — the route is
+                 read off the ask, never chosen. The chips are a readout, not controls:
+                 intent · depth · register · breadth resolve live as you type, the same
+                 _read(q) derives the turn's config at send time, and every answer stays
+                 badged with the register it ACTUALLY used. The Surface link is a view,
+                 not a mode: the live report panel (src/research/surface.js) over the
+                 session's append-only research log. -->
+            <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:9px;min-height:22px;">
+              <span style="{{ read.dotStyle }}"></span>
+              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);white-space:nowrap;flex:0 0 auto;">{{ read.lead }}</span>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-width:0;flex:1;">
+                <sc-for list="{{ read.chips }}" as="c" hint-placeholder-count="0">
+                  <span title="{{ c.why }}" style="{{ c.style }}">{{ c.label }}</span>
+                </sc-for>
+                <span style="font-size:11px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">{{ read.gloss }}</span>
+              </div>
+              <button onclick="{{ onOpenDeepResearch }}" title="{{ surfaceTitle }}" style="{{ surfaceStyle }}" style-hover="color:var(--acc)">Surface ▸</button>
             </div>
             <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
               <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
@@ -1253,24 +1252,18 @@
           <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}">
             <div style="{{ chat.statusStyle }}"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
           </sc-if>
-          <div style="max-width:720px;margin:0 auto 8px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
-            <button onclick="{{ onToggleResearchMode }}" title="{{ researchModeTitle }}" style="{{ researchModeStyle }}" style-hover="border-color:var(--accline)">{{ webBtnLabel }}</button>
-              <button onclick="{{ onCycleDepth }}" title="{{ depthTitle }}" style="{{ depthStyle }}" style-hover="border-color:var(--accline)"><span style="font-family:'Phosphor';font-size:13px;line-height:1;margin-right:5px;">{{ depthBtnIcon }}</span>{{ depthBtnLabel }}</button>
-              <button onclick="{{ onCycleStrategy }}" title="{{ strategyTitle }}" style="{{ strategyStyle }}" style-hover="border-color:var(--accline)">{{ strategyBtnLabel }}</button>
-              <!-- THE REGISTER SWITCH: auto / grounded / creative — how the next answers are written;
-                   every answer is badged with the register it ACTUALLY used. Cycles on click. -->
-              <button onclick="{{ onCycleAnswerMode }}" title="{{ answerModeTitle }}" style="{{ answerModeStyle }}" style-hover="border-color:var(--accline)"><span style="font-family:'Phosphor';font-size:13px;line-height:1;margin-right:5px;">{{ answerModeIcon }}</span>{{ answerModeLabel }}</button>
-              <!-- PROVENANCE DISPLAY: how per-span source/model marks show on answers — hover (clean) / lines / off. -->
-              <button onclick="{{ onCycleProvMode }}" title="{{ provModeTitle }}" style="{{ provModeStyle }}" style-hover="border-color:var(--accline)">{{ provModeLabel }}</button>
-            <!-- THE RESEARCH CONTROL — deep research replaced the essay output picker. The
-                 accent half runs grounded deep research on the box text; the neutral half opens
-                 the SURFACE: the live report panel (src/research/surface.js) over the session's
-                 append-only research log, which keeps populating as research is asked in chat. -->
-            <span style="position:relative;flex:0 0 auto;display:inline-flex;align-items:stretch;">
-              <button onclick="{{ onOutputGo }}" title="{{ outputGoTitle }}" style="{{ outputGoStyle }}" style-hover="background:var(--acc);color:#fff"><span style="font-family:'Phosphor';font-size:13px;line-height:1;">{{ outputGoIcon }}</span>{{ outputWriteLabel }}</button>
-              <button onclick="{{ onOutputMenu }}" title="{{ outputMenuTitle }}" style="{{ outputChooserStyle }}" style-hover="background:var(--accbg);color:var(--acc)">{{ outputCurrentLabel }} ▸</button>
-            </span>
-            <span style="font-size:11px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ researchModeHint }}</span>
+          <!-- THE EMERGENT READOUT — same readout as the overlay composer above:
+               a readout, not controls (design/chat-redesign/REVISIONS.md). -->
+          <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:9px;min-height:22px;">
+            <span style="{{ read.dotStyle }}"></span>
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);white-space:nowrap;flex:0 0 auto;">{{ read.lead }}</span>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-width:0;flex:1;">
+              <sc-for list="{{ read.chips }}" as="c" hint-placeholder-count="0">
+                <span title="{{ c.why }}" style="{{ c.style }}">{{ c.label }}</span>
+              </sc-for>
+              <span style="font-size:11px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">{{ read.gloss }}</span>
+            </div>
+            <button onclick="{{ onOpenDeepResearch }}" title="{{ surfaceTitle }}" style="{{ surfaceStyle }}" style-hover="color:var(--acc)">Surface ▸</button>
           </div>
           <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
             <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
