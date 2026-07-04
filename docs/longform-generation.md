@@ -136,7 +136,8 @@ for each section in render-order(spine):
     consolidate bind to spans, veto the unbound, keep the coherent set
     revise?     if consolidation surfaced a spine-relevant claim, move the spine (bounded)
     gate        coherence gates against spine, carry, dependencies
-    render      one prose pass from the surviving commitments
+    render      one prose pass from the surviving commitments, paragraph grain
+    verify      re-bind the render at claim grain; strike smuggled assertions
     accept      commit the section
     update      fold the section into the carry
     flush       drop section spans, checkpoint the carry
@@ -157,6 +158,36 @@ prompt N times. Perturb attention, not decoding.
 
 Keep N small, two or three, chosen to be maximally different rather than
 randomly sampled. WebLLM generation is sequential and local, so N is a budget.
+
+## Asymmetric granularity
+
+Generation grain and verification grain are different knobs, and the evidence
+splits them. Snowballing is a content-selection failure: a model that chooses
+what to assert autoregressively over-commits to an early mistake and then
+stays consistent with it — the later errors are loyalty to a bad commitment,
+not ignorance. The cure is returning control before the commitment compounds:
+a small commit unit. So explore stays at claim grain, and the claim is the
+floor. A claim is the smallest thing that can be true — the unit that binds
+to a span and can be vetoed. Below it there is no verification boundary;
+half a claim checks against nothing.
+
+Render cuts the other way. By render time the propositions are already chosen
+and bound, so the model is doing surface realization, not fact generation —
+the one place autoregressive fluency is a strength and there are no new facts
+to get wrong. The snowball has nothing to roll. Shrinking the prose unit
+attacks that strength, multiplies sequential calls on a local model, and buys
+no coherence, because coherence was fixed by the commitment graph before
+rendering started. So render flows at paragraph scale or larger, one pass per
+section.
+
+The check after render is where the grains meet. Each rendered sentence is
+re-bound at claim grain: a sentence that cites a span keeps its citation;
+connective tissue that made lexical contact rides as glue, marked; an
+assertive sentence bound to nothing — an embellishment smuggled in while
+writing — is struck; and a sentence that contradicts the ledger is struck
+whatever it cites. Coarse generation, fine verification. The accepted section
+carries its per-sentence verdicts into the log, so the accept event states
+its own generative honesty.
 
 ## Revision discipline
 
@@ -376,6 +407,8 @@ where corrections to frozen accepted sections land.
   drift.
 - **Carry size.** Cap the ledger and thread list. Old paid threads drop. Old
   bound claims compress to their contradiction-relevant core.
+- **Render ceiling.** The section's prose budget. Paragraph or more — the
+  grain of generation, never of verification.
 - **Reconciliation depth.** One pass, or iterate to a clean pass.
 - **Section granularity.** Finer sections mean smaller folds and more
   doorways. Coarser sections mean larger folds and fewer seams. The direct

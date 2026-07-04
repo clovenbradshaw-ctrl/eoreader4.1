@@ -45,7 +45,7 @@ const computeEssay = (log, at) => {
       sections.set(id, {
         id, intent: '', state: 'pending', order: sectionOrderSeen.length, dependsOn: [],
         deps: [], relit: [], spanIds: [], proposed: [], commitments: [], vetoed: [],
-        prose: null, terminalClaim: null, acceptedAt: null,
+        prose: null, terminalClaim: null, acceptedAt: null, sentences: [], dropped: 0,
       });
       sectionOrderSeen.push(id);
     }
@@ -83,7 +83,7 @@ const computeEssay = (log, at) => {
         break;
       }
       case EKIND.RELIT:
-        recOf(e.sectionId).relit = [...e.dependsOn];
+          recOf(e.sectionId).relit = [...e.dependsOn];
         break;
       case EKIND.SPANS:
         recOf(e.sectionId).spanIds = [...e.spanIds];
@@ -134,6 +134,8 @@ const computeEssay = (log, at) => {
         r.prose = e.prose;
         r.terminalClaim = e.terminalClaim;
         r.acceptedAt = e.t;
+        r.sentences = [...(e.sentences || [])];
+        r.dropped = e.dropped | 0;
         if (active === e.sectionId) active = null; // the doorway flush
         if (spine) spine = withState(spine, e.sectionId, 'accepted');
         break;
@@ -209,6 +211,12 @@ const computeEssay = (log, at) => {
       vetoed: totalVetoed,
       threadsOpen: openThreads.length,
       threadsPaid: [...threads.values()].filter((th) => th.paidBy).length,
+      // The render's claim-grain verify, aggregated — the honest VERIFY line:
+      // "N sentences, K bound, G glue, D struck after render."
+      sentences: accepted.reduce((n, s) => n + s.sentences.length, 0),
+      sentencesBound: accepted.reduce((n, s) => n + s.sentences.filter((x) => x.boundTo).length, 0),
+      glue: accepted.reduce((n, s) => n + s.sentences.filter((x) => x.glue).length, 0),
+      droppedSentences: accepted.reduce((n, s) => n + s.dropped, 0),
     },
   });
 };

@@ -49,8 +49,9 @@ export const KNOB_DEFAULTS = Object.freeze({
   thin: 2,                 // fewer survivors than this = a thin section
   payThreshold: 0.34,      // commitment contact that pays a thread
   sectionFloor: 60,        // render budget (advisory floor, hard ceiling)
-  sectionCeiling: 220,
+  sectionCeiling: 360,     // paragraph or more — the grain of GENERATION, never of verification
   renderBindFloor: 0.5,    // below this bound fraction the render regenerates once
+  glueTerms: 4,            // an unbound sentence this short is connective tissue, not an assertion
   carry: Object.freeze({ maxLedger: 64 }),
   gate: Object.freeze({}),
   reconcilePasses: 1,
@@ -220,12 +221,14 @@ export const runEssay = async ({
       emit(threadOpened({ threadId: th.id, text: th.text, openedAt: th.openedAt, dueBy: th.dueBy, t: t++ }));
     }
 
-    // render — the ONE prose pass, from the surviving commitments.
-    const rendered = await render({ section, pass, secSpans, model, doc, carry, knobs, signal });
+    // render — the ONE prose pass, from the surviving commitments, at
+    // paragraph grain; then the claim-grain verify strikes what it smuggled.
+    const rendered = await render({ section, pass, secSpans, model, doc, carry, knobs, signal, emit, tick: () => t++ });
 
     // accept → update the carry → flush at the doorway (checkpoint).
     emit(sectionAccepted({
       sectionId: section.id, terminalClaim: pass.terminalClaim, prose: rendered.prose,
+      sentences: rendered.sentences, dropped: rendered.dropped,
       model: model?.name ?? (model ? 'model' : null), prompt: rendered.prompt, raw: rendered.raw, t: t++,
     }));
     spine = withState(spine, section.id, 'accepted');
@@ -592,20 +595,27 @@ const settleThreads = (carry, section, survivors, order, knobs) => {
 };
 
 // ── render — one prose pass from the surviving commitments ──────────────────
-// With a model: the arc's generateSection + bindAndVeto, regenerated once on
-// a low bound fraction with the unbound claims struck from the allowed set.
-// Without: the extractive floor — the commitments themselves, in order; a
-// surfaced divergence renders both framings, each grounded.
-const render = async ({ section, pass, secSpans, model, doc, carry, knobs, signal }) => {
+// ASYMMETRIC GRANULARITY: generate at paragraph grain, verify at claim grain.
+// By render time the propositions are chosen and bound — the model is doing
+// surface realization, not fact generation, so the prose flows in one pass
+// per section (the snowball has nothing to roll). The fine grain returns in
+// the check: every rendered sentence is re-bound; a cited sentence keeps its
+// citation, connective tissue that made lexical contact rides as glue, an
+// assertive sentence bound to nothing is struck, and a sentence contradicting
+// the ledger is struck whatever it cites — each strike a loud veto event.
+// With no model: the extractive floor — the commitments themselves, in order;
+// a surfaced divergence renders both framings, each grounded.
+const render = async ({ section, pass, secSpans, model, doc, carry, knobs, signal, emit, tick }) => {
   const extractive = () => {
+    const sentences = pass.survivors.map((c) => ({ text: c.claim, boundTo: c.spanRefs[0] ?? null, glue: false }));
     if (pass.surfaced) {
       const one = pass.surfaced.a.map((c) => c.claim).join(' ');
       const two = pass.surfaced.b.map((c) => c.claim).join(' ');
-      return two ? `${one} Read under another frame: ${two}` : one;
+      return { prose: two ? `${one} Read under another frame: ${two}` : one, sentences, dropped: 0 };
     }
-    return pass.survivors.map((c) => c.claim).join(' ');
+    return { prose: pass.survivors.map((c) => c.claim).join(' '), sentences, dropped: 0 };
   };
-  if (!model) return { prose: extractive(), prompt: null, raw: null };
+  if (!model) return { ...extractive(), prompt: null, raw: null };
 
   const refs = new Set(pass.survivors.flatMap((c) => c.spanRefs));
   const boundSpans = secSpans.filter((s) => refs.has(`s${s.idx}`));
@@ -621,10 +631,38 @@ const render = async ({ section, pass, secSpans, model, doc, carry, knobs, signa
     const retry = bindAndVeto(out.rawOutput, boundSpans, { question: section.intent });
     if (retry.boundFraction >= bv.boundFraction) bv = retry;
   }
-  // A render the floor refuses falls back to the commitments themselves —
-  // ungrounded fluency never ships over bound claims.
-  const prose = bv.refuse || !bv.answer.trim() ? extractive() : bv.answer;
-  return { prose, prompt: out.messages, raw: out.rawOutput };
+
+  // The claim-grain verify over the paragraph-grain render.
+  const kept = [];
+  let dropped = 0;
+  for (const b of bv.bound) {
+    const clash = carry.ledger.find((l) => contradicts(b.claim, l.claim))
+      || pass.survivors.find((c) => contradicts(b.claim, c.claim));
+    if (clash) {
+      emit(candidateVetoed({ sectionId: section.id, claimId: null, claim: b.claim, reason: 'render-contradicts-ledger', t: tick() }));
+      dropped += 1;
+      continue;
+    }
+    if (b.citation) { kept.push({ text: b.claim, boundTo: b.citation, glue: false }); continue; }
+    // Unbound: a short connective rides as glue, marked; a contentful
+    // assertion bound to nothing is an embellishment smuggled in while
+    // writing — struck, however fluent.
+    if (termsOf(b.claim).length < knobs.glueTerms) {
+      kept.push({ text: b.claim, boundTo: null, glue: true });
+      continue;
+    }
+    emit(candidateVetoed({ sectionId: section.id, claimId: null, claim: b.claim, reason: 'render-unbound', t: tick() }));
+    dropped += 1;
+  }
+
+  // A render the floor refuses — or that the verify emptied of bound content —
+  // falls back to the commitments themselves: ungrounded fluency never ships
+  // over bound claims.
+  if (bv.refuse || !kept.some((k) => k.boundTo)) {
+    return { ...extractive(), dropped, prompt: out.messages, raw: out.rawOutput };
+  }
+  const prose = kept.map((k) => (k.boundTo ? `${k.text} [${k.boundTo}]` : k.text)).join(' ');
+  return { prose, sentences: kept, dropped, prompt: out.messages, raw: out.rawOutput };
 };
 
 const rawSpine = (spine) => ({

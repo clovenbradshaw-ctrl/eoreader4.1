@@ -131,12 +131,20 @@ export const spineRevised = ({ op, sectionIds = [], detail = null, t = 0 }) => {
 
 // The section commits. The FULL prose lives here — the log is where the
 // essay-so-far lives; only the compressed trace rides forward in the carry.
-// `prompt`/`raw` embed the one generative call's audit when a model rendered.
-export const sectionAccepted = ({ sectionId, terminalClaim, prose = '', model = null, prompt = null, raw = null, t = 0 }) => {
+// `sentences` carry the render's claim-grain verdicts (asymmetric granularity:
+// coarse generation, fine verification) — { text, boundTo: spanRef|null,
+// glue: bool } per kept sentence, `dropped` counting the smuggled assertions
+// struck after render. `prompt`/`raw` embed the one generative call's audit,
+// so the accept event states its own generative honesty from the log alone.
+export const sectionAccepted = ({ sectionId, terminalClaim, prose = '', sentences = [], dropped = 0, model = null, prompt = null, raw = null, t = 0 }) => {
   if (!sectionId) throw new TypeError('sectionAccepted: sectionId required');
+  const ss = (sentences || []).map((s) => freeze({
+    text: String(s.text ?? ''), boundTo: s.boundTo ?? null, glue: !!s.glue,
+  }));
   return freeze({
     kind: EKIND.ACCEPT, sectionId, terminalClaim: String(terminalClaim ?? ''),
-    prose: String(prose ?? ''), model, prompt: prompt ?? null, raw: raw ?? null, t,
+    prose: String(prose ?? ''), sentences: Object.freeze(ss), dropped: dropped | 0,
+    model, prompt: prompt ?? null, raw: raw ?? null, t,
   });
 };
 

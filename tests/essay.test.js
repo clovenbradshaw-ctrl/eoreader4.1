@@ -367,26 +367,61 @@ test('resume: a carry corrected at the seam is honored by the next section', asy
 
 // ── render with a model ──────────────────────────────────────────────────────
 
+const excerptEcho = (extra = '') => ({
+  name: 'scripted',
+  phrase: async (messages) => {
+    // Echo the grounded excerpts back as prose — a faithful talker, with an
+    // optional tail the test smuggles in.
+    const user = messages.find((m) => m.role === 'user')?.content || '';
+    const at = user.indexOf('What I found reading it:');
+    const lines = [];
+    for (const l of user.slice(at).split('\n').slice(1)) {
+      if (!l.trim()) break;
+      lines.push(l.trim());
+    }
+    return [lines.slice(0, 2).join(' '), extra].filter(Boolean).join(' ');
+  },
+});
+
 test('render: the one prose pass is bound back to the spans it was given', async () => {
-  const model = {
-    name: 'scripted',
-    phrase: async (messages) => {
-      // Echo the grounded excerpts back as prose — a faithful talker.
-      const user = messages.find((m) => m.role === 'user')?.content || '';
-      const at = user.indexOf('What I found reading it:');
-      const lines = [];
-      for (const l of user.slice(at).split('\n').slice(1)) {
-        if (!l.trim()) break;
-        lines.push(l.trim());
-      }
-      return lines.slice(0, 2).join(' ');
-    },
-  };
-  const { log, essay } = await run({ model });
+  const { log, essay, report } = await run({ model: excerptEcho() });
   const accept = log.find((e) => e.kind === EKIND.ACCEPT);
   assert.ok(accept.raw, 'the raw model output rides in the accept event');
   assert.ok(accept.prompt, 'the exact messages ride in the accept event');
   assert.match(essay, /\[s\d+\]/); // re-cited mechanically, never by the model
+  // The claim-grain verdicts ride in the accept event and aggregate honestly.
+  assert.ok(accept.sentences.length >= 1);
+  assert.ok(accept.sentences.every((s) => s.boundTo || s.glue === true));
+  assert.ok(report.verify.sentencesBound >= 1);
+});
+
+test('asymmetric granularity: a smuggled assertion is struck, glue rides marked', async () => {
+  // The talker writes fluently at paragraph grain — and smuggles in one
+  // contentful assertion from nowhere plus one short connective.
+  const model = excerptEcho('Space aliens are probably responsible. So the record holds.');
+  const { log, essay, report } = await run({ model });
+
+  const struck = log.find((e) => e.kind === EKIND.VETO && e.reason === 'render-unbound');
+  assert.ok(struck, 'the smuggled assertion should be struck after render');
+  assert.match(struck.claim, /Space aliens/);
+  assert.ok(!essay.includes('Space aliens'), 'a struck sentence never ships');
+
+  const accepts = log.filter((e) => e.kind === EKIND.ACCEPT);
+  const glue = accepts.flatMap((a) => [...a.sentences]).find((s) => s.glue);
+  assert.ok(glue, 'the connective rides as marked glue');
+  assert.equal(glue.boundTo, null);
+  assert.ok(report.verify.droppedSentences >= 1);
+  assert.ok(report.verify.glue >= 1);
+});
+
+test('asymmetric granularity: a rendered sentence contradicting the ledger is struck whatever it cites', async () => {
+  // The contradiction shares the wrecks span's vocabulary, so it would CITE —
+  // the ledger check strikes it anyway.
+  const model = excerptEcho('The logbook never records shipwrecks in the channel.');
+  const { log, essay } = await run({ model });
+  const struck = log.find((e) => e.kind === EKIND.VETO && e.reason === 'render-contradicts-ledger');
+  assert.ok(struck, 'the contradicting sentence should be struck after render');
+  assert.ok(!essay.includes('never records'), 'a struck contradiction never ships');
 });
 
 // ── reconciliation ───────────────────────────────────────────────────────────
