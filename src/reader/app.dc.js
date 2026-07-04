@@ -1763,6 +1763,12 @@ class Component extends DCLogic {
     try{
       const {report,rootId}=await sess.research(subject,{
         sources,model,size,strategy,
+        // Skip Save-Page-Now in the conversational turn: from the browser it
+        // essentially never lands (CORS), so every source degrades to a local
+        // pin anyway — the slow save request is pure latency for no archive. The
+        // fast availability check still runs (a real snapshot, when one exists,
+        // still upgrades the pin), and the dedicated Surface keeps full archiving.
+        save:false,
         search:useWeb?drSearch:null,
         onGather:(query,have,want)=>this._beat(id,'search','Gathering “'+query+'” — '+have+'/'+want+' sources'),
         onSectionToken:(frameId,piece)=>{if(this._stopGen||liveDone)return;liveText.set(frameId,(liveText.get(frameId)||'')+piece);schedulePaint();},
@@ -3684,8 +3690,24 @@ class Component extends DCLogic {
       // In 'off' mode the per-span provenance layer is inert — no hover card for eo-prov spans.
       // Native citation pills (eo-cite without eo-prov — the [N] superscripts) still work in every mode.
       if(this.state.provMode==='off'&&p.classList&&p.classList.contains('eo-prov'))return;
-      this._showCiteCard(p);};
-    this._onCiteOut=(e)=>{const p=this._closestCite(e.target);if(!p)return;const to=e.relatedTarget;if(to&&this._citeCard&&this._citeCard.contains(to))return;this._hideCiteCard();};
+      clearTimeout(this._citeCardHideT);
+      // The answer is tiled edge to edge with eo-prov spans, so moving the cursor
+      // from a citation DOWN to the open card crosses many of them. Without this
+      // guard each crossed span re-anchored the card to itself — the card chased
+      // the cursor and its "Go to the section" button was never reachable. Once a
+      // card is open, switch to another span only on a deliberate REST (hover
+      // intent): fast transit spans just keep resetting the timer, so the open
+      // card holds still and stays clickable.
+      const open=this._citeCard&&this._citeCard.style.display!=='none';
+      if(open&&this._citePill&&p!==this._citePill){
+        clearTimeout(this._citeSwitchT);
+        this._citeSwitchT=setTimeout(()=>{this._citePill=p;this._showCiteCard(p);},180);
+        return;
+      }
+      clearTimeout(this._citeSwitchT);this._citePill=p;this._showCiteCard(p);};
+    this._onCiteOut=(e)=>{const p=this._closestCite(e.target);if(!p)return;const to=e.relatedTarget;
+      if(to&&this._citeCard&&this._citeCard.contains(to))return;   // moved onto the card — keep it
+      clearTimeout(this._citeSwitchT);this._hideCiteCard();};
     document.addEventListener('mouseover',this._onCiteOver);
     document.addEventListener('mouseout',this._onCiteOut);
   }
@@ -3698,7 +3720,7 @@ class Component extends DCLogic {
     const el=document.createElement('div');
     el.className='eo-cite-card';el.setAttribute('role','tooltip');
     el.style.cssText='position:fixed;z-index:9000;max-width:330px;display:none;background:#1b1f26;color:#e7eaef;border:1px solid #2c333d;border-radius:11px;box-shadow:0 12px 34px rgba(0,0,0,.42);padding:12px 13px;font-size:12.5px;line-height:1.5;font-family:inherit;';
-    el.addEventListener('mouseenter',()=>{clearTimeout(this._citeCardHideT);});
+    el.addEventListener('mouseenter',()=>{clearTimeout(this._citeCardHideT);clearTimeout(this._citeSwitchT);});
     el.addEventListener('mouseleave',()=>this._hideCiteCard());
     document.body.appendChild(el);this._citeCard=el;return el;
   }
@@ -3751,7 +3773,7 @@ class Component extends DCLogic {
     card.style.left=left+'px';card.style.top=top+'px';card.style.visibility='visible';
     clearTimeout(this._citeCardHideT);
   }
-  _hideCiteCard(now){clearTimeout(this._citeCardHideT);const el=this._citeCard;if(!el)return;if(now){el.style.display='none';}else{this._citeCardHideT=setTimeout(()=>{el.style.display='none';},180);}}
+  _hideCiteCard(now){clearTimeout(this._citeCardHideT);const el=this._citeCard;if(!el)return;const done=()=>{el.style.display='none';this._citePill=null;};if(now){done();}else{this._citeCardHideT=setTimeout(done,180);}}
   // A page reduced to its term-frequency profile — the unit the walk measures surprise on.
   _profile(text){const m=new Map();for(const t of this._researchTerms(text))m.set(t,(m.get(t)||0)+1);return m;}
   // The prose of an already-read page, for the surprise / saliency measure.

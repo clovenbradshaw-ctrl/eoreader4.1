@@ -109,9 +109,26 @@ export const modelPlanner = (model, { history = [], question = '' } = {}) => asy
     return String(out || '')
       .split('\n')
       .map(s => s.replace(/^\s*[-*\d.)\]]+\s*/, '').replace(/^(query|search)\s*:\s*/i, '').replace(/^["'`]+|["'`]+$/g, '').trim())
-      .filter(s => s && s.length <= 160 && !/^i (cannot|can't|am unable)/i.test(s));
+      .filter(isQueryLine);
   } catch { return []; }
 };
+
+// A planner line is a QUERY, not the model's framing around one. Small local
+// models routinely prepend a lead-in — "Here are 4 distinct search queries that
+// open different angles on … :" — and, being under the length cap and not a
+// refusal, it used to sail through and get FETCHED as if it were a query: a
+// wasted hop, and it polluted the walk with the instruction echoed back at the
+// search engine (the dolphins audit, 2026-07-04). Drop the tells — a refusal, a
+// trailing colon (a header, not a query), a lead-in opener, or a line echoing
+// the instruction's own words ("search queries", "different angles"). A genuine
+// keyword query trips none of these.
+export const isQueryLine = (s) =>
+  !!s && s.length <= 160
+  && !/^i (?:cannot|can't|am unable)/i.test(s)
+  && !/[:：]\s*$/.test(s)
+  && !/^(?:here (?:are|is)|the following|below (?:are|is)|these are|sure\b|certainly\b|okay\b|of course)/i.test(s)
+  && !/\b(?:search|research)\s+quer(?:y|ies)\b/i.test(s)
+  && !/\bdifferent angles?\b/i.test(s);
 
 // runDeepResearch(seed, opts) → { docs, sources, hops, facets, frontier, prior, topic } — the
 // multi-branch walk.

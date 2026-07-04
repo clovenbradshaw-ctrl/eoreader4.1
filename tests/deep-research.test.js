@@ -47,6 +47,20 @@ test('planQueries drops paragraph-length junk from the planner', async () => {
   assert.ok(!facets.some(f => f.length > 160), 'the over-long line was dropped');
 });
 
+test('modelPlanner drops the model’s lead-in preamble, keeps the real queries (dolphins audit)', async () => {
+  // The exact failure from the dolphins audit: the small model prepended its
+  // own framing line, which was then FETCHED as a query. It must not survive.
+  const model = { phrase: async () =>
+    'Here are 4 distinct search queries that open different angles on the topic of characteristics of dolphins:\n' +
+    'Brain structure and dolphin cognition\n' +
+    'Dolphin behavior and social structure\n' +
+    'Physical adaptations of dolphins for aquatic life' };
+  const angles = await modelPlanner(model, {})('characteristics of dolphins', { max: 5 });
+  assert.ok(!angles.some(a => /search queries|different angles/i.test(a)), 'the preamble line was dropped');
+  assert.ok(angles.includes('Brain structure and dolphin cognition'), 'the real queries survive');
+  assert.equal(angles.length, 3, 'exactly the three real keyword queries survive');
+});
+
 test('modelPlanner parses a numbered model list into bare queries; degrades to [] with no model', async () => {
   const model = { phrase: async () => '1. solar power cost\n2. solar power storage\n- solar power policy' };
   const out = await modelPlanner(model)('solar power', { max: 4 });
