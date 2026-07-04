@@ -29,8 +29,8 @@ const methodOf = (src, name) => {
 };
 
 // A fake folded world: labelled entities + directed edges with per-edge source sentences.
-const worldHarness = (src) => {
-  const body = ['groundPropositions', '_rankPropositions', '_independentOrigins', '_nearDup', 'eotRel', 'junkRel', '_repOf', '_disagreementCue']
+const worldHarness = (src, world) => {
+  const body = ['groundPropositions', '_rankPropositions', '_independentOrigins', '_nearDup', 'eotRel', 'junkRel', '_repOf', '_groundCue', '_chainBetween', '_bfsPath']
     .map((m) => methodOf(src, m)).join('\n');
   const Cls = new Function(`return class H {
     norm(s){ return String(s||'').replace(/\\s+/g,' ').trim(); }
@@ -45,11 +45,12 @@ const worldHarness = (src) => {
   const h = new Cls();
   h.MAX_PASSAGE = 600;
   h.STOP = new Set(['the','a','an','to','in','of','and','is','are','on']);
-  h.__labels = { d:'dolphin', ec:'echolocation', sh:'shipping', ox:'oxygen', f:'Further' };
+  // Default world: dolphins. `world` overrides labels/edges/sentences/sentenceSource for other cases.
+  h.__labels = (world && world.labels) || { d:'dolphin', ec:'echolocation', sh:'shipping', ox:'oxygen', f:'Further' };
   h.graph = {
     representative: (x) => x,
     entities: new Map(Object.keys(h.__labels).map((id) => [id, { id }])),
-    edges: [
+    edges: (world && world.edges) || [
       { from:'d', to:'ec', via:'uses',    sentIdx:0 },   // on-question, source A
       { from:'d', to:'ec', via:'uses',    sentIdx:1 },   // same claim, source B → corroborated
       { from:'sh', to:'ox', via:'reading', sentIdx:2 },  // OFF-question (no referent) → excluded
@@ -58,14 +59,14 @@ const worldHarness = (src) => {
     ],
   };
   h.master = {
-    sentences: [
+    sentences: (world && world.sentences) || [
       'Dolphins use echolocation to navigate.',
       'The river dolphin relies on echolocation in murky water.',
       'Shipping tonnage rose in 2016.',
       'Further reading on oxygen.',
       'Dolphins and shipping.',
     ],
-    sentenceSource: ['A', 'B', 'A', 'A', 'A'],
+    sentenceSource: (world && world.sentenceSource) || ['A', 'B', 'A', 'A', 'A'],
   };
   return h;
 };
@@ -149,8 +150,8 @@ for (const page of ['src/reader/app.dc.js', 'index.html']) {
     assert.ok(r.evidence.every((e) => e.fork), 'both forked propositions are tagged');
     assert.equal(r.promptSpans.length, 2, 'both sides of the debate reach the prompt');
     // The disagreement cue fires for a forked turn and is empty otherwise.
-    assert.match(h._disagreementCue({ forks: r.forks }), /disagree/i);
-    assert.equal(h._disagreementCue({ forks: [] }), '');
+    assert.match(h._groundCue({ forks: r.forks }), /disagree/i);
+    assert.equal(h._groundCue({ forks: [] }), '');
   });
 
   test(`${page}: the prompt is token-budgeted while the citation evidence stays full`, () => {
@@ -165,5 +166,46 @@ for (const page of ['src/reader/app.dc.js', 'index.html']) {
     assert.ok(tiny.promptSpans.length >= 1, 'at least the top proposition always rides the prompt');
     assert.ok(tiny.promptSpans.length <= tiny.evidence.length, 'the prompt is a bounded subset of the evidence');
     assert.equal(tiny.evidence.length, 2, 'the citation evidence is never truncated by the prompt budget');
+  });
+
+  test(`${page}: _bfsPath returns the shortest ordered path, or null when unreachable`, () => {
+    const h = worldHarness(src);
+    const adj = new Map([
+      ['a', [{ to:'b', edge:{ sentIdx:0 } }]],
+      ['b', [{ to:'c', edge:{ sentIdx:1 } }, { to:'a', edge:{ sentIdx:0 } }]],
+      ['c', [{ to:'b', edge:{ sentIdx:1 } }]],
+    ]);
+    const p = h._bfsPath(adj, 'a', 'c', 5);
+    assert.ok(p && p.length === 2, 'a→b→c is a length-2 path');
+    assert.deepEqual(p.map((s) => s.edge.sentIdx), [0, 1], 'edges are in path order');
+    assert.equal(h._bfsPath(adj, 'a', 'z', 5), null, 'an unreachable target is null');
+    assert.equal(h._bfsPath(new Map([['a', [{ to:'b', edge:{} }]]]), 'a', 'b', 0), null, 'maxLen 0 finds nothing');
+  });
+
+  test(`${page}: CHAIN MODE — two referents joined by a multi-hop path ground as an ordered chain`, () => {
+    const h = worldHarness(src, {
+      labels: { wm:'working memory', gw:'global workspace', con:'consciousness' },
+      edges: [
+        { from:'wm', to:'gw',  via:'resembles', sentIdx:0 },
+        { from:'gw', to:'con', via:'produces',  sentIdx:1 },
+      ],
+      sentences: ['Working memory resembles the global workspace.', 'The global workspace produces consciousness.'],
+      sentenceSource: ['A', 'A'],
+    });
+    const pg = h.groundPropositions('how does working memory relate to consciousness', []);
+    assert.ok(pg && pg.chain, 'a multi-hop connection between two referents grounds as a CHAIN, not a set');
+    assert.equal(pg.promptSpans.length, 2, 'both links of the chain ride the prompt');
+    // The witness sentences are in PATH order (workspace resemblance → consciousness production).
+    assert.match(pg.promptSpans[0].text, /global workspace/i);
+    assert.match(pg.promptSpans[1].text, /consciousness/i);
+    // The cue tells the model to reason step by step along the chain.
+    assert.match(h._groundCue({ chain: true }), /step by step/i);
+  });
+
+  test(`${page}: a directly-connected pair is NOT a chain (falls to the set selection)`, () => {
+    const h = worldHarness(src);
+    const pg = h.groundPropositions('dolphin echolocation', []);   // d↔ec is a direct edge
+    assert.ok(pg, 'still grounds');
+    assert.ok(!pg.chain, 'a 1-hop link is a proposition, not a chain');
   });
 }
