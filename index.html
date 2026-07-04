@@ -3236,6 +3236,17 @@ class Component extends DCLogic {
   groundNotes(q,sources){const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
     const a=this.answerQuestion(q,scope);
     const span=i=>({text:this._clipPassage(this.norm(this.master.sentences[i])),score:1,i,u:this.master.sentenceSource[i]});
+    // PROPOSITION-FIRST grounding: the reading's EOT propositions ABOUT the question, ranked by how
+    // many INDEPENDENT sources corroborate each. When the graph holds propositions on the question,
+    // THEY are the grounding — the prompt gets the top ones' verbatim witness sentences (their own
+    // natural-language surface, corroboration-ordered, token-budgeted), and the citation layer gets
+    // the full ranked evidence with provenance (unbounded — the count follows the material, not a
+    // fixed cap). Falls through to the keyword path below only when the graph is silent on the
+    // question (a fresh topic / a sparse fold), so behaviour never regresses.
+    try{const pg=this.groundPropositions(q,scope);
+      if(pg&&pg.promptSpans&&pg.promptSpans.length)
+        return {spans:pg.promptSpans,entities:a.entities||[],sources:[...new Set(pg.evidence.map(e=>e.u).filter(Boolean))],relevant:true,evidence:pg.evidence,prop:true};
+    }catch(e){/* any fault → the keyword path below (never worse than today) */}
     // `relevant` = the question actually matched read text (keyword overlap). Only relevant
     // spans are shown as linked grounding; the fallback below still feeds the model context
     // but is NOT surfaced as a citation (it isn't really "where the answer came from").
@@ -3250,6 +3261,89 @@ class Component extends DCLogic {
       if(idxs.length)return {spans:idxs.map(span),entities:a.entities||[],sources:[...used],relevant:false};
     }
     return {spans:[],entities:a.entities||[],sources:[],relevant:false};}
+  // groundPropositions(q,sources,{budget}) → { promptSpans, evidence, relevant } | null
+  //
+  // The grounding unit is the PROPOSITION, not the keyword-matched sentence or the centrality-ranked
+  // graph edge. It selects the reading's EOT propositions that are ABOUT the question's referents
+  // (coupled through the graph's merged identity, so coref holds), groups paraphrases of the same
+  // claim, and ranks each by INDEPENDENT-ORIGIN corroboration (≥2 distinct sources beats one). The
+  // fix for the export's noise: "Further -> Oxygen : reading" has no subject→object about a referent,
+  // so it never enters; a reference-list line parses to no proposition, so it never outranks a real
+  // claim. Returns null when the graph holds no on-question proposition (caller keeps the keyword path).
+  //   promptSpans  the top propositions' verbatim witness sentences (their NL surface), token-budgeted
+  //   evidence     the FULL ranked set with spans + origins — the citation layer (unbounded)
+  groundPropositions(q,sources,{budget=1600}={}){
+    if(!this.graph||!this.graph.edges||!this.graph.entities||!this.master||!this.master.sentences.length)return null;
+    const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
+    const inScope=i=>!scope.length||scope.includes(this.master.sentenceSource[i]);
+    // (1) the question's referents → representative graph ids (the SAME label match answerQuestion
+    // uses, merged through representative so "the dolphin"/"it"/"Ganges dolphin" collapse to one).
+    const qwords=String(q||'').toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2&&!this.STOP.has(w));
+    if(!qwords.length)return null;
+    const Q=new Set();
+    for(const e of this.graph.entities.values()){
+      if(!this.showable(e.id))continue;
+      const lab=String(this.labelOf(e.id)||'').toLowerCase();
+      if(qwords.some(w=>lab===w||(lab.length>3&&lab.includes(w))||(w.length>3&&w.includes(lab))))Q.add(this._repOf(e.id));
+    }
+    if(!Q.size)return null;
+    // (2) select the propositions ABOUT a referent; group paraphrases by (endpoints | relation).
+    const groups=new Map();
+    for(const e of this.graph.edges){
+      if(e.from===e.to||e.sentIdx==null||!inScope(e.sentIdx))continue;
+      const via=e.relType||e.via||e.kind;if(this.junkRel(via))continue;
+      if(!this.showable(e.from)||!this.showable(e.to))continue;
+      if(this.isURLish(this.labelOf(e.from))||this.isURLish(this.labelOf(e.to)))continue;
+      const rf=this._repOf(e.from),rt=this._repOf(e.to);
+      if(!Q.has(rf)&&!Q.has(rt))continue;                          // must be ABOUT the question
+      let t;try{t=this.edgeTriple(e);}catch(_){continue;}
+      if(!t||t.irr)continue;                                        // speculative → not a fact to ground on
+      const sent=e.sentIdx,s=this.norm(this.master.sentences[sent]||'');
+      if(!s||s.length>this.MAX_PASSAGE||!this._proseOk(s.toLowerCase()))continue;
+      const rel=this.eotRel(t.v,t.neg),key=[rf,rt].sort().join('~')+'|'+rel;
+      let g=groups.get(key);
+      if(!g){g={key,eot:t.eot,conf:t.conf||0,onRef:(Q.has(rf)&&Q.has(rt))?2:1,witnesses:[]};groups.set(key,g);}
+      g.witnesses.push({source:this.master.sentenceSource[sent],text:s,sentIdx:sent});
+      if((t.conf||0)>g.conf){g.conf=t.conf||0;g.eot=t.eot;}
+    }
+    if(!groups.size)return null;
+    return this._rankPropositions([...groups.values()],{budget});
+  }
+  // The pure rank+render half (no graph reads → unit-testable): count independent origins, order by
+  // corroboration → referent-centrality → confidence, render the top witness sentences until a token
+  // budget is spent (the prompt bound is a real constraint, never a fixed N), and carry the full set
+  // as evidence for citation.
+  _rankPropositions(groups,{budget=1600}={}){
+    const ranked=(groups||[]).map(g=>({...g,origins:this._independentOrigins(g.witnesses)}))
+      .sort((a,b)=>b.origins-a.origins||(b.onRef||0)-(a.onRef||0)||(b.conf||0)-(a.conf||0));
+    const promptSpans=[],evidence=[],seen=new Set();let used=0;
+    for(const g of ranked){
+      const w=(g.witnesses||[])[0];if(!w)continue;
+      const text=this.norm(String(w.text||''));if(!text)continue;
+      evidence.push({text:this._clipPassage(text),u:w.source,i:w.sentIdx,score:g.origins,eot:g.eot,origins:g.origins});
+      if(seen.has(w.sentIdx))continue;
+      const cost=Math.max(1,Math.ceil(text.length/4));                       // ~chars→tokens
+      if(used+cost<=budget||!promptSpans.length){promptSpans.push({text:this._clipPassage(text),score:g.origins,i:w.sentIdx,u:w.source});used+=cost;seen.add(w.sentIdx);}
+    }
+    return {promptSpans,evidence,relevant:true};
+  }
+  // Independent-origin count — mirrors factcheck/propositions.js meaningfulSupport: a claim repeated
+  // inside ONE source, or syndicated verbatim across sources, counts once; ≥2 genuinely-different
+  // sources is corroboration. Kept inline (not imported) so grounding stays synchronous.
+  _independentOrigins(witnesses){
+    const kept=[];
+    for(const s of (witnesses||[])){
+      if(kept.some(k=>(k.source&&k.source===s.source)||this._nearDup(k.text,s.text)))continue;
+      kept.push(s);
+    }
+    return kept.length;
+  }
+  _nearDup(a,b){
+    a=String(a||'').toLowerCase().replace(/\s+/g,' ').trim();b=String(b||'').toLowerCase().replace(/\s+/g,' ').trim();
+    if(!a||!b)return false;if(a===b)return true;
+    const A=new Set(a.split(' ')),B=new Set(b.split(' '));let sh=0;for(const w of A)if(B.has(w))sh++;
+    const uni=A.size+B.size-sh;return uni>0&&(sh/uni)>=0.7;
+  }
   // ── DEEP RESEARCH (src/research/) — grounded projection over an append-only log ──
   //
   // The essay organs are GONE (docs/deep-research-log.md): they asked a 3B model
@@ -3632,7 +3726,12 @@ class Component extends DCLogic {
   // `grounded` is sendChat's flag (spans OR a meaning graph existed) — it separates the
   // graph-only case from the no-document case in the 'model' disclosure.
   _groundReport(ground,grounded){
-    const spans=((ground&&ground.spans)||[]).map(s=>({text:s.text,u:s.u,i:s.i}));
+    // CITATIONS (mechanical, decoupled from the model's wording): when the turn is proposition-
+    // grounded, the evidence is the FULL ranked set of on-question propositions with their spans
+    // (corroboration-ordered, unbounded), not the token-budgeted prompt subset — the model need not
+    // reproduce a proposition for it to be cited. Otherwise the prompt spans stand as today.
+    const src=(ground&&ground.prop&&ground.evidence&&ground.evidence.length)?ground.evidence:((ground&&ground.spans)||[]);
+    const spans=src.map(s=>({text:s.text,u:s.u,i:s.i,...(s.origins!=null?{origins:s.origins}:{})}));
     if(ground&&ground.relevant&&spans.length)
       return {groundKind:'matched',passages:spans,sources:ground.sources||[],disclosure:''};
     if(spans.length)
@@ -4454,7 +4553,10 @@ class Component extends DCLogic {
       if(grounded){
         const pastTurns=prev.filter(m=>m.role==='user').slice(-6).map(m=>this.norm(m.text)).filter(Boolean);
         messages=this._ME.buildGroundedMessages({
-          question:q, spans:ground.spans||[], graph:this.meaningGraph(sources),
+          // Proposition-grounded turns carry their meaning in the witness sentences (spans) already;
+          // the centrality graph block (which never saw the question) is retired for them, kept only
+          // as the fallback when grounding dropped to the keyword path.
+          question:q, spans:ground.spans||[], graph:ground.prop?'':this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),
           task:this._isSummaryQ(q)?'summary':'answer',
           conversation:{pastTurns}, now:new Date(), shape,
@@ -4918,7 +5020,7 @@ class Component extends DCLogic {
       // asker, and what even the gathered reading still doesn't hold).
       const shape=grounded?[this._ME.LIBRARIAN_CUE,(this._ME.shapeForScope&&this._ME.shapeForScope(q))||'',this._steerLine(meta)].filter(Boolean).join('\n\n'):'';
       if(grounded){
-        messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:this.meaningGraph(sources),
+        messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:ground.prop?'':this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape});
       }else{messages=this._ME.buildChatMessages({question:q,history:[],now:new Date()});}
       this._auditRec(id,'answer-prompt',{prompt:messages.map(mm=>'['+mm.role+']\n'+mm.content).join('\n\n---\n\n')});
