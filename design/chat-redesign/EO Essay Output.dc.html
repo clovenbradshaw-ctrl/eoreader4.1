@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%}
+    button{font-family:inherit;cursor:pointer}
+    ::selection{background:#cfe0ff}
+    @keyframes eospin{to{transform:rotate(360deg)}}
+    @keyframes eopop{from{transform:translateY(6px);opacity:0}to{transform:translateY(0);opacity:1}}
+    ::-webkit-scrollbar{width:10px;height:10px}
+    ::-webkit-scrollbar-thumb{background:#d4d8de;border-radius:6px;border:2px solid #f5f6f8}
+    .eo-prov{border-radius:2px;transition:background .12s ease;text-underline-offset:3px;}
+    [data-prov="hover"] .eo-prov{cursor:pointer;}
+    [data-prov="hover"] .eo-prov-source:hover{background:rgba(21,128,61,.10);border-bottom:1px solid rgba(21,128,61,.6);}
+    [data-prov="hover"] .eo-prov-llm:hover{background:rgba(150,150,160,.13);border-bottom:1px dotted rgba(150,150,160,.75);}
+    [data-prov="hover"] .eo-prov-assert:hover{background:rgba(208,165,74,.14);border-bottom:1px dotted rgba(208,165,74,.85);}
+    :root{ --app:#f5f6f8;--card:#fff;--line:#e6e8ec;--line2:#dde0e5;--ink:#1b1f24;--ink2:#5a626d;--ink3:#9aa1ab;
+      --acc:#5b34d6;--accbg:#f1edfc;--accline:#d8ccf7;--web:#2563eb;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  </style>
+</helmet>
+
+<div data-prov="hover" style="min-height:100vh;background:var(--app);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased;padding:0 22px 80px;">
+  <div style="max-width:760px;margin:0 auto;">
+
+    <!-- title -->
+    <div style="display:flex;align-items:flex-start;gap:12px;padding:26px 0 4px;">
+      <span style="flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--accbg);color:var(--acc);font-size:15px;">✦</span>
+      <div style="min-width:0;">
+        <div style="font-size:20px;font-weight:800;line-height:1.25;">write an essay about dolphins</div>
+        <div style="font-size:12.5px;color:var(--ink3);margin-top:2px;">Grounded in 8 sources · 51 sentences · <span style="color:#15803d;font-weight:600;">38 bound</span> · 13 connective</div>
+      </div>
+    </div>
+
+    <!-- SENSE LOCK — the drift, made visible and reversible -->
+    <div style="margin-top:16px;border:1px solid var(--accline);background:var(--accbg);border-radius:14px;padding:13px 15px;">
+      <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;">
+        <span style="font-size:13px;font-weight:700;color:var(--ink);">Reading “dolphins” as the animal</span>
+        <button style="font-size:11.5px;font-weight:600;color:var(--acc);background:var(--card);border:1px solid var(--accline);border-radius:8px;padding:3px 9px;white-space:nowrap;" style-hover="background:#fff">⇄ the NFL teams</button>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin-top:9px;flex-wrap:wrap;">
+        <span style="font-size:12.5px;color:var(--ink2);line-height:1.5;min-width:0;">{{ setAside.count }} sources drifted into football &amp; fishing — set aside so they don’t skew the read.</span>
+        <button onclick="{{ onToggleSetAside }}" style="font-size:11.5px;font-weight:600;color:var(--acc);background:transparent;border:none;padding:0;white-space:nowrap;">{{ setAside.caret }} {{ setAside.label }}</button>
+      </div>
+      <sc-if value="{{ setAside.open }}" hint-placeholder-val="{{ false }}">
+        <div style="margin-top:11px;display:flex;flex-direction:column;gap:7px;">
+          <sc-for list="{{ setAside.items }}" as="d" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line2);border-radius:10px;padding:8px 11px;">
+              <div style="min-width:0;flex:1;">
+                <div style="font-size:12.5px;font-weight:600;color:var(--ink);">{{ d.title }}</div>
+                <div style="font-size:11px;color:var(--ink3);margin-top:1px;">{{ d.why }} · {{ d.ents }}</div>
+              </div>
+              <button style="flex:0 0 auto;font-size:11.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:8px;padding:5px 11px;white-space:nowrap;" style-hover="border-color:var(--accline);color:var(--acc)">Restore</button>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- TRACE — a few human phases, no hashes, no jargon -->
+    <div style="margin-top:12px;border:1px solid var(--line);background:var(--card);border-radius:14px;overflow:hidden;">
+      <button onclick="{{ onToggleTrace }}" style="width:100%;display:flex;align-items:center;gap:9px;padding:11px 15px;background:transparent;border:none;text-align:left;">
+        <span style="width:8px;height:8px;border-radius:50%;background:#15803d;flex:0 0 auto;display:inline-block;"></span>
+        <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink2);white-space:nowrap;">How this was read</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--ink3);">{{ traceCaret }}</span>
+      </button>
+      <sc-if value="{{ traceOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:2px 15px 13px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:2px;">
+          <sc-for list="{{ trace }}" as="t" hint-placeholder-count="4">
+            <div style="display:flex;align-items:baseline;gap:10px;padding:6px 2px;font-size:12.5px;line-height:1.45;">
+              <span style="{{ t.iconStyle }}">{{ t.icon }}</span>
+              <span style="{{ t.textStyle }}">{{ t.text }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- ESSAY — clean sections, every sentence a grounded proposition -->
+    <div style="margin-top:26px;">
+      <sc-for list="{{ sections }}" as="sec" hint-placeholder-count="5">
+        <sc-if value="{{ sec.hasTitle }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink3);margin:26px 0 9px;padding-top:16px;border-top:1px solid var(--line);">{{ sec.title }}</div>
+        </sc-if>
+        <p style="margin:0 0 4px;font-size:15px;line-height:1.95;color:var(--ink);">
+          <sc-for list="{{ sec.props }}" as="p" hint-placeholder-count="3"><span onclick="{{ p.onClick }}" class="{{ p.cls }}" title="{{ p.tip }}" style="{{ p.spanStyle }}">{{ p.text }}<sup style="{{ p.markStyle }}">{{ p.mark }}</sup></span></sc-for>
+        </p>
+      </sc-for>
+    </div>
+
+    <!-- VERIFY — one honest, rendered line -->
+    <div style="margin-top:24px;padding:13px 15px;background:var(--card);border:1px solid var(--line);border-radius:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2);">
+      <span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:#15803d;display:inline-block;"></span><strong style="color:var(--ink);font-weight:700;">38</strong> of 51 sentences bound to a passage</span>
+      <span style="color:var(--line2);">·</span>
+      <span><strong style="color:var(--ink);font-weight:700;">13</strong> connective (the model’s glue)</span>
+      <span style="color:var(--line2);">·</span>
+      <span><strong style="color:var(--ink);font-weight:700;">8</strong> sources</span>
+      <span style="color:var(--line2);">·</span>
+      <span style="color:#b45309;"><strong style="font-weight:700;">4</strong> off-topic set aside</span>
+    </div>
+
+    <!-- SOURCES — deduped, with how often each is cited -->
+    <div style="margin-top:22px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);margin-bottom:9px;">Sources · {{ sourceCount }} <span style="font-weight:500;text-transform:none;letter-spacing:0;">— the essay draws on these; each passage is traceable above</span></div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <sc-for list="{{ sources }}" as="s" hint-placeholder-count="8">
+          <div style="display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:9px 12px;cursor:pointer;" style-hover="border-color:var(--line2)">
+            <span style="flex:0 0 auto;font-size:10.5px;font-weight:700;color:#15803d;background:rgba(21,128,61,.10);border-radius:5px;padding:2px 7px;">{{ s.srcId }}</span>
+            <div style="min-width:0;flex:1;">
+              <div style="font-size:13px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ s.title }}</div>
+              <div style="font-size:11px;color:var(--ink3);margin-top:1px;">{{ s.host }}</div>
+            </div>
+            <span style="flex:0 0 auto;font-size:11px;color:var(--ink3);">{{ s.citedIn }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROVENANCE MODAL -->
+  <sc-if value="{{ provModalOpen }}" hint-placeholder-val="{{ false }}">
+    <div onclick="{{ onCloseProv }}" style="position:fixed;inset:0;background:rgba(20,20,40,.32);display:flex;align-items:center;justify-content:center;z-index:60;padding:24px;animation:eopop .16s ease;">
+      <div onclick="{{ onCardStop }}" style="width:470px;max-width:100%;max-height:82vh;overflow-y:auto;background:var(--card);border:1px solid var(--line2);border-radius:18px;box-shadow:0 24px 60px rgba(20,20,40,.30);">
+        <div style="display:flex;align-items:center;gap:9px;padding:15px 18px 13px;border-bottom:1px solid var(--line);">
+          <span style="{{ pv.badgeStyle }}"><span style="font-size:12px;">{{ pv.badgeIcon }}</span>{{ pv.badgeLabel }}</span>
+          <button onclick="{{ onCloseProv }}" style="margin-left:auto;font-size:17px;line-height:1;color:var(--ink3);background:transparent;border:none;padding:2px 4px;" style-hover="color:var(--ink)">✕</button>
+        </div>
+        <div style="padding:16px 18px 18px;">
+          <div style="font-size:15px;line-height:1.55;color:var(--ink);font-weight:500;margin-bottom:16px;">“{{ pv.claim }}”</div>
+          <sc-if value="{{ pv.isSource }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:9px;">{{ pv.whereLabel }}</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <sc-for list="{{ pv.witnesses }}" as="w" hint-placeholder-count="1">
+                <div style="border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:var(--app);">
+                  <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
+                    <span style="font-size:10.5px;font-weight:700;color:#15803d;background:rgba(21,128,61,.10);border-radius:5px;padding:1px 7px;">{{ w.srcId }}</span>
+                    <span style="font-size:11.5px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ w.host }}</span>
+                    <span style="font-size:11px;color:var(--ink3);margin-left:auto;flex:0 0 auto;">read {{ w.when }}</span>
+                  </div>
+                  <div style="font-size:13px;line-height:1.55;color:var(--ink);border-left:2px solid rgba(21,128,61,.42);padding-left:11px;">“{{ w.quote }}”</div>
+                  <div style="margin-top:9px;"><a href="#" onclick="{{ onCardStop }}" style="font-size:11.5px;font-weight:600;color:var(--acc);" style-hover="text-decoration:underline">go to line →</a></div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ pv.isVoid }}" hint-placeholder-val="{{ false }}">
+            <div style="border:1px dashed var(--line2);border-radius:12px;padding:13px 14px;background:var(--app);">
+              <div style="font-size:13px;line-height:1.62;color:var(--ink2);">{{ pv.voidNote }}</div>
+              <div style="display:flex;align-items:center;gap:9px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);">
+                <span style="font-size:11px;color:var(--ink3);font-style:italic;min-width:0;">{{ pv.edgeLabel }}</span>
+                <button style="margin-left:auto;flex:0 0 auto;white-space:nowrap;font-size:12px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:9px;padding:6px 13px;">✦ Research this</button>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { traceOpen:false, setAsideOpen:false, provModal:null };
+
+  openProv = (p) => this.setState({ provModal: p });
+  onCloseProv = () => this.setState({ provModal: null });
+  onCardStop = (e) => { e.stopPropagation(); };
+  onToggleTrace = () => this.setState(s => ({ traceOpen: !s.traceOpen }));
+  onToggleSetAside = () => this.setState(s => ({ setAsideOpen: !s.setAsideOpen }));
+
+  _sections() {
+    return [
+      { props:[
+        { kind:'source', text:'Dolphins are marine mammals whose physical traits differ widely from one species to the next, each evolved to thrive in its own environment.',
+          witnesses:[{ srcId:'S8', host:'explorationjunkie.com', when:'today', quote:'Each species showcases the adaptability and diversity of dolphins, evolving distinct physical and behavioral characteristics to thrive in their specific environments.' }] },
+        { kind:'connective', text:'What holds the group together is less a single body plan than a shared pattern of adaptation.' },
+      ]},
+      { title:'Anatomy & physical traits', props:[
+        { kind:'source', text:'River dolphins carry longer beaks and smaller dorsal fins than their oceanic relatives,',
+          witnesses:[{ srcId:'S8', host:'explorationjunkie.com', when:'today', quote:'River dolphins tend to have longer beaks and smaller dorsal fins compared to their oceanic counterparts.' }] },
+        { kind:'source', text:'and stay relatively small — shaped by warm, shallow water and strong river currents.',
+          witnesses:[{ srcId:'S3', host:'en.wikipedia.org · River dolphin', when:'today', quote:'River dolphins are relatively small compared to other dolphins, having evolved to survive in warm, shallow water and strong river currents.' }] },
+        { kind:'source', text:'A few are even pink.',
+          witnesses:[{ srcId:'S3', host:'en.wikipedia.org · River dolphin', when:'today', quote:'Specific types of dolphins can be pink.' }] },
+        { kind:'source', text:'The familiar bottlenose lives 40 to 60 years.',
+          witnesses:[{ srcId:'S2', host:'en.wikipedia.org · Bottlenose dolphin', when:'today', quote:'Life history — Bottlenose dolphins have a lifespan of 40–60 years.' }] },
+      ]},
+      { title:'Evolution & diversity', props:[
+        { kind:'source', text:'In the Mediterranean, dolphins split into two types with no physical barrier between their regions — divided by ecology and biology rather than geography.',
+          witnesses:[{ srcId:'S4', host:'en.wikipedia.org · Evolution of cetaceans', when:'today', quote:'Even though the dolphins in the Mediterranean area had no physical barrier between their regions, they still differentiated into two types due to ecology and biology.' }] },
+        { kind:'source', text:'The east–west difference most likely comes from specialized niche choice, not distance.',
+          witnesses:[{ srcId:'S4', host:'en.wikipedia.org · Evolution of cetaceans', when:'today', quote:'Therefore, the differences between the eastern and western dolphins most likely stems from highly specialized niche choice rather than just physical barriers.' }] },
+        { kind:'creative', text:'The through-line across the sources is that dolphin diversity is written by habitat, over and over.' },
+      ]},
+      { title:'Society & communication', props:[
+        { kind:'source', text:'Males may work together to herd females in estrus, using physical aggression and intimidation to raise their reproductive success.',
+          witnesses:[{ srcId:'S1', host:'en.wikipedia.org · Dolphin', when:'today', quote:'Male dolphins may also work together and attempt to herd females in estrus, keeping the females by their side by means of both physical aggression and intimidation, to increase their chances of reproductive success.' }] },
+        { kind:'source', text:'They also play — with objects, with self-made bubble rings, with each other and with other animals.',
+          witnesses:[{ srcId:'S1', host:'en.wikipedia.org · Dolphin', when:'today', quote:'Dolphins show various types of playful behavior, often including objects, self-made bubble rings, other dolphins or other animals.' }] },
+        { kind:'source', text:'Among Mediterranean bottlenose dolphins, even the whistles are shaped by behavior.',
+          witnesses:[{ srcId:'S2', host:'en.wikipedia.org · Bottlenose dolphin', when:'today', quote:'"Whistle characteristics in free-ranging bottlenose dolphins (Tursiops truncatus) in the Mediterranean Sea: Influence of behaviour".' }] },
+      ]},
+      { title:'People & conservation', props:[
+        { kind:'source', text:'Bottlenose dolphins perform in many aquaria, which remains controversial,',
+          witnesses:[{ srcId:'S2', host:'en.wikipedia.org · Bottlenose dolphin', when:'today', quote:'Bottlenose dolphins perform in many aquaria, generating controversy.' }] },
+        { kind:'source', text:'and despite international criticism, thousands are still taken each year in drive hunts, in places such as Japan and parts of Latin America.',
+          witnesses:[{ srcId:'S1', host:'en.wikipedia.org · Dolphin', when:'today', quote:'Despite the controversial nature of the hunt resulting in international criticism, and the possible health risk that the often polluted meat causes, thousands of dolphins are caught in drive hunts each year.' }] },
+        { kind:'creative', text:'The record keeps returning to one tension: fascination on one side, exploitation on the other.' },
+      ]},
+    ];
+  }
+  _setAsideItems() {
+    return [
+      { title:'Miami Dolphins', why:'NFL team — followed from “dolphin”', ents:'+809 entities' },
+      { title:'Bills–Dolphins rivalry', why:'NFL rivalry — followed from “want”', ents:'+322 entities' },
+      { title:'Fishing industry in Peru', why:'followed from “merluccius” (hake)', ents:'+482 entities' },
+      { title:'Dolphin (character)', why:'DC Comics / Aquaman — followed from “aquaman”', ents:'+91 entities' },
+    ];
+  }
+  _trace() {
+    return [
+      { icon:'⟳', text:'Read the ask as an essay on dolphins — the animal.' },
+      { icon:'⌕', text:'Searched 5 angles · read 8 sources across 13 hops.' },
+      { icon:'⚠', warn:true, text:'4 pages drifted into football & fishing — set aside so they don’t skew the picture.' },
+      { icon:'✓', text:'Grounded 51 sentences — 38 bound to a passage, 13 connective.' },
+    ];
+  }
+  _sources() {
+    return [
+      { srcId:'S1', title:'Dolphin', host:'en.wikipedia.org', citedIn:'6 spans' },
+      { srcId:'S2', title:'Bottlenose dolphin', host:'en.wikipedia.org', citedIn:'5 spans' },
+      { srcId:'S3', title:'River dolphin', host:'en.wikipedia.org', citedIn:'3 spans' },
+      { srcId:'S4', title:'Evolution of cetaceans', host:'en.wikipedia.org', citedIn:'2 spans' },
+      { srcId:'S5', title:'Communication', host:'en.wikipedia.org', citedIn:'1 span' },
+      { srcId:'S6', title:'Sociality', host:'en.wikipedia.org', citedIn:'1 span' },
+      { srcId:'S7', title:'Dolphin characteristics', host:'animalwised.com', citedIn:'2 spans' },
+      { srcId:'S8', title:'Dolphin — a complete overview', host:'explorationjunkie.com', citedIn:'2 spans' },
+    ];
+  }
+
+  _propMap = {
+    source:     { cls:'eo-prov eo-prov-source', mColor:'#15803d',   mBg:'rgba(21,128,61,.10)', tip:'Grounded to a source — click to see the passage' },
+    connective: { cls:'eo-prov eo-prov-llm',    mColor:'var(--ink3)', mBg:'var(--app)',         tip:'The model connecting grounded claims — grounded to the void' },
+    creative:   { cls:'eo-prov eo-prov-assert', mColor:'var(--acc)',  mBg:'var(--accbg)',        tip:'The model’s own synthesis — grounded to the void' },
+  };
+  _propView(p) {
+    const c = this._propMap[p.kind] || this._propMap.connective;
+    const n = p.witnesses ? p.witnesses.length : 0;
+    const mark = p.kind === 'source'
+      ? (p.witnesses[0].srcId + (n > 1 ? '\u2009+' + (n - 1) : ''))
+      : (p.kind === 'creative' ? '\u2726' : '\u25CB');
+    return {
+      text: p.text, cls: c.cls, tip: c.tip,
+      spanStyle: 'cursor:pointer;margin-right:3px;border-radius:2px;',
+      mark,
+      markStyle: `display:inline-flex;align-items:center;font-size:9px;font-weight:700;line-height:1;color:${c.mColor};background:${c.mBg};border-radius:4px;padding:2px 4px;margin:0 0 0 3px;vertical-align:2px;cursor:pointer;`,
+      onClick: () => this.openProv(p),
+    };
+  }
+  _modalView(p) {
+    if (!p) return { badgeStyle:'', badgeIcon:'', badgeLabel:'', claim:'', isSource:false, isVoid:false, witnesses:[] };
+    if (p.kind === 'source') {
+      const n = p.witnesses.length;
+      return {
+        isSource:true, isVoid:false,
+        badgeIcon:'\u2693',
+        badgeLabel: n > 1 ? `Grounded · ${n} independent sources` : 'Grounded · 1 source',
+        badgeStyle:'display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:#15803d;background:rgba(21,128,61,.10);border:1px solid rgba(21,128,61,.28);border-radius:9px;padding:4px 11px;white-space:nowrap;',
+        claim: p.text, witnesses: p.witnesses,
+        whereLabel: n > 1 ? 'Where this comes from — corroborated' : 'Where this comes from',
+      };
+    }
+    const creative = p.kind === 'creative';
+    return {
+      isSource:false, isVoid:true,
+      badgeIcon: creative ? '\u2726' : '\u25CB',
+      badgeLabel: creative ? 'The model\u2019s own · the void' : 'The model\u2019s connective · the void',
+      badgeStyle: creative
+        ? 'display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:4px 11px;white-space:nowrap;'
+        : 'display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:4px 11px;white-space:nowrap;',
+      claim: p.text,
+      voidNote: creative
+        ? 'No passage says this outright. The model wrote it to name the pattern running through the sources — grounded to the void, not to a span, and marked so you always know.'
+        : 'No source asserts this on its own. The model wrote it to connect the grounded claims on either side — grounded to the void, not to a passage.',
+      edgeLabel: 'The edge of what I have read',
+    };
+  }
+
+  _traceView(t) {
+    const color = t.warn ? '#b45309' : (t.icon === '\u2713' ? '#15803d' : 'var(--ink3)');
+    return {
+      icon:t.icon, text:t.text,
+      iconStyle:`flex:0 0 auto;font-size:12px;width:16px;text-align:center;color:${color};`,
+      textStyle:`flex:1;min-width:0;color:${t.warn ? '#92400e' : 'var(--ink)'};`,
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    const items = this._setAsideItems();
+    return {
+      sections: this._sections().map(sec => ({
+        hasTitle: !!sec.title, title: sec.title || '',
+        props: sec.props.map(p => this._propView(p)),
+      })),
+      trace: this._trace().map(t => this._traceView(t)),
+      traceOpen: s.traceOpen, onToggleTrace: this.onToggleTrace,
+      traceCaret: s.traceOpen ? '▾' : '▸',
+      setAside: {
+        open: s.setAsideOpen, onToggle: this.onToggleSetAside,
+        caret: s.setAsideOpen ? '▾' : '▸',
+        label: s.setAsideOpen ? 'hide' : 'review',
+        count: items.length, items,
+      },
+      onToggleSetAside: this.onToggleSetAside,
+      sources: this._sources(), sourceCount: this._sources().length,
+      provModalOpen: !!s.provModal, pv: this._modalView(s.provModal),
+      onCloseProv: this.onCloseProv, onCardStop: this.onCardStop,
+    };
+  }
+}
+</script>
+</body>
+</html>
