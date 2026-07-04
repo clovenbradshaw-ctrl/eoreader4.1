@@ -7,8 +7,8 @@
 //   - A *multi-word* proper name ("Gregor Samsa", "Project Gutenberg") is
 //     referential on its face and admits on first sighting.
 //   - A single-token name admits as soon as it occupies an argument position —
-//     subject, object, possessor, prepositional object, or apposition bearer —
-//     so a name spoken once still anchors its proposition.
+//     subject, object, possessor, prepositional object, apposition bearer, or
+//     vocative addressee — so a name spoken once, or spoken TO, anchors its proposition.
 //   - Titles ("Mr.", "Mrs.", "Professor") are kept joined to the name and the
 //     trailing period normalised, so "Mr. Samsa" is one entity, not a bare "Mr".
 //
@@ -159,6 +159,7 @@ const idFor = (label) =>
 //     · a possessor      "Abram's wife"        (it owns something)
 //     · a kin/apposition  "his son Seth"        (a role names it)
 //     · subject or object "Cainan begat X" / "X walked"  (it acts or is acted on)
+//     · a vocative        "learning, Friedrich,"  (it is spoken TO — direct address)
 //   a bare CLAUSE-OPENER ("Behold, …") has zero gravity, however often it recurs;
 //   a bare mid-sentence mention has a little, so genuine list members still accrue
 //   across a few sightings (the old recurrence intuition, kept as the weak case).
@@ -214,6 +215,20 @@ const sightingGravity = (sentence, start, end, C, label = null) => {
   if (prev && (C.isRole(prev) || C.isPreposition(prev))) return 1.0;  // "his son Seth" / "unto Noah"
   if (isContent(next, C) || isContent(prev, C)) return 1.0;           // subject ("X walked") / object ("begat X")
   if (next && C.isAuxiliary(next)) return 1.0;                        // subject of a copula/aux ("Alice is …")
+  // A VOCATIVE / set-off name — a proper name inset by punctuation on BOTH sides
+  // (", Friedrich," / ", Friedrich.") — is direct address, apposition, or a list
+  // member, and each is a referent: you address a referent, you appose a referent,
+  // a comma-run of names is a roster of them ("Adam, Seth, Enosh"). This is the
+  // argument position the word-adjacency checks above cannot see, because a comma
+  // stops `prev`/`next` from reading across it — so a name spoken TO, or one that
+  // sits between two commas, earns nothing though it is as referential as a subject.
+  // The BOTH-sides requirement is what keeps it high-precision: it fires on an inset
+  // name, not on a clause-initial one, so it never mistakes a heading or a stray
+  // capital for a figure. It is placed AFTER the calendar/demonym denials, so
+  // "…, Monday," and "…, Russian," stay refused; and `cleanLabel`'s starter strip has
+  // already removed "Behold,"/"Lo,"/"Verily," before a candidate ever reaches gravity,
+  // so a KJV clause-opener cannot slip in as a vocative here either.
+  if (/,\s*$/.test(before) && (after === '' || /^\s*[,.;:!?)]/.test(after))) return 1.0;
   return 0.0;                                                         // no referential gravity
 };
 
