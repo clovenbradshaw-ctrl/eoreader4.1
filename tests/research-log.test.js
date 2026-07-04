@@ -231,6 +231,22 @@ test('bind-back: a summary sentence unsupported by any span greys as glue, and V
   assert.equal(glue.boundTo, null, 'glue carries no claim and no citation');
 });
 
+test("compose:'essay' asks the model to WRITE an essay (no 2-5 sentence cap) and lifts the token budget", async () => {
+  let seenOpts = null;
+  const model = { phrase: async (messages, opts) => { seenOpts = opts; return 'The Falcon project budget was 40 million dollars, and the overrun reshaped the program.'; } };
+  const { report } = await runGroundedResearch('Write an essay about the Falcon project budget', { sources: CORPUS, model, compose: 'essay' });
+  const sys = report.sections[0].phrase.prompt[0].content;
+  assert.match(sys, /essay/i, 'the system prompt asks for an essay');
+  assert.ok(!/2-5 sentences/i.test(sys), 'the terse summary cap is gone in essay mode');
+  assert.equal(seenOpts && seenOpts.maxTokens, 900, 'an essay gets room to breathe');
+});
+
+test('without compose, the phrasing is byte-identical to the 2-5 sentence summary (no regression)', async () => {
+  const model = { phrase: async () => 'The Falcon project budget was 40 million dollars.' };
+  const { report } = await runGroundedResearch('What happened with the Falcon project budget?', { sources: CORPUS, model });
+  assert.match(report.sections[0].phrase.prompt[0].content, /2-5 sentences/i, 'the default summary prompt is unchanged');
+});
+
 test('a leading instruction-echo is stripped from the rendered prose but kept verbatim in raw', async () => {
   const model = { phrase: async () => 'Here is a summary of the excerpts in plain prose, 2-5 sentences: The Falcon project budget was 40 million dollars.' };
   const { report } = await runGroundedResearch('What happened with the Falcon project budget?', { sources: CORPUS, model });

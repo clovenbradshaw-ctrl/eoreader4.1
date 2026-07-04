@@ -3611,7 +3611,13 @@ class Component extends DCLogic {
     // is scoped to the reading or the reading already covers the subject, so those
     // stay grounded in what's pinned.
     const size={shallow:'brief',deep:'standard',obsessive:'deep'}[(this._turnRead&&this._turnRead.depth)||'deep']||'standard';
-    const strategy=(this._turnRead&&this._turnRead.strategy)||'holonic';
+    // An ESSAY request ("write me an essay about X") should NOT be chopped into
+    // predetermined facet TYPES — the holonic "origins / types / criticism…"
+    // sections that came back mostly empty and disjointed. Use a single frame and
+    // let the model WRITE the essay from the grounded material (compose:'essay'
+    // below); a plain research question keeps the holonic decomposition.
+    const essayCompose=this._essayCompose(q);
+    const strategy=essayCompose?'depth':((this._turnRead&&this._turnRead.strategy)||'holonic');
     const useWeb=webOn&&!isolated&&!covered&&!opts.noWalk;
     const drSearch=async(query,o)=>{
       const k=(o&&o.k)||4;let urls=[];
@@ -3654,6 +3660,9 @@ class Component extends DCLogic {
     try{
       const {report,rootId}=await sess.research(subject,{
         sources,model,size,strategy,
+        // Essay requests: write from the grounded material as one flowing essay,
+        // no imposed facet types, with room for a fuller draft.
+        compose:essayCompose?'essay':null,maxPerSection:essayCompose?18:12,
         // Skip Save-Page-Now in the conversational turn: from the browser it
         // essentially never lands (CORS), so every source degrades to a local
         // pin anyway — the slow save request is pure latency for no archive. The
@@ -3737,6 +3746,13 @@ class Component extends DCLogic {
     const m=String(q||'').match(/\b(?:write|compose|draft|create|generate|produce|pen|craft)\b[^.?!]*?\b(?:poem|haiku|sonnet|limerick|verse|essay|story|song|lyrics?|rap|ballad|ode|tale|piece|article|blog\s*post|screenplay|script)\b\s+(?:about|on|regarding|concerning|describing|inspired\s+by|in\s+the\s+style\s+of)\s+(.+)$/i);
     if(m&&m[1]){const t=this.norm(m[1]).replace(/[?.!]+$/,'').trim();if(t.length>1)return t;}
     return null;}
+  // An essay / longform-COMPOSE request — "write me an essay about X", "draft a
+  // report on Y". Distinct from a plain research question: the user wants prose
+  // COMPOSED, so the grounded run drops the facet-type decomposition and lets the
+  // model write the essay from the material (compose:'essay'). Informative prose
+  // forms only — a poem/song is creative-gen's job, not this.
+  _essayCompose(q){
+    return /\b(?:write|compose|draft|create|produce|generate|pen|craft|prepare|put\s+together)\b[^.?!]*?\b(?:essays?|articles?|reports?|papers?|pieces?|overviews?|guides?|blog\s*posts?|write[-\s]?ups?|treatises?|dissertations?|compositions?)\b/i.test(String(q||''));}
   // ── The named-subject gate (the "essay about Grok" failure), the reader's copy ──
   // The same hole the answerabilityGate closes in the turn pipeline (src/longgen/answerable.js,
   // wired into src/turn/stages.js), brought to the path this UI actually runs: the Reader
