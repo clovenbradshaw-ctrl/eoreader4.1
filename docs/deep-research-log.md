@@ -78,9 +78,7 @@ instrumentation — the log is the instrument.
 
 - **The main app** (composer → *Research* / *Surface*): `Research` runs the
   grounded projection on the box text (`/research …` and `/essay …` in chat
-  land on the same path); `Surface` opens the live overlay panel.
-- **The standalone page** `deep-research.html`: just this functionality,
-  full-screen, over the same module.
+  land on the same path); `Surface` docks the live panel in the right panel.
 
 The surface is a *live* projection, not an artifact: `createResearchSession`
 (session.js) holds ONE append-only log across asks. Every further research ask

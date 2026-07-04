@@ -114,6 +114,11 @@ test('holonicFacets breaks a subject into natural sub-questions, trimmed to the 
   assert.ok(f.every((q) => /dolphins/.test(q)), 'each facet names the subject');
   assert.match(f[0], /origins|history/, 'the first facet is the origin/history sub-holon');
   assert.match(holonicFacets('research dolphins')[0], /^origins and history of dolphins/, 'the research verb is stripped from the subject');
+  // A task noun that leaked past subject extraction must not ride into every heading
+  // as "…of dolphins essay" (the dolphins audit).
+  assert.match(holonicFacets('dolphins essay')[0], /^origins and history of dolphins$/, 'a trailing task noun is stripped from the subject');
+  assert.match(holonicFacets('climate report')[0], /of climate$/, 'a trailing "report" is stripped too');
+  assert.match(holonicFacets('essay')[0], /of essay$/, 'a bare task noun as the whole subject survives');
 });
 
 test('holonic auto-decomposes into sub-frames, each reading the sources IT gathered', async () => {

@@ -1623,7 +1623,11 @@ class Component extends DCLogic {
       guard.clear();
       const history=((cur&&cur.messages)||[]).filter(m=>m&&m.role==='user'&&m.text).slice(-6).map(m=>({role:'user',content:String(m.text)}));
       const out=await formulateSearchQuery({model,question:base,history,fallback:base});
-      const q=this.norm(String(out||'')).trim();
+      // The small model sometimes RE-INJECTS the task framing it was meant to strip
+      // ("dolpins" → "dolphins essay"), which then rides into the research subject and
+      // every facet heading ("origins and history of dolphins essay" — the dolphins
+      // audit). Peel a trailing task noun back off; if that empties it, keep the base.
+      const q=this.norm(String(out||'')).trim().replace(/\s+(?:essays?|reports?|papers?|articles?|overviews?|summar(?:y|ies)|guides?|posts?|write[-\s]?ups?|analys[ei]s|reviews?)\s*$/i,'').trim();
       return (q&&q.length<=120)?q:base;
     }catch(e){return base;}
   }
@@ -1789,33 +1793,51 @@ class Component extends DCLogic {
       this.setState({drHasLog:true});
     }catch(e){liveDone=true;finish({text:'Deep research failed: '+((e&&e.message)||e)});}
   }
-  // THE SURFACE — the live report panel: a claude-artifact-like overlay that is
-  // never dead. It mounts src/research/surface.js on the SAME session log the
-  // chat writes into, so further research via chat keeps populating it. Plain
-  // DOM overlay outside the DC tree, so the runtime never re-renders it away.
+  // THE SURFACE — the live report panel, DOCKED in the right panel. It mounts
+  // src/research/surface.js on the SAME session log the chat writes into, so
+  // further research via chat keeps populating it. The panel is React-rendered
+  // and would reconcile an in-tree mount away, so the surface stays plain DOM
+  // outside the DC tree — but SIZED and POSITIONED to the right panel's column
+  // and tracked as that column moves/resizes, so it lives in the right panel
+  // while surviving every re-render.
   async onOpenDeepResearch(){
-    if(this._drOverlay){this._drOverlay.style.display='';return;}
+    if(this._drDock){this._drDock.style.display='';this._positionDrDock();return;}
     let lib,sess;
     try{lib=await this._drLib();sess=await this._drSessionGet();}
     catch(e){alert('The research module failed to load: '+((e&&e.message)||e));return;}
-    const ov=document.createElement('div');
-    ov.style.cssText='position:fixed;inset:0;z-index:900;background:rgba(15,18,24,.45);display:flex;align-items:stretch;justify-content:flex-end;';
-    const panel=document.createElement('div');
-    panel.style.cssText='width:min(960px,96vw);height:100%;background:#f5f6f8;box-shadow:-12px 0 40px rgba(0,0,0,.25);';
-    ov.appendChild(panel);
-    ov.addEventListener('click',(e)=>{if(e.target===ov)this.closeDeepResearch();});
-    document.body.appendChild(ov);
-    this._drOverlay=ov;
+    if(!this.state.rightShow)this.setState({rightShow:true});   // the panel must be open to dock into
+    const dock=document.createElement('div');
+    dock.style.cssText='position:fixed;z-index:60;background:#f5f6f8;border-left:1px solid var(--line,#e5e7eb);box-shadow:-6px 0 18px rgba(0,0,0,.08);overflow:hidden;';
+    document.body.appendChild(dock);
+    this._drDock=dock;
+    this._positionDrDock();
+    this._drDockReposition=()=>this._positionDrDock();
+    window.addEventListener('resize',this._drDockReposition,{passive:true});
+    if(typeof ResizeObserver!=='undefined'){this._drDockRO=new ResizeObserver(this._drDockReposition);const panel=document.getElementById('eo-panel-scroll');if(panel)this._drDockRO.observe(panel);this._drDockRO.observe(document.body);}
     let model=null;
     try{model=this._drModelOf(await this.ensureChatModel());}catch(e){model=null;}
-    this._drSurface=lib.mountResearchSurface(panel,{
+    this._drSurface=lib.mountResearchSurface(dock,{
       session:sess,model,
       fetchPage:async(u)=>{const p=await this.fetchPage(u);return {url:u,title:(p&&p.title)||u,text:(p&&(p.text||p.content))||''};},
       sources:this._drSources([]),
       onClose:()=>this.closeDeepResearch(),
     });
   }
-  closeDeepResearch(){if(this._drOverlay)this._drOverlay.style.display='none';}
+  // Sit the docked surface exactly over the right panel's box; when the panel is
+  // hidden or too narrow to hold it, fall back to a right-edge column.
+  _positionDrDock(){
+    const dock=this._drDock;if(!dock)return;
+    const panel=document.getElementById('eo-panel-scroll');
+    const r=(panel&&panel.offsetParent!==null)?panel.getBoundingClientRect():null;
+    if(r&&r.width>60){dock.style.top=r.top+'px';dock.style.left=r.left+'px';dock.style.right='auto';dock.style.width=r.width+'px';dock.style.height=r.height+'px';}
+    else{dock.style.top='0';dock.style.right='0';dock.style.left='auto';dock.style.width='min(960px,96vw)';dock.style.height='100%';}
+  }
+  closeDeepResearch(){
+    if(this._drDockReposition){window.removeEventListener('resize',this._drDockReposition);this._drDockReposition=null;}
+    if(this._drDockRO){try{this._drDockRO.disconnect();}catch(e){}this._drDockRO=null;}
+    if(this._drSurface&&this._drSurface.destroy){try{this._drSurface.destroy();}catch(e){}this._drSurface=null;}
+    if(this._drDock){this._drDock.remove();this._drDock=null;}
+  }
   // CREATIVE GENERATION over a topic — "write an emily dickinson poem about iced coffee",
   // "compose an essay on dolphins", "draft a haiku about the sea". The frame (write/compose/draft
   // + poem/essay/song/…) names a FORM, and the real topic rides in the "about/on X" tail. Taken at
@@ -6545,6 +6567,9 @@ class Component extends DCLogic {
       const token=this.state.viewUrl+'|'+this.state.rev+'|'+(this.state.linkMode?1:0)+'|'+this.curAccent()+'|'+this.state.highlightStyle;
       if(token!==this._decoToken){this._decoToken=token;this._scheduleDecorate();}
     } else {this._decoToken=null;}
+    // The docked research surface tracks the right panel's box across layout changes
+    // (panel resize/toggle, left rail collapse) — a re-render is exactly when the box moved.
+    if(this._drDock)this._positionDrDock();
   }
   _scheduleDecorate(){clearTimeout(this._decoT);let tries=0;const tick=()=>{const ifr=document.querySelector('iframe[data-eo-center]');const d=ifr&&ifr.contentDocument;if(d&&d.body&&d.body.childNodes.length){this.decorateFrame(d,ifr);}else if(tries++<50){this._decoT=setTimeout(tick,80);}};this._decoT=setTimeout(tick,60);}
   _frameOffset(){const ifr=document.querySelector('iframe[data-eo-center]');if(!ifr)return{x:0,y:0};const r=ifr.getBoundingClientRect();return{x:r.left,y:r.top};}
