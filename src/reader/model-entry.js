@@ -7,7 +7,7 @@
 // actually chat, and chat falls back to a structural answer if none is available.
 export { createModel } from '../model/interface.js';
 export { streamPhrase } from '../model/stream.js';
-export { buildChatMessages, buildGroundedMessages, shapeForScope, LIBRARIAN_CUE, GROUNDING_CUE } from '../model/prompt.js';
+export { buildChatMessages, buildGroundedMessages, shapeForScope, LIBRARIAN_CUE, GROUNDING_CUE, CAPABILITY_CUE } from '../model/prompt.js';
 export { CODER_MODELS, browserCoders } from '../model/coders.js';
 import '../model/echo.js';
 import '../model/webllm.js';

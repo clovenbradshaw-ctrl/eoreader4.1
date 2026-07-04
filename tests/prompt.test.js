@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   buildGroundedMessages, buildChatMessages, orientationLine, EXCERPTS_HEADER,
-  orderSpansForFrame, currentMomentLine,
+  orderSpansForFrame, currentMomentLine, LIBRARIAN_CUE, CAPABILITY_CUE,
 } from '../src/model/prompt.js';
 import { serializeNotes } from '../src/perceiver/index.js';
 import { parseText } from '../src/perceiver/parse/index.js';
@@ -224,6 +224,33 @@ test('a grounded turn is the subjective frame: the lines you read, no arrows, no
   const userTurn = t.prompt.slice(t.prompt.indexOf('\n\nuser: ') + 8);
   assert.doesNotMatch(userTurn, /\[s\d+\]/, 'the talker never sees a sentence index in the material');
   assert.ok(result.sources.length > 0, 'the grounder still cites mechanically off the spans');
+});
+
+// ── The self-aware register: honest about what a small in-browser reader can output ──
+// A longform ask ("write me an essay") over a small model comes out slow, and — worse — padded
+// into invention. Rather than fake the long form, the reader admits what it is and gives a short
+// grounded rundown. The cue is opt-in (the app folds it in on an explicit longform ask), so it
+// must never disturb the default grounded prompt.
+
+test('the capability cue is self-aware: a short grounded rundown, not a padded essay', () => {
+  assert.match(CAPABILITY_CUE, /small model reading in the browser/i, 'it names what it actually is');
+  assert.match(CAPABILITY_CUE, /short grounded rundown rather than a full essay/i, 'it offers the thing it can do');
+  assert.match(CAPABILITY_CUE, /do not (try to spin one out or )?pad/i, 'it refuses to pad to length');
+});
+
+test('the capability cue never rides the default grounded prompt (opt-in only)', () => {
+  const [, user] = buildGroundedMessages({ question: 'write me an essay about dolphins', spans: [{ idx: 0, text: 'x' }] });
+  assert.doesNotMatch(user.content, /small model reading in the browser/i,
+    'buildGroundedMessages does not carry the capability cue — the app folds it into `shape`');
+});
+
+// The anti-fabrication guard on the librarian cue: permission to quote is bounded to what was
+// actually read, and inventing a quotation is named as the failure to avoid (the dolphins run's
+// quoted-from-nothing "Dolphins give each other hugs").
+test('the librarian cue forbids inventing a quotation', () => {
+  assert.match(LIBRARIAN_CUE, /invent no quotations/i, 'inventing a quote is named as the failure');
+  assert.match(LIBRARIAN_CUE, /never put quotation marks around wording you did not actually read/i,
+    'quoting is bounded to what was actually read');
 });
 
 // ── The current-moment line (the running app's clock) ────────────────────────

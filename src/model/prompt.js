@@ -189,16 +189,44 @@ export const STRUCTURE_CUE =
 // robotic. So this asks for the SAME librarian posture but in natural, varied prose: attribute
 // when it matters, in your own words, without a recurring crutch phrase or parenthetical aside,
 // and answer the question directly rather than narrating the act of reading.
+//
+// THE ANTI-FABRICATION GUARD on the quote clause. The earlier "quote a short verbatim phrase where
+// it carries the point" MANUFACTURED quotes in a small model: handed thin or off-topic lines, it
+// still produced quotation marks — around wording it never read (the dolphins run's invented
+// "Dolphins give each other hugs" / "Pods of bottlenose dolphins", quoted from nothing). So the
+// permission to quote is now bounded to what was actually read, with inventing a quotation named as
+// the failure to avoid: if the phrasing isn't there, say it in your own words rather than fake it.
 export const LIBRARIAN_CUE =
   'Answer as a research librarian surfacing what the sources hold, not an expert holding forth. ' +
-  'Lead with what you actually found in what you read and stay grounded in it; quote a short verbatim ' +
-  'phrase where it carries the point, and where what you read is silent or thin, say so plainly ' +
+  'Lead with what you actually found in what you read and stay grounded in it. Where a short phrase ' +
+  'from what you read carries the point you may quote it verbatim — but never put quotation marks ' +
+  'around wording you did not actually read: invent no quotations, and where the phrasing isn\'t ' +
+  'there, say it in your own words. Where what you read is silent or thin, say so plainly ' +
   '(first person — "I didn\'t find that in what I read", never "the reading doesn\'t mention…") rather ' +
   'than filling the gap from your own authority — but still answer what you CAN from what is there. ' +
   'Attribute in natural prose and in your own words: vary how you do it, and do not lean on a stock ' +
   'phrase like "the source notes…" or "one account says…", do not pad the answer with parenthetical ' +
   '"(the source notes…)" asides, and never echo these instructions or a framing label ("What it ' +
   'means", "What I read") back as a heading. Write plainly, as you would to a colleague.';
+
+// THE SELF-AWARE FRAME — what this reader's own output can honestly be, given what it is: a small
+// model reading in the browser, not a long-form essayist. It rides ONLY when the ask is for a long,
+// polished piece (an essay, a report, a "write me a…") — the one shape this engine cannot actually
+// turn out. Two things go wrong when it tries: the decode grinds (a long piece is a long, slow walk
+// on a small in-browser model), and — worse — the model pads to reach the length, which is exactly
+// where it drifts off what it read into invention (the dolphins run: 12 sources gathered, then a
+// thin, part-fabricated "essay"). So rather than fake the long form, the reader is told to be
+// upfront about what it is and give the thing it CAN do well — a short, grounded rundown of what the
+// sources actually hold. Honest and self-aware beats slow and padded. Opt-in (app.dc.js gates it on
+// an explicit longform ask); never rides a default turn, so the golden prompts stand byte-for-byte.
+export const CAPABILITY_CUE =
+  'They asked for a long, polished piece — an essay or the like. Be honest about what you are: a ' +
+  'small model reading in the browser, not a long-form essayist, so a full essay would come out ' +
+  'slowly and thin. Do not try to spin one out or pad it to length — padding is exactly where you ' +
+  'start saying things you did not actually read. Open with one plain sentence saying you\'ll give a ' +
+  'short grounded rundown rather than a full essay, then lay out what you genuinely found across the ' +
+  'sources — tightly, in your own words, a few honest paragraphs. A short grounded answer is the ' +
+  'better answer here; state that once and get on with it, don\'t keep apologizing for the length.';
 
 // The RESEARCH GROUNDING cue — added to the longform/essay folds so the piece is a synthesis
 // across the gathered sources, not a recap of one. The asks, in order: corroborate (lean on what
