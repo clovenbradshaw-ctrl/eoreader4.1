@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 
 import {
   ROUTE_ALPHABET, ROUTE_EXEMPLARS, FORM_EXEMPLARS, KIND_EXEMPLARS, LENGTH_EXEMPLARS,
+  REGISTER_EXEMPLARS,
   buildBases, defaultBases, speechCurrents, relaxRoute, formKindOf, steerKindOf,
-  lengthDemandOf, developDrive,
+  lengthDemandOf, developDrive, registerDemandOf, creativeDrive,
   metaRoute, createMetaRouter, discoursePrompt, leadsOf,
 } from '../src/turn/meta-route.js';
 import { routeStance, isExplicitCompose } from '../src/core/conversation-fold.js';
@@ -128,6 +129,51 @@ test('lengthDemandOf tolerates bases with no length group (older buildBases) →
   const legacy = { route: new Map(), form: new Map(), kind: new Map() }; // no `length`
   assert.equal(lengthDemandOf('a long developed piece in many sections', legacy), '');
   assert.equal(developDrive('a long developed piece in many sections', legacy), 0);
+});
+
+// ---------------------------------------------------------------------------
+// The REGISTER grain — invention vs the checked reading, orthogonal to the route.
+// Replaces the composer's last regex-decided setting (the speculative word list in
+// the reader's _read): measured off the metacognition's own speech, so a paraphrased
+// invitation to speculate needs no trigger word — and "imagine my surprise when the
+// treaty failed" no longer flips a grounded ask into free writing.
+
+test('every register direction gets a finite crosstalk null', () => {
+  const bases = defaultBases();
+  for (const k of Object.keys(REGISTER_EXEMPLARS)) {
+    assert.ok(bases.register && bases.register.get(k), k + ' register basis exists');
+    assert.ok(Number.isFinite(bases.register.get(k).null), k + ' register null is finite');
+  }
+});
+
+test('register self-recovery: creative vs grounded speech reads the demand it names', () => {
+  const creative = 'The user wants me to make something up — an invented, imagined scenario written freely, not looked up.';
+  const grounded = 'The user wants what the sources actually say, an answer checked against the reading and anchored to the documents.';
+  assert.equal(registerDemandOf(creative), 'creative');
+  assert.equal(registerDemandOf(grounded), 'grounded');
+});
+
+test('register abstains on register-neutral speech (no demand named)', () => {
+  assert.equal(registerDemandOf('The user is asking when the bridge was completed.'), '');
+  assert.equal(registerDemandOf(''), '');
+  assert.equal(registerDemandOf(null), '');
+});
+
+test('registerDemandOf tolerates bases with no register group (older buildBases) → ""', () => {
+  const legacy = { route: new Map(), form: new Map(), kind: new Map(), length: new Map() }; // no `register`
+  assert.equal(registerDemandOf('make something up, invented freely', legacy), '');
+  assert.equal(creativeDrive('make something up, invented freely', legacy), 0);
+});
+
+test('registerDemand rides out of metaRoute on any route', () => {
+  // A GROUND turn that also asks for invention: the route settles where it settles,
+  // and the register demand rides out regardless — the composer's register reads it.
+  const speech = 'A question about the loaded document, but they want me to dream up a hypothetical continuation, invented from imagination rather than the sources.';
+  const m = metaRoute(speech, groundFold);
+  assert.equal(m.registerDemand, 'creative');
+  assert.ok(m.creativeDrive > 0, 'the graded creative current is exposed regardless of the winner');
+  const factual = metaRoute('A factual question about the document; report what the reading holds, checked against the sources.', groundFold);
+  assert.equal(factual.registerDemand, 'grounded');
 });
 
 test('developDrive is a graded current, exposed on any route', () => {
