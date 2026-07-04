@@ -2354,17 +2354,26 @@ class Component extends DCLogic {
   toggleChorus(){this.setState(s=>{const open=!s.chorusOpen;let text=s.chorusText;if(open&&!text){const sel=this._selectedSentence&&this._selectedSentence();if(sel)text=sel;}return {chorusOpen:open,settingsOpen:false,chorusText:text};});}
   closeChorus(){this.setState({chorusOpen:false});}
   onChorusText(e){this.setState({chorusText:(e&&e.target?e.target.value:'')});}
+  // The shared MiniLM meaning organ (eo/embed.js), created ONCE and reused by both the chorus reader
+  // and the walk's semantic relevance channel — so warming downloads the model a single time. Warming
+  // itself stays opt-in (embed() self-warms on first use); this only hands back the one instance.
+  async _getEmbedder(){
+    if(this._embedderP)return this._embedderP;
+    const R=(typeof window!=='undefined'&&window.__resources)||{};
+    this._embedderP=import(R.eoEmbed||new URL('src/reader/eo/embed.js',document.baseURI).href)
+      .then(m=>m.createMiniLMEmbedder());
+    return this._embedderP;
+  }
   // The chorus reader, built once and cached: the MiniLM meaning organ (eo/embed.js)
   // + the installed 27 centroids + the chorus holon (eo/chorus.js). Warmed lazily —
   // this is the ONE place the reader loads a model, and only on an explicit read.
   async _chorusReader(){
     if(this._chorus)return this._chorus;
     const R=(typeof window!=='undefined'&&window.__resources)||{};
-    const embMod=await import(R.eoEmbed||new URL('src/reader/eo/embed.js',document.baseURI).href);
     const chMod=await import(R.eoChorus||new URL('src/reader/eo/chorus.js',document.baseURI).href);
     const cenUrl=R.eoCentroids||new URL('src/reader/eo/centroids-27.json',document.baseURI).href;
     const centroids=await (await fetch(cenUrl)).json();
-    const embedder=embMod.createMiniLMEmbedder();
+    const embedder=await this._getEmbedder();
     this._chorus=chMod.createChorusReader({centroids,embedder});
     return this._chorus;
   }
@@ -3218,18 +3227,9 @@ class Component extends DCLogic {
     const isQuestion=/^(what|whats|what'?s|who|whose|when|where|which|how|is|are|was|were|does|do|did|can|will)\b/.test(s)||s.endsWith('?');
     return isQuestion&&this._researchTerms(s).length<=1;
   }
-  _researchBattery(subject,derived,sources){
-    // A lookup gets no battery — just the seed query, answered shallow (no facet drift).
-    if(!derived&&this._isSimpleLookup(subject))return [];
-    const out=[],seen=new Set(this._researchTerms(subject));
-    const add=t=>{t=this.norm(String(t||'')).trim();const k=t.toLowerCase();if(t&&!seen.has(k)){seen.add(k);out.push(t);}};
-    // (1) the document's own salient threads — only when deepening read sources, so a fresh named
-    // topic never seeds from unrelated reading already in memory.
-    const cap=this._depthCfg().facets;   // shallow 2 · deep 4 · obsessive 5 — how wide the battery
-    if(derived)for(const t of this._seedLeadsFromRead(subject,sources,4))add(t);
-    // (2) neutral facets — breadth for any subject, so it's a battery even with nothing read yet.
-    for(const f of ['overview','analysis','history','significance','criticism','examples']){if(out.length>=cap)break;add(f);}
-    return out.slice(0,cap);}
+  // (The fixed facet battery — a hardcoded overview/analysis/history/… list appended to the subject
+  // — was retired: _planFacets now plans discourse-aware angle queries through the engine's shared
+  // facet brain (modelPlanner + planQueries), with the neutral facets kept only as an offline fallback.)
   // The read context for a question, as the verbatim spans the model leans on (plus the
   // source chips/entities to show). `sources` is the chat's source set — empty ranges over
   // everything read. Empty spans when nothing relevant has been read.
@@ -3265,6 +3265,86 @@ class Component extends DCLogic {
     if(this._drLibP)return this._drLibP;
     this._drLibP=import(new URL('src/research/index.js',document.baseURI).href);
     return this._drLibP;
+  }
+  // THE QUERY BRAIN — the modular engine's LLM query formulator (src/turn/web.js), loaded the same
+  // way _drLib loads the projection lib (the app already imports src/turn/* at runtime by baseURI —
+  // see _discourseRead's meta-route.js import). ONE shared formulator for chat research and the
+  // deep-research gather, so a walk never again fires the raw chat sentence at Wikipedia.
+  async _webLib(){
+    if(this._webLibP)return this._webLibP;
+    this._webLibP=import(new URL('src/turn/web.js',document.baseURI).href);
+    return this._webLibP;
+  }
+  // THE WALK ENGINE — the modular curiosity walk + facet planner (src/turn/research.js,
+  // deep-research.js), loaded by baseURI like _drLib. runCuriousResearch/runDeepResearch are the
+  // one shared walk; modelPlanner/planQueries are the one shared facet brain. Merged into one lib
+  // object so the reader has a single handle to the engine's gather primitives.
+  async _walkLib(){
+    if(this._walkLibP)return this._walkLibP;
+    this._walkLibP=(async()=>{
+      const base=document.baseURI;
+      const [research,deep]=await Promise.all([
+        import(new URL('src/turn/research.js',base).href),
+        import(new URL('src/turn/deep-research.js',base).href),
+      ]);
+      return {...research,...deep};
+    })();
+    return this._walkLibP;
+  }
+  // _planFacets(subject,seed,cur) → the BATTERY of angle QUERIES to open the walk from — the shared
+  // engine facet brain (modelPlanner + planQueries, turn/deep-research.js) in place of the old fixed
+  // ['overview','analysis','history'…] list. modelPlanner is discourse-aware: it writes DISTINCT
+  // angles that each keep the subject, resolving references against the conversation. Returns full
+  // queries (not bare facet words). A simple lookup gets no battery; a "do more" continuation still
+  // leads with the doc's own salient threads. Guarded: no engine / no model / a refusal → the neutral
+  // facets, so the walk always has a battery and behavior never regresses.
+  async _planFacets(subject,seed,cur){
+    const cfg=this._depthCfg();
+    // A lookup wants one fast answer — no fan-out.
+    if(!(seed&&seed.derived)&&this._isSimpleLookup(subject))return [];
+    const out=[],seen=new Set([this.norm(subject).toLowerCase()]);
+    const push=(q)=>{q=this.norm(String(q||'')).trim();const k=q.toLowerCase();if(q&&!seen.has(k)){seen.add(k);out.push(q);}};
+    // (1) A continuation deepens THIS chat: the salient threads the in-scope reading already raised,
+    // sharpened by the subject (real entities/themes of the document, via the walk's own lead ranking).
+    if(seed&&seed.derived)for(const t of this._seedLeadsFromRead(subject,this.chatSourcesOf(cur),3))push(this._nextQuery(subject,t));
+    // (2) The engine's LLM angle planner — the same discipline as formulateSearchQuery, discourse-aware.
+    try{
+      const {modelPlanner,planQueries}=await this._walkLib();
+      const guard=this._stallGuard();let model=null;
+      try{model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);}catch(e){model=null;}
+      guard.clear();
+      const history=((cur&&cur.messages)||[]).filter(m=>m&&m.role==='user'&&m.text).slice(-6).map(m=>({role:'user',content:String(m.text)}));
+      const plan=modelPlanner(model,{history,question:subject});
+      const planned=await planQueries(subject,{plan,max:cfg.facets+1});   // facet 0 is the subject itself — dropped below
+      const subjKey=this.norm(subject).toLowerCase();
+      for(const f of planned)if(this.norm(String(f)).toLowerCase()!==subjKey)push(f);
+    }catch(e){/* fall through to the neutral battery */}
+    // (3) Neutral fallback so there is always a battery, even offline / with no model.
+    if(!out.length)for(const f of ['overview','analysis','history','significance','criticism']){if(out.length>=cfg.facets)break;push(this._nextQuery(subject,f));}
+    return out.slice(0,cfg.facets);
+  }
+  // _formulateSubject(topic,cur) → a clean web-search subject. formulateSearchQuery (turn/web.js) is
+  // an LLM, discourse-aware rewrite: it resolves references and strips filler/typos, turning "dophins
+  // very deeply, especially the fresh water kind" into "freshwater dolphins". Fed the discourse-ROUTED
+  // subject (_researchSeed already resolved "do more research"/corrections/find-work into a real topic),
+  // so the two are complementary — the chat's own coref, then the query rewrite. Guarded end to end:
+  // no engine, no model, or a bad/over-long rewrite → the routed subject stands, so behavior only
+  // ever improves. Same fast-path opts the engine tunes for (maxTokens 32, temp 0) ride through the
+  // RAW model — never _drModelOf, which drops the opts.
+  async _formulateSubject(topic,cur){
+    const base=this.norm(String(topic||'')).trim();
+    if(!base)return base;
+    try{
+      const {formulateSearchQuery}=await this._webLib();
+      const guard=this._stallGuard();
+      let model=null;
+      try{model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);}catch(e){model=null;}
+      guard.clear();
+      const history=((cur&&cur.messages)||[]).filter(m=>m&&m.role==='user'&&m.text).slice(-6).map(m=>({role:'user',content:String(m.text)}));
+      const out=await formulateSearchQuery({model,question:base,history,fallback:base});
+      const q=this.norm(String(out||'')).trim();
+      return (q&&q.length<=120)?q:base;
+    }catch(e){return base;}
   }
   async _drSessionGet(){
     if(this._drSess)return this._drSess;
@@ -3317,8 +3397,11 @@ class Component extends DCLogic {
   // bind-checked, cited reply — each [n] quoting the exact span it stands on.
   async _deepResearch(id,q,cur,opts={}){
     const seed=this._researchSeed(q,cur);
-    const subject=this.norm(seed.topic||q)||this.norm(q);
-    const anchor=seed.anchor||subject;
+    const routed=this.norm(seed.topic||q)||this.norm(q);
+    // Same shared query brain as chatResearch: an LLM-cleaned subject, not the raw sentence. A
+    // find-work turn keeps its routed subject (matched on Gutenberg by title). Guarded → routed.
+    const subject=seed.focus?routed:await this._formulateSubject(routed,cur);
+    const anchor=seed.focus?(seed.anchor||routed):subject;
     const existing=this.chatSourcesOf(cur);
     const isolated=this.chatIsolated(cur);
     let gathered=[];
@@ -3327,9 +3410,9 @@ class Component extends DCLogic {
     if(webOn&&!covered&&!opts.noWalk){
       this._beat(id,'start','Deep research on “'+subject+'” — reading the web first, then projecting the grounded report from pinned spans.');
       this._busy=true;this.setState({busy:true});
-      const extraSeeds=seed.focus?[]:this._researchBattery(subject,seed.derived,existing);
+      const extraSeeds=seed.focus?[]:await this._planFacets(subject,seed,cur);
       let walk={readUrls:[],hops:[]};
-      try{walk=await this._curiosityWalk(subject,anchor,(k,t)=>this._beat(id,k,t),{extraSeeds});}
+      try{walk=await this._curiosityWalk(subject,anchor,(k,t)=>this._beat(id,k,t),{facetQueries:extraSeeds});}
       catch(e){this._beat(id,'warn','Research stopped — '+((e&&e.message)||e));}
       this._busy=false;this.setState({busy:false});
       if(this._stopGen)return;
@@ -4480,28 +4563,38 @@ class Component extends DCLogic {
     // Wikipedia-first would answer "what is the weather" with an article about meteorology.
     const live=lookup&&(this._isLiveFact(q)||this._isLiveFact(topic));
     const today=live?new Date().toLocaleDateString(undefined,{year:'numeric',month:'long',day:'numeric'}):'';
+    // THE QUERY BRAIN: formulate a clean search subject with the shared LLM formulator instead of
+    // firing the raw chat sentence at Wikipedia. Skipped for a live fact (date-stamped, open-web), a
+    // simple lookup (one fast answer, no fan-out), and a find-work turn (the title is matched on
+    // Gutenberg) — an LLM rewrite would only harm those. Guarded: any fault falls back to the topic.
+    const formulated=(lookup||seed.focus)?topic:await this._formulateSubject(topic,cur);
+    // The clean subject is BOTH the seed query AND the leash anchor, so facet queries read "freshwater
+    // dolphins overview" (not "dophins very deeply … overview") and the seed gate matches the real
+    // dolphin entity. Lookup/find-work keep the routed anchor unchanged.
+    const useAnchor=(lookup||seed.focus)?anchor:formulated;
     // A "go find/read this WORK" turn focuses on the ONE work: read it — its actual text when a
     // Project Gutenberg edition exists — and its context, but do NOT fan out into a battery of facet
     // angles (overview/analysis/history…) that wander off the book. Follow the thread; don't spider.
-    const extraSeeds=seed.focus?[]:this._researchBattery(topic,seed.derived,this.chatSourcesOf(cur));
+    const extraSeeds=seed.focus?[]:await this._planFacets(formulated,seed,cur);
     // The discourse read seeds the walk: MISSING ANCHORS first (the half of the question the
-    // reading can't ground — the exact thing to go read), then the metacognition's novel leads.
-    // The metacognition deposits mass on the frontier; it never formulates the queries.
+    // reading can't ground — the exact thing to go read), then the metacognition's novel leads —
+    // each sharpened with the anchor into a standalone query, so a bare term never matches a
+    // namesake. The metacognition deposits mass on the frontier; it never formulates the queries.
     if(pre&&pre.meta&&!seed.focus&&!lookup){
       const want=[...(((pre.meta.anchorGap||{}).missing)||[]),...((pre.meta.leads)||[])];
-      for(const w of want){const t=this.norm(w);
-        if(t&&extraSeeds.length<5&&!extraSeeds.some(x=>String(x).toLowerCase()===t.toLowerCase()))extraSeeds.unshift(t);}
+      for(const w of want){const q=this._nextQuery(useAnchor,this.norm(w));
+        if(q&&extraSeeds.length<5&&!extraSeeds.some(x=>String(x).toLowerCase()===q.toLowerCase()))extraSeeds.unshift(q);}
     }
-    const angles=extraSeeds.map(t=>'“'+this._nextQuery(anchor,t)+'”').join(', ');
+    const angles=extraSeeds.map(q=>'“'+q+'”').join(', ');
     const startText=seed.derived
-      ? ('Picking up this chat — researching “'+topic+'”'+(angles?(' across '+angles):'')+'. Starting from Wikipedia, then following its cited sources.')
+      ? ('Picking up this chat — researching “'+formulated+'”'+(angles?(' across '+angles):'')+'. Starting from Wikipedia, then following its cited sources.')
       : live
-      ? ('A live question — searching the open web for “'+topic+'” as of '+today+' and reading the freshest source.')
+      ? ('A live question — searching the open web for “'+formulated+'” as of '+today+' and reading the freshest source.')
       : lookup
-      ? ('Looking up “'+topic+'” — a quick fact, so I’ll read the best source and answer straight.')
+      ? ('Looking up “'+formulated+'” — a quick fact, so I’ll read the best source and answer straight.')
       : seed.focus
       ? ('Finding “'+topic+'” and reading it — the full text if it’s on Project Gutenberg, then Wikipedia for context.')
-      : ('Researching “'+topic+'”'+(angles?(' — also '+angles):'')+'. Starting from Wikipedia, then following its cited sources to ground it across several.');
+      : ('Researching “'+formulated+'”'+(angles?(' — also '+angles):'')+'. Starting from Wikipedia, then following its cited sources to ground it across several.');
     // The turn + pending bubble: REUSED when sendChat already created them (the discourse path —
     // the trail converts from think-mode to a research trail, keeping the read's beats), created
     // fresh when research was entered directly.
@@ -4515,7 +4608,7 @@ class Component extends DCLogic {
     }else{
       this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
         if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
-        const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(topic,40);
+        const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(formulated,40);
         const research={steps:[{kind:'start',text:startText}],done:false,mode:'research',t0:Date.now()};
         chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q},{role:'asst',text:'',pending:true,research}]};
         return {chats,activeChat:id,chatInput:''};});
@@ -4538,7 +4631,7 @@ class Component extends DCLogic {
       }catch(e){pushStep('warn','Couldn’t reach Project Gutenberg — reading about it from the web instead.');}
     }
     let walk={readUrls:[],hops:[]};
-    try{walk=await this._curiosityWalk(live?(topic+' '+today):topic,anchor,pushStep,{extraSeeds,lookup,primaryUrl,live});}
+    try{walk=await this._curiosityWalk(live?(formulated+' '+today):formulated,useAnchor,pushStep,{facetQueries:extraSeeds,lookup,primaryUrl,live});}
     catch(e){pushStep('warn','Research stopped — '+((e&&e.message)||e));}
     this._busy=false;this.setState({busy:false});
     // Stopped mid-walk — stopGeneration already finalized the bubble; don't push a "done" step or
@@ -4547,7 +4640,7 @@ class Component extends DCLogic {
     const readCount=new Set(walk.readUrls).size,hops=walk.hops.length;
     const learned=Math.max(0,((this.graph&&this.graph.entities&&this.graph.entities.size)||0)-preEnts);
     pushStep('done',readCount?('Read '+readCount+' source'+(readCount!==1?'s':'')+' across '+hops+' hop'+(hops!==1?'s':'')+(learned?(' · learned '+learned+' new '+(learned===1?'entity':'entities')):'')+'. Writing it up…')
-                              :'Couldn’t gather fresh sources on “'+topic+'” — answering from what’s already read.');
+                              :'Couldn’t gather fresh sources on “'+formulated+'” — answering from what’s already read.');
     // Fold what we found into what this chat is About, so the answer is grounded in it and
     // the source chips reflect the new reading.
     for(const u of new Set(walk.readUrls))this.addChatSource(u);
@@ -4560,7 +4653,7 @@ class Component extends DCLogic {
     // Answer about the SUBJECT (not the literal "do more research" message) grounded in what was
     // read. The longform intent rides from the ORIGINAL turn ("write me an essay…") so stripping
     // the framing off the subject (now just "dolphins") doesn't lose the essay shape.
-    await this._answerInto(id,topic,[...new Set(walk.readUrls)],{longform:this._wantsLongform(q,pre&&pre.meta),meta:pre&&pre.meta});
+    await this._answerInto(id,formulated,[...new Set(walk.readUrls)],{longform:this._wantsLongform(q,pre&&pre.meta),meta:pre&&pre.meta});
   }
   // Synthesize the grounded answer into the existing pending bubble (which already carries the
   // research trail). Mirrors sendChat's answer path; grounded in whatever the chat is About
@@ -4885,6 +4978,19 @@ class Component extends DCLogic {
     // dominate, enriched once by the first page actually read, then frozen.
     const topic=new Map();for(const t of this._researchTerms(anchor))topic.set(t,(topic.get(t)||0)+3);
     let baseline=0,topicFrozen=false,stray=0;
+    // SEMANTIC recall floor (best-effort, opt-in): active only when a real meaning organ is ALREADY
+    // warm. If it isn't, kick a non-blocking warm so LATER turns gain it, and run this turn on the
+    // word-leash alone — the walk never blocks on a model download. `intentVec` embeds the denoised
+    // subject (the anchor is already the formulateSearchQuery-cleaned query); `semBaseline` is filled
+    // from the seed page's own intent-similarity at calibration, so the floor self-calibrates.
+    let emb=null,intentVec=null,semBaseline=0;
+    try{
+      const e=await this._getEmbedder();
+      if(e&&e.measuresMeaning){
+        if(e.isWarm()){const iv=await e.embed(this.norm(String(anchor||'')).slice(0,300));if(iv){emb=e;intentVec=iv;}}
+        else e.warm().catch(()=>{});   // background — available on a later turn, never blocks this one
+      }
+    }catch(_){/* no meaning organ → the walk runs on the word-leash alone */}
     // The SUBJECT's identifying company — the FIGURES (graph entities) co-present with the
     // anchor in the calibrating page's fold, the anchor's own figures excluded. Cosine saliency
     // alone is too generous a leash: "World War I", "Nuclear War: A Scenario" and "Democratic
@@ -4905,8 +5011,13 @@ class Component extends DCLogic {
     // EXTRA SEEDS — the battery: a few more ENTRY POINTS for the subject (the salient threads the
     // reading already raised, plus neutral facets), each its own Wikipedia search, so the walk opens
     // the topic from several angles instead of chaining off one.
-    const extra=(opts&&opts.extraSeeds)||[];
-    for(const t of extra){const tt=String(t||'').trim();if(tt&&!chased.has(tt)){chased.add(tt);frontier.push({query:this._nextQuery(anchor,tt),term:tt});}}
+    // Facet battery: full angle QUERIES (from _planFacets — the engine's discourse-aware planner)
+    // are seeded VERBATIM (each already keeps the subject); the legacy `extraSeeds` path (bare terms)
+    // is still supported and sharpened with the anchor, so any other caller keeps working.
+    const facetQ=(opts&&opts.facetQueries)||null;
+    if(facetQ){for(const q of facetQ){const qq=String(q||'').trim();const key=qq.toLowerCase();if(qq&&!chased.has(key)){chased.add(key);frontier.push({query:qq,term:null});}}}
+    else{const extra=(opts&&opts.extraSeeds)||[];
+      for(const t of extra){const tt=String(t||'').trim();if(tt&&!chased.has(tt)){chased.add(tt);frontier.push({query:this._nextQuery(anchor,tt),term:tt});}}}
     // PRIMARY TEXT — a Project Gutenberg full-text edition, read FIRST and directly so the BOOK
     // itself (not an article about it) anchors the walk: its own characters and places become the
     // referent set the relevance leash then checks every later page against.
@@ -4989,6 +5100,9 @@ class Component extends DCLogic {
             if(!(isUrl&&node.via==='gutenberg')&&!this._aboutAnchor(url,anchorWords,arrival)){
               this.tossPage(url);step('warn','Set aside '+this.short(url)+' — not about “'+anchor+'”, so it can’t anchor the research');continue;}
             baseline=sal;for(const t of arrival.keys())topic.set(t,(topic.get(t)||0)+1);
+            // The seed page's own intent-similarity calibrates the semantic floor (the meaning-space
+            // analogue of `baseline=sal`): later pages are judged on-meaning relative to THIS.
+            if(emb&&intentVec){const s0=await this._semPageSim(emb,url,res.title,intentVec);if(s0!=null&&s0>0)semBaseline=s0;}
             // Seed the subject's figure neighborhood from the calibrating fold: every proper
             // figure co-present with the anchor, the anchor's own figures dropped (else every
             // "war"/"peace" page would trivially "share" it).
@@ -4996,7 +5110,19 @@ class Component extends DCLogic {
             for(const fid of this._pageFigures(url).keys()){if(!A.has(fid)&&this._properFigure(fid))subjectFigures.add(fid);}
             topicFrozen=true;}
           else{
-            if(baseline>0&&sal<0.34*baseline){this.tossPage(url);step('warn','Set aside '+this.short(url)+' — drifting off “'+anchor+'”');continue;}
+            if(baseline>0&&sal<0.34*baseline){
+              // The WORD-leash says this page drifted. Before setting it aside, ask the MEANING organ
+              // (when warm): is it on the intent even though it's off the words? A reprieve keeps it;
+              // otherwise the toss stands. Semantic can only RESCUE here, never toss — so the figure
+              // gate below is still the precision authority and namesakes are still caught.
+              let rescued=false;
+              if(emb&&intentVec&&semBaseline>0){
+                const s=await this._semPageSim(emb,url,res.title,intentVec);
+                rescued=this._semReprieve(s,semBaseline);
+                if(rescued)step('lead','Kept '+this.short(url)+' — off the words but on the meaning of “'+anchor+'”');
+              }
+              if(!rescued){this.tossPage(url);step('warn','Set aside '+this.short(url)+' — drifting off “'+anchor+'”');continue;}
+            }
             // NAMESAKE leash, on the graph: known subject, but this page's fold touches NONE of
             // its figures — same topic words, different subject. Coupling is through the graph's
             // merged identity (a page mentioning Pierre folds INTO the Pierre figure), so this
@@ -5338,6 +5464,45 @@ class Component extends DCLogic {
     for(const a of arrival.values())ta+=a*a;
     return (ta&&tb)?dot/Math.sqrt(ta*tb):0;
   }
+  // ── SEMANTIC RELEVANCE — the meaning organ's recall floor ────────────────────────────────────
+  // The saliency leash above reads WORD overlap; it under-scores a page that means the question but
+  // says it in other words ("cetacean echolocation" for "dolphin sounds"). When a real meaning organ
+  // is warm (MiniLM — measuresMeaning), the walk gets a second, semantic channel: embed the denoised
+  // INTENT (the anchor is already the formulateSearchQuery-cleaned subject) and the page's ABOUTNESS,
+  // and read the cosine in that space — a meaning-distance, not a bag of words. It is used ONLY to
+  // RESCUE a page the word-leash would drop (a recall floor), never to toss one — precision stays with
+  // the figure gate — and it self-calibrates against the seed page's own intent-similarity, exactly
+  // like the word-leash calibrates against the seed's saliency. Cheap-first: it is consulted only on a
+  // page the word-leash is about to set aside, so at most one embed per borderline page.
+  //
+  // SEM_RATIO/SEM_ABS: a page is on-MEANING if its intent-cosine clears BOTH a share of the seed's
+  // (relative, self-calibrating) AND an absolute floor (so a weak seed can't lower the bar to noise).
+  // Deliberately conservative — a rescue, not a flood. Tuned by smoke-test (the MiniLM path can't run
+  // in Node), so they live as named constants.
+  _cosine(a,b){if(!a||!b||a.length!==b.length)return 0;let d=0;for(let i=0;i<a.length;i++)d+=a[i]*b[i];return d;}   // MiniLM vectors are L2-normalised → dot = cosine
+  // The DECISION, factored out pure so it is unit-testable without the model: is `sim` close enough to
+  // the seed baseline (and above the absolute floor) to reprieve a word-leash toss?
+  _semReprieve(sim,baseline){
+    const SEM_RATIO=0.72,SEM_ABS=0.34;
+    if(!(sim>0)||!(baseline>0))return false;
+    return sim>=SEM_ABS&&sim>=SEM_RATIO*baseline;
+  }
+  // The page's ABOUTNESS as a short digest — title + its lead prose, not the whole page (a long
+  // article's mean vector washes out; the lede is what it's ABOUT). Capped so the embed is cheap.
+  _pageAboutness(url,title){
+    const lead=this.norm(this._pageText(url)).slice(0,500);
+    return (this.norm(String(title||''))+'. '+lead).trim().slice(0,600);
+  }
+  // The intent-cosine of a page: embed its aboutness (the embedder caches by text, so a repeat is
+  // free) and dot it with the pre-embedded intent vector. Best-effort — any embed fault → null, and a
+  // null never rescues (the word-leash toss stands), so a cold/broken organ only ever means "no help".
+  async _semPageSim(emb,url,title,intentVec){
+    try{
+      if(!emb||!intentVec)return null;
+      const v=await emb.embed(this._pageAboutness(url,title));
+      return this._cosine(intentVec,v);
+    }catch(e){return null;}
+  }
   // CURIOSITY's leads: the most surprising real terms on a page — repeated, not seen before (or
   // far more here than in the prior), not already chased, not OCR/markup junk. Terms the engine
   // also resolved as ENTITIES are boosted (it understood them, not just saw them — competency).
@@ -5387,7 +5552,13 @@ class Component extends DCLogic {
       if(s.length>this.MAX_PASSAGE)continue;
       const low=s.toLowerCase();if(!this._proseOk(low))continue;let v=0;for(const w of qwords)if(low.includes(w))v++;if(v>0)scored.push({i,v});}
     scored.sort((a,b)=>b.v-a.v||a.i-b.i);
-    const top=scored.slice(0,3);
+    // How many passages (and, deduped from them, sources) the answer may stand on. Scaled by the
+    // research-depth dial rather than hard-capped at 3: a quick lookup stays tight, but a real
+    // research turn that gathered many on-topic sources gets to cite across them (the fix for
+    // "it only ever writes from 3 sources"). shallow 3 · deep 6 · obsessive 8.
+    const _dc=this._depthCfg();
+    const cap=_dc.key==='shallow'?3:(_dc.key==='obsessive'?8:6);
+    const top=scored.slice(0,cap);
     if(!top.length) return {text:'I didn’t find anything about that in what I’ve read.',refs:[],entities:ents.slice(0,6),sources:[]};
     const text=top.map(o=>this._clipPassage(this.norm(this.master.sentences[o.i]))).join(' ');
     const sources=[...new Set(top.map(o=>this.master.sentenceSource[o.i]).filter(Boolean))];
