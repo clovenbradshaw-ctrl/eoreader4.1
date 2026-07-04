@@ -32,7 +32,7 @@ import { makeSpine, sectionOf, renderOrder, withState, insert as spineInsert, sp
 import { initCarry, updateCarry, capCarry, replanCarry, threadsDue } from './carry.js';
 import { runGates } from './gates.js';
 import { termsOf, termSimilarity, contradicts, repeats, claimSimilarity } from './terms.js';
-import { propositionOf, numbersIn } from './proposition.js';
+import { propositionOf, numbersIn, propsConflict } from './proposition.js';
 import { renderChart, renderPullquote, renderDivider, validateSurface } from './renderers.js';
 import { projectEssay } from './project.js';
 import { reconcile } from './reconcile.js';
@@ -417,7 +417,13 @@ const explorePass = async ({ section, spine, carry, deps, secSpans, bindPool, ex
       status.set(claimId, commitment);
       continue;
     }
-    const clash = carry.ledger.find((l) => contradicts(claim, l.claim));
+    // Contradiction has two readings now that the payload is typed: the
+    // string one (shared vocabulary, flipped polarity) and the NUMERIC one
+    // (same relation, same time, disjoint quantities — the payload's own
+    // field disagreeing with itself, which no negation word marks).
+    const denies = (l) => contradicts(claim, l.claim)
+      || (claimSimilarity(claim, l.claim).sim >= 0.5 && propsConflict(commitment.prop, l.prop));
+    const clash = carry.ledger.find(denies);
     if (clash) {
       emit(candidateVetoed({ sectionId: section.id, claimId, claim, reason: `contradicts-ledger:${clash.sectionId}`, t: tick() }));
       status.set(claimId, null);
@@ -426,7 +432,7 @@ const explorePass = async ({ section, spine, carry, deps, secSpans, bindPool, ex
     // The batch coheres with itself too: a candidate contradicting a claim
     // already kept this section loses to it (arrival order breaks the tie —
     // the earlier claim has already been weighed).
-    const batchClash = [...status.values()].find((k) => k && contradicts(claim, k.claim));
+    const batchClash = [...status.values()].find((k) => k && denies(k));
     if (batchClash) {
       emit(candidateVetoed({ sectionId: section.id, claimId, claim, reason: `contradicts-ledger:${section.id}`, t: tick() }));
       status.set(claimId, null);
@@ -734,6 +740,14 @@ const renderSeam = async ({ prev, section, survivors, carry, model, knobs, signa
     const src = (prev.commitments || []).find((c) => c.claim === prev.terminalClaim)
       || (prev.commitments || [])[prev.commitments.length - 1];
     return src ? renderPullquote(src) : renderDivider();
+  }
+  if (mode === 'chart') {
+    // The fluent move from A to B is sometimes a figure: the quantity-bearing
+    // payloads of BOTH neighbors, projected together. Deterministic like any
+    // chart; thinner than two data points it degrades to the divider.
+    const pool = [...(prev.commitments || []), ...survivors];
+    const surface = renderChart(pool.filter((c) => c.prop?.quantities?.length));
+    return surface.data.length >= 2 ? surface : renderDivider();
   }
   if (!model) return renderDivider();
 

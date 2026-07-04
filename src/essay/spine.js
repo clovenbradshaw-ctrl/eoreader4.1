@@ -24,7 +24,7 @@ const list = (xs) => freeze([...(xs || [])]);
 // the model. 'auto' seams resolve in the driver: a phrased transition when a
 // model is on hand, an honest divider when not.
 export const SECTION_MODALITIES = Object.freeze(['text', 'chart', 'pullquote']);
-export const SEAM_MODALITIES = Object.freeze(['auto', 'text', 'divider', 'pullquote']);
+export const SEAM_MODALITIES = Object.freeze(['auto', 'text', 'divider', 'pullquote', 'chart']);
 
 // A section intent. `anchors` seed retrieval; `dependsOn` are the coherence
 // edges re-illuminated on entry; `opens` are the promises this section makes

@@ -508,7 +508,83 @@ test('every render call conditions on the commitment graph, never on a sibling s
   for (const p of laterPrompts) assert.ok(!p.includes(firstSurface), 'a sibling surface leaked into a render prompt');
 });
 
+test('the payload catches a numeric contradiction no negation marks', async () => {
+  const spans = [
+    { idx: 0, text: 'Felony camping arrests rose to 148 during the 2021 heat event.' },
+    { idx: 1, text: 'A later tally said felony camping arrests rose to 152 during the 2021 heat event.' },
+    { idx: 2, text: 'The heat event lasted nine days across the headland.' },
+  ];
+  const { log } = await runEssay({
+    spine: {
+      thesis: 'felony camping arrests in the heat event',
+      sections: [
+        { id: 'a', intent: 'felony camping arrests during the 2021 heat event' },
+        { id: 'b', intent: 'the tally of felony camping arrests' },
+      ],
+    },
+    spans,
+    explore: async ({ section }) => (section.id === 'a'
+      ? ['Felony camping arrests rose to 148 during the 2021 heat event.',
+         'The heat event lasted nine days across the headland.']
+      : ['Felony camping arrests rose to 152 during the 2021 heat event.']),
+  });
+  // Same words, same polarity — the string check is blind here; the typed
+  // payloads (change · 2021 · {148} vs {152}) are not.
+  const veto = log.find((e) => e.kind === EKIND.VETO && e.reason.startsWith('contradicts-ledger'));
+  assert.ok(veto, 'expected the numeric contradiction to be struck');
+  assert.match(veto.claim, /152/);
+});
+
+test('the DAG interleaves modalities: a chart slot sits mid-spine, gated like any section', async () => {
+  const spans = [
+    { idx: 0, text: 'The heat event closed the granite headland camps in 2021.' },
+    { idx: 1, text: 'Felony camping arrests rose to 148 during the heat event.' },
+    { idx: 2, text: 'The arrests fell after the camps reopened past the heat event.' },
+  ];
+  const claimFor = { a: spans[0].text, fig: spans[1].text, c: spans[2].text };
+  const { report } = await runEssay({
+    spine: {
+      thesis: 'the heat event, the camps, and the arrests',
+      sections: [
+        { id: 'a', intent: 'the heat event and the headland camps' },
+        { id: 'fig', intent: 'felony camping arrests during the heat event', modality: 'chart', dependsOn: ['a'] },
+        { id: 'c', intent: 'the arrests after the camps reopened', dependsOn: ['fig'] },
+      ],
+    },
+    spans,
+    explore: async ({ section }) => [claimFor[section.id]],
+  });
+  assert.deepEqual(report.order, ['a', 'fig', 'c']);
+  const fig = report.sections.find((s) => s.id === 'fig');
+  assert.equal(fig.state, 'accepted');
+  assert.equal(fig.modality, 'chart');
+  assert.deepEqual(fig.surface.data.map((d) => d.value), [148]);
+  assert.equal(report.sections.find((s) => s.id === 'c').state, 'accepted');
+});
+
 // ── seams: the form owns the transition ─────────────────────────────────────
+
+test('a declared chart seam projects both neighbors’ quantities', async () => {
+  const spans = [
+    { idx: 0, text: 'Felony camping arrests rose to 148 during the 2021 heat event.' },
+    { idx: 1, text: 'Shelter capacity reached 90 beds by the winter of 2021.' },
+  ];
+  const claimFor = { a: spans[0].text, b: spans[1].text };
+  const { log } = await runEssay({
+    spine: {
+      thesis: 'arrests and shelter capacity of beds',
+      sections: [
+        { id: 'a', intent: 'felony camping arrests during the heat event' },
+        { id: 'b', intent: 'shelter capacity of beds in winter', seam: { modality: 'chart' } },
+      ],
+    },
+    spans,
+    explore: async ({ section }) => [claimFor[section.id]],
+  });
+  const accepts = log.filter((e) => e.kind === EKIND.ACCEPT);
+  assert.equal(accepts[1].seam.modality, 'chart');
+  assert.deepEqual(accepts[1].seam.data.map((d) => d.value).sort((x, y) => x - y), [90, 148]);
+});
 
 test('seams: divider without a model; a declared pullquote seam quotes the left terminal claim', async () => {
   const plan = {
@@ -575,4 +651,20 @@ test('reconcile: names cross-section contradiction, redundancy, and off-thesis s
   assert.ok(findings.some((f) => f.kind === 'contradiction' && f.sectionId === 'b'));
   assert.ok(findings.some((f) => f.kind === 'redundancy' && f.sectionId === 'c'));
   assert.ok(findings.some((f) => f.kind === 'off-thesis' && f.sectionId === 'd'));
+});
+
+test('reconcile: a surface that stopped matching its payloads is named, whatever the modality', () => {
+  const claim = 'Arrests rose to 148 in 2021.';
+  const commitments = [{ claim, prop: propositionOf(claim), spanRefs: ['s0'], sectionId: 'a' }];
+  const fake = {
+    thesis: 'arrests',
+    openThreads: [],
+    sections: [{
+      id: 'a', state: 'accepted', commitments,
+      surface: { modality: 'chart', kind: 'bar', data: [{ label: 'arrests', value: 999 }], caption: '' },
+      seam: null,
+    }],
+  };
+  const findings = reconcile(fake);
+  assert.ok(findings.some((f) => f.kind === 'surface-mismatch' && f.sectionId === 'a'));
 });

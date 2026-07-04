@@ -239,9 +239,10 @@ being only a check and becomes a productive slot: the seam renders
 conditioned on both neighbors — the terminal commitment on the left, the
 target commitment on the right — and the form chooses the seam's modality.
 Sometimes the fluent move from A to B is a sentence; sometimes it is a pull
-quote, or a divider. A phrased seam is connective tissue by construction: it
-may reuse only its neighbors' vocabulary, carry no numbers, and contradict
-nothing it connects — else it falls back to the divider, loudly.
+quote, a chart of both neighbors' quantities, or a divider. A phrased seam is
+connective tissue by construction: it may reuse only its neighbors'
+vocabulary, carry no numbers, and contradict nothing it connects — else it
+falls back to the divider, loudly.
 
 The net is one sentence: fluency stops being something you generate and
 becomes something you preserve, because every surface, in every modality,

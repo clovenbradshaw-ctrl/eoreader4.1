@@ -83,6 +83,24 @@ export const propositionOf = (claim) => {
   return makeProposition({ relation, entities, quantities, time });
 };
 
+// The NUMERIC contradiction the string check cannot see: "rose to 148 in
+// 2021" and "rose to 152 in 2021" share every word and a polarity — no
+// negation flips — yet they are the same field of the same proposition with
+// two values. Two payloads conflict when they report the same relation at
+// the same time and their quantity sets are disjoint. Time must be PRESENT
+// on both and equal: "rose to 148 in 2021" and "fell to 61 after the
+// shelters opened" are different events, not a conflict. Callers guard with
+// claim-term overlap so different subjects never collide here.
+export const propsConflict = (a, b) => {
+  if (!a || !b) return false;
+  if (!a.quantities?.length || !b.quantities?.length) return false;
+  if (a.relation !== b.relation) return false;
+  if (a.time == null || b.time == null || a.time !== b.time) return false;
+  const B = new Set(b.quantities.map((q) => q.value));
+  for (const q of a.quantities) if (B.has(q.value)) return false; // a shared value — the versions agree somewhere
+  return true;
+};
+
 // The cross-modal predicate over ONE commitment: does a surface say only what
 // the payload holds? Text: every number in the surface is one of the payload's
 // quantities (or its time). Chart datum: the value IS a payload quantity.

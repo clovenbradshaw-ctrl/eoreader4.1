@@ -46,7 +46,7 @@ export const REVISE_OPS = Object.freeze(['reorder', 'insert', 'split', 'merge', 
 // visible, never silently dropped.
 export const FINDING_KINDS = Object.freeze([
   'contradiction', 'unpaid-thread', 'redundancy', 'off-thesis',
-  'thesis-contradiction', 'gate-failed',
+  'thesis-contradiction', 'gate-failed', 'surface-mismatch',
 ]);
 
 const freeze = (e) => Object.freeze(e);
