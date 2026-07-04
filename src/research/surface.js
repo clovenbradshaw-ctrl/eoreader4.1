@@ -1,8 +1,8 @@
 // research/surface.js — the deep-research surface, mountable anywhere.
 //
-// ONE UI, two hosts: the main app mounts it in an overlay (reader/app.dc.js →
-// onOpenDeepResearch) and the standalone deep-research.html page mounts it
-// full-screen. Framework-free DOM so it owes nothing to either host's runtime.
+// The main app mounts it in the right panel (reader/app.dc.js →
+// onOpenDeepResearch). Framework-free DOM so it owes nothing to the host's
+// runtime — it can be dropped into any DOM element.
 //
 // The surface is the two projections side by side (docs/deep-research-log.md):
 // while the driver runs, the LIVE view (live.js) — the frame panel, the strain

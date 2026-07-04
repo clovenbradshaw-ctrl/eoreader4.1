@@ -96,7 +96,7 @@ inspection.
 | `ingest` | text / image / web-source adapters · EoT surface syntax | `perceiver`, `core` |
 | `audit` | the append-only audit log (a projection of the fold) | nothing |
 | `reader` | the **shell build source** (`app.dc.js`, `view.xdc.html`) · `eo-gen` · the geometric reader bundle · file import · `eo/` cells & centroids | the engine |
-| `research` | **deep research as a grounded projection over an append-only log** (`docs/deep-research-log.md`): events · `projectReport` · driver · live view · the mountable surface (in-app overlay + standalone `deep-research.html`) | `archive`, `surfer`, `turn`, `core` |
+| `research` | **deep research as a grounded projection over an append-only log** (`docs/deep-research-log.md`): events · `projectReport` · driver · live view · the mountable surface (docked in the app's right panel) | `archive`, `surfer`, `turn`, `core` |
 | `archive` | archive.org pinning: dated snapshots, content hashes, span anchors (`#:~:text=`) | `ingest` |
 | `credence` | belief / credence detection (carried for the eval battery — see the pointer) | `core` |
 
@@ -138,8 +138,6 @@ after the fact. See [`docs/edge-grounding.md`](docs/edge-grounding.md),
     # serve the app
     npm run serve        # python3 -m http.server 8000
     # then visit http://localhost:8000
-    # deep research standalone (just the research surface):
-    #   http://localhost:8000/deep-research.html
 
     # optional acceptance battery
     npm run mechanics    # needs devDependencies installed

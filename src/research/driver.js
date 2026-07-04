@@ -144,8 +144,19 @@ const HOLON_FACETS = [
   (s) => `impact and significance of ${s}`,
   (s) => `${s} compared with related subjects`,
 ];
+// A task noun that leaked past subject extraction — "dolphins essay", "climate
+// report" — would make every facet read "origins and history of dolphins essay"
+// (the dolphins audit, 2026-07-04). Drop a single trailing framing noun, but
+// only when a real subject word precedes it (so "essay" or "report" as the whole
+// subject survives).
+const TRAILING_TASK_NOUN = /\s+(?:essays?|reports?|papers?|articles?|overviews?|summar(?:y|ies)|guides?|posts?|write[-\s]?ups?|analys[ei]s|reviews?|briefs?|memos?)\s*$/i;
+export const stripTaskFraming = (q) => String(q || '')
+  .replace(/^\s*(?:research|about|on|study of)\s+/i, '')
+  .replace(TRAILING_TASK_NOUN, '')
+  .trim();
+
 export const holonicFacets = (q, n = 5) => {
-  const s = String(q || '').replace(/^\s*(?:research|about|on|study of)\s+/i, '').trim();
+  const s = stripTaskFraming(q);
   if (!s) return [];
   return HOLON_FACETS.slice(0, Math.max(1, Math.min(HOLON_FACETS.length, n))).map((f) => f(s));
 };
