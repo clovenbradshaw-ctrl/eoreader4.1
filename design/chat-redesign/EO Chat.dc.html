@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%}
+    button{font-family:inherit;cursor:pointer}
+    input{font-family:inherit}
+    ::selection{background:#cfe0ff}
+    @keyframes eospin{to{transform:rotate(360deg)}}
+    @keyframes eopop{from{transform:translateY(6px);opacity:0}to{transform:translateY(0);opacity:1}}
+    @keyframes eopulse{0%,100%{opacity:1}50%{opacity:.35}}
+    ::-webkit-scrollbar{width:10px;height:10px}
+    ::-webkit-scrollbar-thumb{background:#d4d8de;border-radius:6px;border:2px solid #f5f6f8}
+    ::-webkit-scrollbar-track{background:transparent}
+    .eo-prov{border-radius:2px;transition:background .12s ease;text-underline-offset:3px;}
+    [data-prov="hover"] .eo-prov,[data-prov="lines"] .eo-prov{cursor:help;}
+    [data-prov="hover"] .eo-prov-source:hover{background:rgba(21,128,61,.10);border-bottom:1px solid rgba(21,128,61,.6);}
+    [data-prov="hover"] .eo-prov-llm:hover{background:rgba(150,150,160,.13);border-bottom:1px dotted rgba(150,150,160,.75);}
+    [data-prov="lines"] .eo-prov-source{border-bottom:1px solid rgba(21,128,61,.42);}
+    [data-prov="lines"] .eo-prov-source:hover{background:rgba(21,128,61,.10);border-bottom-color:rgba(21,128,61,.75);}
+    [data-prov="lines"] .eo-prov-llm{border-bottom:1px dotted rgba(150,150,160,.55);}
+    [data-prov="lines"] .eo-prov-llm:hover{background:rgba(150,150,160,.13);}
+    :root{ --app:#f5f6f8;--card:#fff;--line:#e6e8ec;--line2:#dde0e5;--ink:#1b1f24;--ink2:#5a626d;--ink3:#9aa1ab;
+      --acc:#5b34d6;--accbg:#f1edfc;--accline:#d8ccf7;--web:#2563eb;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  </style>
+</helmet>
+
+<div data-prov="{{ provMode }}" style="height:100vh;background:var(--app);color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;">
+
+  <!-- header -->
+  <div style="flex:0 0 auto;display:flex;align-items:center;gap:11px;padding:11px 20px;background:#dee1e6;border-bottom:1px solid var(--line);">
+    <span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;background:var(--acc);color:#fff;font-weight:800;font-size:12px;letter-spacing:.02em;">EO</span>
+    <span style="font-weight:700;font-size:13.5px;">Reader</span>
+    <span style="font-size:11px;color:var(--ink3);margin-left:2px;">· chat</span>
+    <span style="margin-left:auto;font-size:11px;color:var(--ink3);">{{ modelStatus }}</span>
+  </div>
+
+  <!-- messages -->
+  <div id="eo-scroll" style="flex:1;overflow-y:auto;min-height:0;padding:24px 22px 8px;">
+    <div style="max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:22px;">
+      <sc-for list="{{ messages }}" as="m" hint-placeholder-count="2">
+        <div style="{{ m.rowStyle }}">
+
+          <!-- user bubble -->
+          <sc-if value="{{ m.isUser }}" hint-placeholder-val="{{ false }}">
+            <div style="max-width:80%;background:var(--accbg);color:var(--ink);border:1px solid var(--accline);border-radius:15px 15px 4px 15px;padding:10px 15px;font-size:13.5px;line-height:1.5;">{{ m.text }}</div>
+          </sc-if>
+
+          <!-- assistant -->
+          <sc-if value="{{ m.isAssistant }}" hint-placeholder-val="{{ true }}">
+            <div style="width:100%;display:flex;flex-direction:column;gap:10px;">
+
+              <!-- RESEARCHED-INFO LIST — spins up live -->
+              <sc-if value="{{ m.hasResearch }}" hint-placeholder-val="{{ false }}">
+                <div style="border:1px solid var(--line);background:var(--card);border-radius:14px;overflow:hidden;">
+                  <button onclick="{{ m.onToggleResearch }}" style="width:100%;display:flex;align-items:center;gap:9px;padding:11px 14px;background:transparent;border:none;text-align:left;font-family:inherit;">
+                    <span style="{{ m.researchDotStyle }}"></span>
+                    <span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink2);white-space:nowrap;">{{ m.researchTitle }}</span>
+                    <span style="margin-left:auto;font-size:11px;color:var(--ink3);">{{ m.researchCaret }}</span>
+                  </button>
+                  <sc-if value="{{ m.researchOpen }}" hint-placeholder-val="{{ true }}">
+                    <div style="padding:2px 14px 12px;display:flex;flex-direction:column;gap:1px;border-top:1px solid var(--line);">
+                      <sc-for list="{{ m.findings }}" as="f" hint-placeholder-count="1">
+                        <div style="{{ f.rowStyle }}">
+                          <span style="{{ f.iconStyle }}">{{ f.icon }}</span>
+                          <span style="{{ f.textStyle }}">{{ f.text }}</span>
+                          <sc-if value="{{ f.hasSrc }}" hint-placeholder-val="{{ false }}"><span style="{{ f.chipStyle }}">{{ f.src }} · {{ f.host }}</span></sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-if>
+
+              <!-- thinking -->
+              <sc-if value="{{ m.thinking }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:9px;color:var(--ink3);font-size:12.5px;padding:2px;">
+                  <span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>
+                  <span>{{ m.think }}</span>
+                </div>
+              </sc-if>
+
+              <!-- answer — EVERY proposition is grounded; each opens its provenance (source, or the void) -->
+              <sc-if value="{{ m.hasAnswer }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:14px;line-height:1.95;color:var(--ink);">
+                  <sc-for list="{{ m.answerProps }}" as="p" hint-placeholder-count="3"><span onclick="{{ p.onClick }}" class="{{ p.cls }}" title="{{ p.tip }}" style="{{ p.spanStyle }}">{{ p.text }}<sup style="{{ p.markStyle }}">{{ p.mark }}</sup></span></sc-for>
+                </div>
+              </sc-if>
+
+              <!-- sources (compact) -->
+              <sc-if value="{{ m.hasSources }}" hint-placeholder-val="{{ false }}">
+                <div style="border:1px solid var(--line);background:var(--card);border-radius:12px;padding:8px 6px;">
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);padding:2px 8px 6px;">{{ m.sourcesLabel }}</div>
+                  <sc-for list="{{ m.sources }}" as="s" hint-placeholder-count="1">
+                    <div style="display:flex;align-items:baseline;gap:9px;padding:6px 8px;border-radius:8px;cursor:pointer;" style-hover="background:var(--app)">
+                      <span style="flex:0 0 auto;font-size:10.5px;font-weight:700;color:var(--acc);background:var(--accbg);border-radius:5px;padding:1px 6px;">{{ s.n }}</span>
+                      <span style="flex:1;min-width:0;font-size:12.5px;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ s.preview }}</span>
+                      <span style="flex:0 0 auto;font-size:11px;color:var(--ink3);">{{ s.domain }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+
+              <!-- single meta line: register + reasoning -->
+              <sc-if value="{{ m.hasMeta }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:1px;">
+                  <span style="{{ m.registerStyle }}"><span style="font-size:12px;">{{ m.registerIcon }}</span>{{ m.registerLabel }}</span>
+                  <button onclick="{{ m.onToggleReason }}" style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink3);background:transparent;border:none;font-family:inherit;padding:2px 0;" style-hover="color:var(--acc)"><span style="font-size:9px;">{{ m.reasonCaret }}</span>{{ m.reasonLabel }}</button>
+                  <span style="font-size:11px;color:var(--ink3);">· every phrase is traceable — click one</span>
+                </div>
+                <sc-if value="{{ m.reasonOpen }}" hint-placeholder-val="{{ false }}">
+                  <div style="border-left:2px solid var(--accline);padding:2px 0 2px 13px;margin-top:-2px;font-size:12.5px;line-height:1.6;color:var(--ink2);">
+                    <sc-for list="{{ m.reasonLines }}" as="l" hint-placeholder-count="3"><div style="margin-bottom:5px;">{{ l.a }}<strong style="color:var(--ink);">{{ l.bold }}</strong>{{ l.b }}</div></sc-for>
+                  </div>
+                </sc-if>
+              </sc-if>
+
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- COMPOSER -->
+  <div style="flex:0 0 auto;padding:12px 22px 16px;border-top:1px solid var(--line);background:var(--card);">
+    <div style="max-width:720px;margin:0 auto;position:relative;">
+
+      <!-- EMERGENT READOUT — the route is read off the ask + the field, never chosen.
+           These chips are a readout, not controls: no manual selection. -->
+      <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px;min-height:22px;">
+        <span style="{{ read.dotStyle }}"></span>
+        <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);white-space:nowrap;flex:0 0 auto;">{{ read.lead }}</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-width:0;">
+          <sc-for list="{{ read.chips }}" as="c" hint-placeholder-count="0">
+            <span title="{{ c.why }}" style="{{ c.style }}">{{ c.label }}</span>
+          </sc-for>
+          <span style="font-size:11px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">{{ read.gloss }}</span>
+        </div>
+      </div>
+
+      <!-- input -->
+      <div style="display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
+        <input value="{{ input }}" oninput="{{ onInput }}" onkeydown="{{ onKey }}" placeholder="{{ placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
+        <sc-if value="{{ generating }}" hint-placeholder-val="{{ false }}">
+          <button onclick="{{ onStop }}" title="Stop" style="font-size:13px;font-weight:600;color:#fff;background:#dc2626;border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;display:flex;align-items:center;gap:6px;" style-hover="background:#b91c1c"><span style="width:9px;height:9px;background:#fff;border-radius:2px;display:inline-block;"></span>Stop</button>
+        </sc-if>
+        <sc-if value="{{ !generating }}" hint-placeholder-val="{{ true }}">
+          <button onclick="{{ onSend }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;">Ask</button>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROVENANCE MODAL — where a proposition comes from: a real passage, or honestly the void -->
+  <sc-if value="{{ provModalOpen }}" hint-placeholder-val="{{ false }}">
+    <div onclick="{{ onCloseProv }}" style="position:fixed;inset:0;background:rgba(20,20,40,.32);display:flex;align-items:center;justify-content:center;z-index:60;padding:24px;animation:eopop .16s ease;">
+      <div onclick="{{ onCardStop }}" style="width:470px;max-width:100%;max-height:82vh;overflow-y:auto;background:var(--card);border:1px solid var(--line2);border-radius:18px;box-shadow:0 24px 60px rgba(20,20,40,.30);">
+        <div style="display:flex;align-items:center;gap:9px;padding:15px 18px 13px;border-bottom:1px solid var(--line);">
+          <span style="{{ pv.badgeStyle }}"><span style="font-size:12px;">{{ pv.badgeIcon }}</span>{{ pv.badgeLabel }}</span>
+          <button onclick="{{ onCloseProv }}" style="margin-left:auto;font-size:17px;line-height:1;color:var(--ink3);background:transparent;border:none;padding:2px 4px;" style-hover="color:var(--ink)">✕</button>
+        </div>
+        <div style="padding:16px 18px 18px;">
+          <div style="font-size:15px;line-height:1.55;color:var(--ink);font-weight:500;margin-bottom:16px;">“{{ pv.claim }}”</div>
+
+          <!-- grounded to real passages -->
+          <sc-if value="{{ pv.isSource }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:9px;">{{ pv.whereLabel }}</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <sc-for list="{{ pv.witnesses }}" as="w" hint-placeholder-count="1">
+                <div style="border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:var(--app);">
+                  <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;">
+                    <span style="font-size:10.5px;font-weight:700;color:#15803d;background:rgba(21,128,61,.10);border-radius:5px;padding:1px 7px;">{{ w.srcId }}</span>
+                    <span style="font-size:11.5px;color:var(--ink2);">{{ w.host }}</span>
+                    <span style="font-size:11px;color:var(--ink3);margin-left:auto;">read {{ w.when }}</span>
+                  </div>
+                  <div style="font-size:13px;line-height:1.55;color:var(--ink);border-left:2px solid rgba(21,128,61,.42);padding-left:11px;">“{{ w.quote }}”</div>
+                  <div style="margin-top:9px;"><a href="#" onclick="{{ onCardStop }}" style="font-size:11.5px;font-weight:600;color:var(--acc);" style-hover="text-decoration:underline">go to line →</a></div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <!-- grounded to the void — the model's own words, marked honestly -->
+          <sc-if value="{{ pv.isVoid }}" hint-placeholder-val="{{ false }}">
+            <div style="border:1px dashed var(--line2);border-radius:12px;padding:13px 14px;background:var(--app);">
+              <div style="font-size:13px;line-height:1.62;color:var(--ink2);">{{ pv.voidNote }}</div>
+              <div style="display:flex;align-items:center;gap:9px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);">
+                <span style="font-size:11px;color:var(--ink3);font-style:italic;min-width:0;">{{ pv.edgeLabel }}</span>
+                <button style="margin-left:auto;flex:0 0 auto;white-space:nowrap;font-size:12px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:9px;padding:6px 13px;">✦ Research this</button>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  _timers = [];
+
+  state = {
+    input: '',
+    generating: false,
+    modelStatus: 'Qwen2.5 · ready',
+    messages: this._seed(),
+    provModal: null,          // the proposition whose provenance is open
+  };
+
+  openProv = (p) => this.setState({ provModal: p });
+  onCloseProv = () => this.setState({ provModal: null });
+  onCardStop = (e) => { e.stopPropagation(); };
+
+  // ===== THE READ — every setting emerges from the ask + the field. No manual selection. =====
+  // Physics, not decisions: intent is read off the question, depth is a length demand read off
+  // its complexity, register falls out of whether the library can ground the claim, breadth
+  // follows intent. Returns null for an empty box (the field is at rest).
+  _read(text) {
+    const t = (text || '').trim();
+    if (!t) return null;
+    const low = t.toLowerCase();
+    const words = t.split(/\s+/).length;
+    // intent: a relational/causal ask relaxes into research; a lookup stays a direct answer
+    const relational = /\b(why|how|compare|contrast|across|trace|history|relationship|between|develop|evolv|origin|connect|lead to|because)\b/.test(low);
+    const research = relational || words > 9;
+    // register: speculative language leaves the library — the model writes freely (creative);
+    // otherwise the answer is checked against sources (grounded)
+    const creative = /\b(imagine|suppose|what if|could|might|guess|opinion|invent|speculat|hypothetical|predict)\b/.test(low);
+    const register = creative ? 'creative' : 'grounded';
+    // depth: a demand read off the discourse field's complexity
+    const depth = words > 15 || (relational && words > 8) ? 'deep' : words > 5 ? 'standard' : 'brief';
+    // breadth follows intent
+    const retrieval = research ? 'broad' : 'precise';
+    return { research, register, depth, retrieval, words, relational, creative };
+  }
+
+  // ---- data ----
+  _findingDefs() {
+    return [
+      { kind:'scope', icon:'⟳', text:'Reading your library — 4 sources in scope' },
+      { kind:'read',  icon:'▤', text:'higher holons re-weight the priors of lower ones', src:'S1', host:'README.md' },
+      { kind:'read',  icon:'▤', text:'the reading cursor rides frame-relative surprise', src:'S3', host:'significance-loop.md' },
+      { kind:'read',  icon:'▤', text:'a claim tied to no span is struck, not shown', src:'S7', host:'edge-grounding.md' },
+      { kind:'web',   icon:'✦', text:'Koestler — the holon as a Janus-faced whole/part', src:'W1', host:'en.wikipedia.org' },
+      { kind:'bond',  icon:'◆', text:'grounding envelope  ⟷  retrieval re-weighting', host:'2 sources agree' },
+    ];
+  }
+  // Each proposition is grounded — to a real passage (source), to the model connecting grounded
+  // claims (connective/void), or to the model writing freely (creative/void). All are shown; none
+  // is unmarked. kind → source | connective | creative.
+  _answerProps() {
+    return [
+      { kind:'source', text:'Higher holons re-weight the priors of the lower ones.',
+        witnesses:[{ srcId:'S1', host:'README.md', when:'2d ago', quote:'The high sets the probabilities for the low — higher holons influence lower ones by changing the priors they operate under.' }] },
+      { kind:'connective', text:'So the grounding envelope never lets retrieval run context-free —' },
+      { kind:'source', text:'it biases which entities get admitted before a single span is scored,',
+        witnesses:[{ srcId:'S3', host:'significance-loop.md', when:'2d ago', quote:'The conversation field biases entity admission; the reading cursor rides frame-relative surprise.' }] },
+      { kind:'source', text:'and any claim it can\u2019t bind to a real passage is struck rather than shown.',
+        witnesses:[
+          { srcId:'S7', host:'edge-grounding.md', when:'5h ago', quote:'A claim tied to no span is struck, not shown.' },
+          { srcId:'S1', host:'README.md', when:'2d ago', quote:'A citation can only bind to a span that exists.' },
+        ] },
+      { kind:'creative', text:'In effect, retrieval inherits the conversation\u2019s priors the way a reader carries a mood from one page to the next.' },
+    ];
+  }
+  _sources() {
+    return [
+      { n:'S1', preview:'higher holons re-weight the priors of lower ones', domain:'README.md' },
+      { n:'S3', preview:'the reading cursor rides frame-relative surprise', domain:'significance-loop.md' },
+      { n:'S7', preview:'a claim tied to no span is struck, not shown', domain:'edge-grounding.md' },
+    ];
+  }
+  _reasonLines() {
+    return [
+      { a:'envelope ', bold:'re-weights', b:' retrieval \u2014 witnessed by S1, S3' },
+      { a:'claim ', bold:'bound to', b:' a span \u2014 else struck (S7)' },
+      { a:'web hit W1 read but ', bold:'not cited', b:' \u2014 no grounded span matched' },
+    ];
+  }
+  _seed() {
+    return [
+      { id:'u0', role:'user', text:"How did EO's grounding envelope come to re-weight retrieval?" },
+      { id:'a0', role:'assistant', kind:'research',
+        findings: this._findingDefs(), researchOpen:true, researchDone:true,
+        answerProps: this._answerProps(), sources:this._sources(),
+        register:'grounded', reasonLines:this._reasonLines(), reasonOpen:false },
+    ];
+  }
+
+  componentWillUnmount() { this._clear(); }
+  _clear() { this._timers.forEach(clearTimeout); this._timers = []; }
+
+  _patch(id, patch) {
+    this.setState(s => ({ messages: s.messages.map(m => m.id===id ? { ...m, ...patch } : m) }));
+  }
+  _push(id, f) {
+    this.setState(s => ({ messages: s.messages.map(m => m.id===id ? { ...m, findings:[...m.findings, f] } : m) }));
+    this._scroll();
+  }
+  _scroll() {
+    requestAnimationFrame(() => { const el = document.getElementById('eo-scroll'); if (el) el.scrollTop = el.scrollHeight; });
+  }
+
+  onInput = (e) => this.setState({ input: e.target.value });
+  onKey = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.onSend(); } };
+  onStop = () => { this._clear(); this.setState(s => ({ generating:false, modelStatus:'stopped',
+    messages: s.messages.map(m => m.thinking ? { ...m, thinking:false } : (m.kind==='research' && !m.researchDone ? { ...m, researchDone:true } : m)) })); };
+
+  onSend = () => {
+    const q = this.state.input.trim();
+    if (!q || this.state.generating) return;
+    const read = this._read(q);                 // the route emerges from the ask
+    const uid = 'u' + Date.now(), aid = 'a' + Date.now();
+    const base = { id:aid, role:'assistant', read };
+    const am = read.research
+      ? { ...base, kind:'research', findings:[], researchOpen:true, researchDone:false }
+      : { ...base, kind:'answer', thinking:true, think:'Reading your library…' };
+    this.setState(s => ({
+      messages: [...s.messages, { id:uid, role:'user', text:q }, am],
+      input:'', generating:true, modelStatus: read.research ? 'researching…' : 'thinking…',
+    }));
+    this._scroll();
+    if (read.research) this._runResearch(aid);
+    else this._timers.push(setTimeout(() => this._finish(aid), 1200));
+  };
+
+  _runResearch(id) {
+    const defs = this._findingDefs();
+    defs.forEach((f, i) => {
+      this._timers.push(setTimeout(() => {
+        this._push(id, f);
+        this._patch(id, { researchTitleN: i + 1 });
+      }, 550 + i * 720));
+    });
+    this._timers.push(setTimeout(() => this._finish(id), 550 + defs.length * 720 + 400));
+  }
+  _finish(id) {
+    // register is what it ACTUALLY used — read.register unless the library couldn't ground it
+    const m = this.state.messages.find(x => x.id === id);
+    const register = (m && m.read && m.read.register) || 'grounded';
+    this._patch(id, { thinking:false, researchDone:true,
+      answerProps:this._answerProps(), sources:this._sources(),
+      register,
+      reasonLines:this._reasonLines(), reasonOpen:false });
+    this.setState({ generating:false, modelStatus:'Qwen2.5 · ready' });
+    this._scroll();
+  }
+
+  // ---- view ----
+  _findingView(f) {
+    const color = f.kind==='web' ? 'var(--acc)' : f.kind==='bond' ? '#15803d' : 'var(--ink3)';
+    const spin = f.kind==='scope' ? 'animation:eospin 1s linear infinite;display:inline-block;' : '';
+    return {
+      icon:f.icon, text:f.text, src:f.src||'', host:f.host||'', hasSrc:!!f.src,
+      rowStyle:'display:flex;align-items:baseline;gap:10px;padding:5px 2px;font-size:12.5px;line-height:1.45;animation:eopop .28s ease;',
+      iconStyle:`flex:0 0 auto;font-size:12px;width:15px;text-align:center;color:${color};${spin}`,
+      textStyle:'flex:1;min-width:0;color:var(--ink);',
+      chipStyle:'flex:0 0 auto;font-size:10.5px;font-weight:600;color:var(--ink3);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 7px;white-space:nowrap;',
+    };
+  }
+  _msgView(m) {
+    if (m.role === 'user') return { rowStyle:'display:flex;justify-content:flex-end;', isUser:true, isAssistant:false, text:m.text };
+    const reg = m.register;
+    const regMap = {
+      grounded:{ icon:'⚓', label:'Grounded', style:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:#15803d;background:rgba(21,128,61,.09);border:1px solid rgba(21,128,61,.25);border-radius:8px;padding:3px 9px;' },
+      creative:{ icon:'✦', label:'Creative', style:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:3px 9px;' },
+    };
+    const r = regMap[reg] || regMap.grounded;
+    const nFound = m.findings ? m.findings.length : 0;
+    return {
+      rowStyle:'display:flex;', isUser:false, isAssistant:true,
+      hasResearch: m.kind === 'research',
+      researchOpen: !!m.researchOpen,
+      onToggleResearch: () => this._patch(m.id, { researchOpen: !m.researchOpen }),
+      researchTitle: m.researchDone ? `Researched · ${nFound} findings` : `Researching… ${nFound} found`,
+      researchCaret: m.researchOpen ? '▾' : '▸',
+      researchDotStyle: m.researchDone
+        ? 'width:8px;height:8px;border-radius:50%;background:#15803d;display:inline-block;flex:0 0 auto;'
+        : 'width:12px;height:12px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;flex:0 0 auto;',
+      findings: (m.findings || []).map(f => this._findingView(f)),
+      thinking: !!m.thinking, think: m.think || '',
+      hasAnswer: !!(m.answerProps && m.answerProps.length),
+      answerProps: (m.answerProps || []).map(p => this._propView(p)),
+      hasSources: !!(m.sources && m.sources.length),
+      sources: m.sources || [], sourcesLabel: `Grounded in ${m.sources ? m.sources.length : 0} passages`,
+      hasMeta: !!(m.answerProps && m.answerProps.length),
+      registerIcon:r.icon, registerLabel:r.label, registerStyle:r.style,
+      reasonOpen: !!m.reasonOpen, reasonCaret: m.reasonOpen ? '▾' : '▸',
+      reasonLabel: m.reasonOpen ? 'hide reasoning' : 'reasoning',
+      reasonLines: m.reasonLines || [],
+      onToggleReason: () => this._patch(m.id, { reasonOpen: !m.reasonOpen }),
+    };
+  }
+
+  // ---- provenance of a single proposition ----
+  _propMap = {
+    source:     { cls:'eo-prov eo-prov-source', mColor:'#15803d',   mBg:'rgba(21,128,61,.10)', tip:'Grounded to a source — click to see the passage' },
+    connective: { cls:'eo-prov eo-prov-llm',    mColor:'var(--ink3)', mBg:'var(--app)',         tip:'The model connecting grounded claims — grounded to the void' },
+    creative:   { cls:'eo-prov eo-prov-assert', mColor:'var(--acc)',  mBg:'var(--accbg)',        tip:'The model\u2019s own words — grounded to the void' },
+  };
+  _propView(p) {
+    const c = this._propMap[p.kind] || this._propMap.connective;
+    const n = p.witnesses ? p.witnesses.length : 0;
+    const mark = p.kind === 'source'
+      ? (p.witnesses[0].srcId + (n > 1 ? '\u2009+' + (n - 1) : ''))
+      : (p.kind === 'creative' ? '\u2726' : '\u25CB');   // ✦ / ○
+    return {
+      text: p.text, cls: c.cls, tip: c.tip,
+      spanStyle: 'cursor:pointer;margin-right:3px;border-radius:2px;',
+      mark,
+      markStyle: `display:inline-flex;align-items:center;font-size:9px;font-weight:700;line-height:1;color:${c.mColor};background:${c.mBg};border-radius:4px;padding:2px 4px;margin:0 0 0 3px;vertical-align:2px;cursor:pointer;`,
+      onClick: () => this.openProv(p),
+    };
+  }
+  _modalView(p) {
+    if (!p) return { badgeStyle:'', badgeIcon:'', badgeLabel:'', claim:'', isSource:false, isVoid:false, witnesses:[] };
+    if (p.kind === 'source') {
+      const n = p.witnesses.length;
+      return {
+        isSource:true, isVoid:false,
+        badgeIcon:'\u2693', // anchor
+        badgeLabel: n > 1 ? `Grounded · ${n} independent sources` : 'Grounded · 1 source',
+        badgeStyle:'display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:#15803d;background:rgba(21,128,61,.10);border:1px solid rgba(21,128,61,.28);border-radius:9px;padding:4px 11px;white-space:nowrap;',
+        claim: p.text,
+        witnesses: p.witnesses,
+        whereLabel: n > 1 ? 'Where this comes from — corroborated' : 'Where this comes from',
+      };
+    }
+    const creative = p.kind === 'creative';
+    return {
+      isSource:false, isVoid:true,
+      badgeIcon: creative ? '\u2726' : '\u25CB',
+      badgeLabel: creative ? 'The model\u2019s own · the void' : 'The model\u2019s connective · the void',
+      badgeStyle: creative
+        ? 'display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:4px 11px;white-space:nowrap;'
+        : 'display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:700;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:4px 11px;white-space:nowrap;',
+      claim: p.text,
+      voidNote: creative
+        ? 'No passage you\u2019ve read says this. The model wrote it freely — a phrasing that rides on your sources without being lifted from any one of them. It is grounded to the void, not to a span, and marked so you always know.'
+        : 'No source asserts this on its own. The model wrote it to connect the grounded claims on either side — grounded to the void, not to a passage.',
+      edgeLabel: 'The edge of what I have read',
+    };
+  }
+
+  // ---- the emergent readout ----
+  _chip(label, accent) {
+    return { label,
+      style: accent
+        ? 'font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:7px;padding:2px 9px;white-space:nowrap;animation:eopop .22s ease;'
+        : 'font-size:11px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:7px;padding:2px 9px;white-space:nowrap;animation:eopop .22s ease;',
+    };
+  }
+  _readView() {
+    const r = this._read(this.state.input);
+    if (!r) {
+      return {
+        dotStyle:'width:7px;height:7px;border-radius:50%;background:var(--line2);display:inline-block;flex:0 0 auto;',
+        lead:'At rest', chips:[],
+        gloss:'The ask sets its own route — depth, grounding and breadth all fall out of what you type.',
+      };
+    }
+    const chips = [
+      { ...this._chip(r.research ? 'research' : 'answer', r.research), why: r.research ? 'A relational or long ask relaxes into research' : 'A direct lookup stays a single answer' },
+      { ...this._chip(r.depth, r.depth === 'deep'), why: 'Depth is a length demand read off the ask\u2019s complexity' },
+      { ...this._chip(r.register, r.register === 'creative'), why: r.register === 'creative' ? 'Speculative wording leaves the library — the model writes freely' : 'Checked against your sources' },
+      { ...this._chip(r.retrieval, false), why: 'Breadth follows intent' },
+    ];
+    const gloss = r.creative
+      ? 'Speculative — it will write freely, marked creative.'
+      : r.research
+        ? (r.depth === 'deep' ? 'A causal ask across your library — deep, grounded research.' : 'A relational ask — grounded research across sources.')
+        : 'A direct lookup — grounded to passages.';
+    return {
+      dotStyle:'width:9px;height:9px;border-radius:50%;background:var(--acc);display:inline-block;flex:0 0 auto;box-shadow:0 0 0 3px var(--accbg);',
+      lead:'Reads as', chips, gloss,
+    };
+  }
+
+  renderVals() {
+    const s = this.state;
+    return {
+      provMode: 'hover',                    // provenance display is emergent too — clean at rest, reveal on hover
+      modelStatus: s.modelStatus,
+      messages: s.messages.map(m => this._msgView(m)),
+      generating:s.generating, input:s.input,
+      onInput:this.onInput, onKey:this.onKey, onSend:this.onSend, onStop:this.onStop,
+      placeholder:'Ask anything — the route reads itself…',
+      read: this._readView(),
+      provModalOpen: !!s.provModal,
+      pv: this._modalView(s.provModal),
+      onCloseProv: this.onCloseProv,
+      onCardStop: this.onCardStop,
+    };
+  }
+}
+</script>
+</body>
+</html>

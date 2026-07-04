@@ -18,7 +18,7 @@ class Component extends DCLogic {
     this.READ_THEMES={light:{bg:'#ffffff',fg:'#23272e',fg2:'#9aa1ab',rule:'#eef0f3'},sepia:{bg:'#f4ecd9',fg:'#473f30',fg2:'#9a8e72',rule:'#e6dac0'},dark:{bg:'#14171c',fg:'#c8ccd3',fg2:'#71777f',rule:'#262a31'}};
     this.READ_FONTS={serif:'Georgia,"Iowan Old Style","Times New Roman",serif',sans:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif'};
     this._defaultRead={fs:19,lh:1.7,w:720,theme:'light',font:'serif'};
-    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null,savedWebBrain=null,savedViewMode=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');savedWebBrain=localStorage.getItem('eo_webbrain');savedViewMode=localStorage.getItem('eo_viewmode');}catch(e){}
+    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null,savedViewMode=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');savedViewMode=localStorage.getItem('eo_viewmode');}catch(e){}
     this._busy=false; this._svoRun=0; this._panelStack=[]; this._gzDrag=null; this._gzMoved=false;
     // Live model-generation tracking: every stall guard registers here so a single Stop can abort
     // whatever's decoding; `_stopGen` latches a user stop until the next turn starts.
@@ -55,30 +55,15 @@ class Component extends DCLogic {
       viewMode:(savedViewMode==='reader'?'reader':'native'),
       accent:savedAccent||null, highlightStyle:savedHL||'marker', settingsOpen:false, templatesOpen:false,
       hoverPivot:savedHoverPivot||'dwell', clickAction:savedClickAct||'ask', hoverDelay:Math.max(150,Math.min(2000,+savedHoverDelay||1100)),
-      // THE REGISTER (docs/creative-grounded-modes.md): how the next answers are written.
-      // 'auto' grounds on whatever the turn gathers and falls back honestly; 'grounded' holds
-      // strictly to sources (declines rather than inventing); 'creative' writes freely from
-      // the model, gathering nothing. Every settled turn is BADGED with the register it
-      // actually used, whichever was asked for. Persisted under eo_answermode.
-      answerMode:(()=>{try{const m=localStorage.getItem('eo_answermode');return (m==='grounded'||m==='creative')?m:'auto';}catch(e){return 'auto';}})(),
-      // How span-provenance is shown on answers: 'hover' (clean — reveal a span's source/model on
-      // hover, no persistent marks) · 'lines' (always underline: green=source, dotted=model) · 'off'
-      // (no per-span marks at all). Default clean-on-hover; persisted under eo_provmode.
-      provMode:(()=>{try{const m=localStorage.getItem('eo_provmode');return (m==='lines'||m==='off')?m:'hover';}catch(e){return 'hover';}})(),
+      // THE COMPOSER CARRIES NO MODE STATE (design/chat-redesign/REVISIONS.md).
+      // Register, depth, strategy and web reach are all EMERGENT — read off the
+      // ask by _read(q) at send time, shown live in the composer readout, never
+      // selected. The register every settled turn is BADGED with is still what
+      // the turn ACTUALLY used. Provenance display is emergent too: clean
+      // hover-reveal, always (the old eo_answermode / eo_provmode / eo_webbrain /
+      // eo_depth / eo_strategy persistence is retired).
       auditMode:savedAudit==='1', auditCollapsed:false, auditCopied:false, provOpen:false, panelProvOpen:false,
       hoverCite:null, liveResearch:{on:false},
-      // WEB AS BRAIN — on by default. A 3B chat model knows little, so by default a question it
-      // can't ground in what's already been read+folded sends the engine to the web first (fetch,
-      // fold, then answer from the new reading) instead of letting the model guess. Turning it off
-      // (the composer toggle) makes the chat answer ONLY from what you've read — no web at all.
-      webBrain:(savedWebBrain!=='0'),
-      // HOW MUCH research — the arc's coverage policy, surfaced. shallow takes the strongest
-      // answer; deep covers the subject from several angles; obsessive exhausts the threads.
-      // It scales the battery size, the hop budget, pages-per-thread, and leash patience.
-      researchDepth:(()=>{try{return localStorage.getItem('eo_depth')||'deep';}catch(e){return 'deep';}})(),
-      // Deep-research strategy: how the gather is shaped — breadth (many sources,
-      // skim), depth (few sources, deep), holonic (decompose into sub-holons).
-      researchStrategy:(()=>{try{return localStorage.getItem('eo_strategy')||'holonic';}catch(e){return 'holonic';}})(),
       leftOpen:true, openGroups:{}, summaries:{}, wikiDefs:{}, learnedOpen:false,
       // Entities the reader has explicitly RESEARCHED (the ✦ button). Once an entity
       // has been researched, its side-panel profile leads with the cross-source reading
@@ -1685,7 +1670,7 @@ class Component extends DCLogic {
     const existing=this.chatSourcesOf(cur);
     const isolated=this.chatIsolated(cur);
     let gathered=[];
-    const webOn=this.state.webBrain!==false;
+    const webOn=true;   // the web toggle is gone — coverage/isolation below still gate the walk
     const covered=!isolated&&this.groundNotes(subject,existing).relevant;
     if(webOn&&!covered&&!opts.noWalk){
       this._beat(id,'start','Deep research on “'+subject+'” — reading the web first, then projecting the grounded report from pinned spans.');
@@ -1716,8 +1701,8 @@ class Component extends DCLogic {
     // walk's corpus (Wikipedia-first, then the open web); withheld when the chat
     // is scoped to the reading or the reading already covers the subject, so those
     // stay grounded in what's pinned.
-    const size={shallow:'brief',deep:'standard',obsessive:'deep'}[this.state.researchDepth||'deep']||'standard';
-    const strategy=this.state.researchStrategy||'holonic';
+    const size={shallow:'brief',deep:'standard',obsessive:'deep'}[(this._turnRead&&this._turnRead.depth)||'deep']||'standard';
+    const strategy=(this._turnRead&&this._turnRead.strategy)||'holonic';
     const useWeb=webOn&&!isolated&&!covered&&!opts.noWalk;
     const drSearch=async(query,o)=>{
       const k=(o&&o.k)||4;let urls=[];
@@ -1807,13 +1792,6 @@ class Component extends DCLogic {
     });
   }
   closeDeepResearch(){if(this._drOverlay)this._drOverlay.style.display='none';}
-  // The composer's Research control: deep-research whatever is in the box; an
-  // empty box gets the scaffold dropped in, so the affordance teaches its own use.
-  researchGo(){
-    const q=this.norm(this.state.chatInput);
-    if(!q){this.setState({chatInput:'research '});return;}
-    this._drCommand(q.replace(/^\/?research\s+/i,''));
-  }
   // THE DISCOURSE STEER — the poem offer stays (composeArtifact is untouched);
   // essay/story-shaped asks now flow to deep research through the longform gate,
   // never to a compose organ, so the steer only ever suggests the poem.
@@ -1923,9 +1901,7 @@ class Component extends DCLogic {
   _noSubjectPatch(q,sources){
     const subj=this._namedSubjects(q).slice(0,3).join(', ');
     const what=this.chatOrientation(sources);
-    const tail=(this.state.webBrain===false)
-      ? 'Turn the web on (the ✦ toggle on the composer) and I’ll go read about it — or ask me about what’s here.'
-      : 'I couldn’t find it in the sources — ask me about what’s here, or I can look it up on the web.';
+    const tail='I couldn’t find it in the sources — ask me about what’s here, or I can look it up on the web.';
     const text='I haven’t read anything about '+(subj?('“'+subj+'”'):'that')+'. What I have read is '+what+'. '+tail;
     return {text,groundKind:'model',disclosure:'Not grounded in your reading — the sources don’t mention this.',related:this.relatedDocs(q,sources)};
   }
@@ -2322,7 +2298,8 @@ class Component extends DCLogic {
     document.body.appendChild(a);a.click();setTimeout(()=>{try{URL.revokeObjectURL(a.href);a.remove();}catch(e){}},0);
   }
   _shouldWeb(q,sources,isolated,meta){
-    if(this.state.webBrain===false)return false;            // web turned off → never touch it
+    // No web on/off switch any more — the reach is emergent: the measured gates
+    // below (live fact, anchor gap, discourse route, coverage) decide per turn.
     if(this.mechanicalAnswer(q))return false;               // a clock question answers itself
     // A LIVE FACT (weather, price, score, headline) is an ask about the world's NOW — a
     // no-brainer web turn. Gated before every coverage check: no reading covers tomorrow's
@@ -2606,6 +2583,11 @@ class Component extends DCLogic {
     // with {steerBypass:true}); the composer's Enter/Ask pass nothing and read the input box.
     const q=this.norm(qArg!=null?qArg:this.state.chatInput);if(!q)return;
     this._stopGen=false;   // a fresh turn clears any prior stop
+    // THE TURN'S CONFIG IS DERIVED, not stored (design/chat-redesign/REVISIONS.md):
+    // one emergent read of the ask replaces the old composer mode state. It rides
+    // on the instance for the depth/strategy consumers downstream of this turn
+    // (_depthCfg, _deepResearch) and is re-derived fresh on every send.
+    this._turnRead=this._read(q)||{research:false,register:'auto',depth:'shallow',strategy:'breadth'};
     if(/^\/svg\b/i.test(q))return this._limnChat(q);
     // MATH — a pure arithmetic question is computed by math.js, before the web/model routing
     // below can strip it to a "subject" and research it. The cheap sync pre-gate keeps a
@@ -2634,11 +2616,11 @@ class Component extends DCLogic {
     // The grounding scope for this turn: isolated (net-new, ground nothing from reading),
     // everything (sources:[]), or the tagged sources. An isolated chat answers plainly.
     const _sc=this._answerScope(cur,null);const isolated=_sc.isolated;const sources=_sc.sources;
-    // THE REGISTER this turn runs at (the composer's Auto/Grounded/Creative switch). Creative
-    // gathers nothing and grounds on nothing — the point is the model speaking for itself —
-    // so the web walk, the subject gate, the discourse read, and the grounded frame are all
-    // bypassed below.
-    const amode=this.state.answerMode||'auto';
+    // THE REGISTER this turn runs at — emergent, from the read above. Creative
+    // gathers nothing and grounds on nothing — the point is the model speaking for
+    // itself — so the web walk, the subject gate, the discourse read, and the
+    // grounded frame are all bypassed below.
+    const amode=this._turnRead.register||'auto';
     const prev=cur?cur.messages.filter(m=>m.text&&!m.pending):[];
     // An EXPLICIT research request ("research dolphins", "look into X") is a performed transition
     // INTO grounding — a structural marker (§5), not an anaphor — so it breaks continuation and
@@ -2847,28 +2829,75 @@ class Component extends DCLogic {
   // follows the most SURPRISING term while it stays ON TOPIC (curiosity steered, competency
   // leashed); reads every kept page into memory; folds them into what the chat is About; and
   // finally answers, grounded in everything it gathered. One thread per hop, never a fan-out.
-  toggleResearchMode(){this.setState(s=>({researchMode:!s.researchMode}));}
-  // The web on/off switch (the composer toggle). On is the default; off means the chat answers only
-  // from what you've already read, never reaching for the internet. Persisted so the choice sticks.
-  toggleWebBrain(){this.setState(s=>{const on=!(s.webBrain!==false);try{localStorage.setItem('eo_webbrain',on?'1':'0');}catch(e){}return {webBrain:on};});}
+  // ── THE EMERGENT READ (design/chat-redesign/REVISIONS.md) ──────────────────
+  // Every composer setting is READ OFF THE ASK, never selected — EO's own
+  // thesis ("it is all physics, not decisions") applied to the UI. The same
+  // read renders live in the composer readout as you type and derives the
+  // turn's config at send time (sendChat sets this._turnRead):
+  //   intent   — a relational/causal ask relaxes into research; a lookup stays
+  //              a single answer.
+  //   register — speculative wording leaves the library (creative); otherwise
+  //              auto: grounded on whatever the turn gathers, honest fallback.
+  //              Every settled answer stays badged with what it ACTUALLY used.
+  //   depth    — a length demand read off the ask's complexity.
+  //   strategy — how a deep-research gather is shaped follows the intent.
+  // Null for an empty box (the field is at rest).
+  _read(text){
+    const t=this.norm(text||'');if(!t)return null;
+    const low=t.toLowerCase();
+    const words=t.split(/\s+/).filter(Boolean).length;
+    const relational=/\b(why|how|compare|contrast|across|trace|history|relationship|between|develops?|evolved?|evolution|origins?|connects?|because|leads? to)\b/.test(low);
+    const speculative=/\b(imagine|suppose|what if|invent|make up|speculat\w*|hypothetical\w*|fiction|pretend|dream up)\b/.test(low);
+    const research=relational||words>9;
+    const depth=(words>15||(relational&&words>8))?'obsessive':(words>5?'deep':'shallow');
+    return {
+      research,
+      register:speculative?'creative':'auto',
+      depth,
+      strategy:relational?'holonic':'breadth',
+      breadth:research?'broad':'precise',
+      words,relational,speculative,
+    };
+  }
+  // The readout's render props — a readout, not buttons: there is nothing to set.
+  _readView(){
+    const r=this._read(this.state.chatInput);
+    if(!r)return {
+      dotStyle:'width:7px;height:7px;border-radius:50%;background:var(--line2);display:inline-block;flex:0 0 auto;',
+      lead:'At rest',chips:[],
+      gloss:'The ask sets its own route — intent, depth, grounding and breadth all fall out of what you type.',
+    };
+    const chip=(label,accent,why)=>({label,why,
+      style:'font-size:11px;font-weight:600;border-radius:7px;padding:2px 9px;white-space:nowrap;'
+        +(accent?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);'
+                :'color:var(--ink2);background:var(--app);border:1px solid var(--line2);')});
+    const chips=[
+      chip(r.research?'research':'answer',r.research,r.research?'A relational or long ask relaxes into research':'A direct lookup stays a single answer'),
+      chip(r.depth,r.depth==='obsessive','Depth is a length demand read off the ask’s complexity'),
+      chip(r.register==='creative'?'creative':'grounded',r.register==='creative',
+        r.register==='creative'?'Speculative wording leaves the library — the model writes freely'
+          :'Checked against your sources — the answer is badged with the register it actually used'),
+      chip(r.breadth,false,'Breadth follows intent'),
+    ];
+    const gloss=r.speculative?'Speculative — it will write freely, marked creative.'
+      :r.research?(r.depth==='obsessive'?'A causal ask across the reading — deep, grounded research.':'A relational ask — grounded research across sources.')
+      :'A direct lookup — grounded to passages.';
+    return {
+      dotStyle:'width:9px;height:9px;border-radius:50%;background:var(--acc);display:inline-block;flex:0 0 auto;box-shadow:0 0 0 3px var(--accbg);',
+      lead:'Reads as',chips,gloss,
+    };
+  }
   // The research-depth policy (shallow / deep / obsessive) → concrete walk knobs. This is the
   // arc's coverage cut: how wide the battery, how many hops, how many pages per thread, and how
-  // patiently the leash tolerates a dry thread before stopping.
-  _depthCfg(){const d=this.state.researchDepth||'deep';
+  // patiently the leash tolerates a dry thread before stopping. Depth now rides
+  // the turn's emergent read (_read), not a stored dial.
+  _depthCfg(){const d=(this._turnRead&&this._turnRead.depth)||'deep';
     if(d==='shallow')  return {key:'shallow',  facets:2, maxHops:3, want:1, wantSeed:1, patience:2};
     // obsessive used to run up to 14 hops × 2 pages each — minutes of reading on the in-browser
     // model, "WAY too long". Reined in: more angles than deep, but a bounded walk (≤9 hops, one
     // page per thread). It exhausts the threads; it does not exhaust the afternoon.
     if(d==='obsessive')return {key:'obsessive',facets:5, maxHops:9, want:1, wantSeed:2, patience:4};
     return                    {key:'deep',     facets:4, maxHops:8, want:1, wantSeed:2, patience:3};}
-  cycleResearchDepth(){const order=['shallow','deep','obsessive'];this.setState(s=>{const i=order.indexOf(s.researchDepth||'deep');const next=order[(i+1)%order.length];try{localStorage.setItem('eo_depth',next);}catch(e){}return {researchDepth:next};});}
-  // THE STRATEGY SWITCH — breadth → depth → holonic, persisted (mirrors cycleResearchDepth).
-  cycleResearchStrategy(){const order=['breadth','depth','holonic'];this.setState(s=>{const i=order.indexOf(s.researchStrategy||'holonic');const next=order[(i+1)%order.length];try{localStorage.setItem('eo_strategy',next);}catch(e){}return {researchStrategy:next};});}
-  // THE REGISTER SWITCH — auto → grounded → creative, persisted (mirrors cycleResearchDepth).
-  cycleAnswerMode(){const order=['auto','grounded','creative'];this.setState(s=>{const i=order.indexOf(s.answerMode||'auto');const next=order[(i+1)%order.length];try{localStorage.setItem('eo_answermode',next);}catch(e){}return {answerMode:next};});}
-  // Cycle how span provenance is shown on answers: hover → lines → off. Persisted; the root's
-  // data-prov attribute (and off-mode hover suppression) read it live, so it re-styles instantly.
-  cycleProvMode(){const order=['hover','lines','off'];this.setState(s=>{const i=order.indexOf(s.provMode||'hover');const next=order[(i+1)%order.length];try{localStorage.setItem('eo_provmode',next);}catch(e){}return {provMode:next};});}
   async chatResearch(q,pre){
     if(this._busy){
       // A walk is already running. A pre-created bubble (sendChat's discourse path) must not be
@@ -3235,7 +3264,7 @@ class Component extends DCLogic {
     const guard=this._stallGuard();
     try{
       const model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);
-      const amode=this.state.answerMode||'auto';
+      const amode=(this._turnRead&&this._turnRead.register)||'auto';
       const grounded=!isolated&&((ground.spans&&ground.spans.length)||!!(this.graph&&this.graph.entities&&this.graph.entities.size));
       // The GROUNDED register's honesty gate, after the walk: even fresh research turned up
       // nothing to ground on, so decline rather than let the model invent (abstention over invention).
@@ -4305,8 +4334,7 @@ class Component extends DCLogic {
       shellStyle:drawer
         ? 'position:absolute;top:0;right:0;bottom:0;width:min(440px,92%);z-index:20;display:flex;flex-direction:column;min-height:0;background:var(--app);border-left:1px solid var(--line);box-shadow:-14px 0 44px rgba(20,24,30,.16);animation:eoslide .18s ease-out;'
         : 'height:100%;display:flex;flex-direction:column;min-height:0;background:var(--app);'+(docked?'border-left:1px solid var(--line);':''),
-      placeholder:this.state.researchMode?'Name a topic to research — I’ll go read about it…'
-        :isIso?'Ask anything — nothing tagged yet…'
+      placeholder:isIso?'Ask anything — nothing tagged yet…'
         :isEvery?'Ask about everything you’ve read…'
         :('Ask about '+(ss.length===1?('“'+titleOf(ss[0])+'”'):('these '+ss.length+' sources'))+'…')};
   }
@@ -6814,58 +6842,21 @@ class Component extends DCLogic {
       onSearch:e=>this.onSearch(e),inboxCount:'',inbox:[],inboxEmpty:true,groups:[],hasEgo:false,
       chats:[],hasChats:false,chatOn:false,chat:null,chatInput:this.state.chatInput||'',askPageOn:false,
       onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onStopGen:()=>this.stopGeneration(),onCloseChat:()=>this.closeChat(),onAskPage:()=>this.askThisPage(),
-      onToggleResearchMode:()=>this.toggleWebBrain(),researchModeOn:this.state.webBrain!==false,
-      webBtnLabel:this.state.webBrain!==false?'✦ Web on':'✦ Web off',
-      researchModeTitle:this.state.webBrain!==false?'Web is on — when your own reading doesn’t cover a question I go read the internet, fold it into memory, and answer grounded in what I found. Click to turn the web off.':'Web is off — answers come only from what you’ve read, nothing from the internet. Click to let me read the web when your reading doesn’t cover a question.',
-      researchModeHint:this.state.webBrain!==false?'I’ll read the web when your own reading doesn’t cover it.':'Off — answering only from what you’ve read.',
-      researchModeStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.webBrain!==false?'color:#fff;background:var(--acc);border:1px solid var(--acc);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
-      // HOW MUCH research — cycles shallow → deep → obsessive (the arc's coverage policy). Disabled
-      // visually when the web is off (there's nothing to scale). Only meaningful while web is on.
-      // THE REGISTER SWITCH (docs/creative-grounded-modes.md, the reader's face): how the next
-      // answers are written \u2014 auto (ground on whatever the turn gathers, honest fallback) \u00b7
-      // grounded (strictly from sources; declines rather than inventing) \u00b7 creative (the model
-      // writing freely, nothing gathered). Cycles like the depth button; every settled turn is
-      // badged with the register it ACTUALLY used. Phosphor icons: circle-half \u00b7 anchor \u00b7 sparkle.
-      onCycleAnswerMode:()=>this.cycleAnswerMode(),
-      answerModeIcon:(this.state.answerMode==='grounded')?'\ue514':(this.state.answerMode==='creative')?'\ue6a2':'\ue18c',
-      answerModeLabel:(this.state.answerMode||'auto'),
-      answerModeTitle:'How the next answers are written: auto (ground on whatever this turn gathers; fall back honestly) \u00b7 grounded (strictly from sources \u2014 declines rather than inventing) \u00b7 creative (the model writing freely; nothing gathered). Click to cycle. Every answer is badged with the register it actually used.',
-      answerModeStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'
-        +((this.state.answerMode==='grounded')?'color:#15803d;background:#e9f6ee;border:1px solid #bfe3cc;'
-        :(this.state.answerMode==='creative')?'color:#6d28d9;background:#f1edfc;border:1px solid #d8ccf7;'
-        :'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
-      // The PROVENANCE display toggle — how per-span source/model marks are shown on answers.
-      onCycleProvMode:()=>this.cycleProvMode(),
-      provMode:(this.state.provMode||'hover'),
-      provModeLabel:'spans: '+(this.state.provMode||'hover'),
-      provModeTitle:'How each span’s provenance is shown on answers: hover (clean — reveal a span’s source or model on hover) · lines (always underline: green = from a source, dotted = the model’s own) · off (no per-span marks). Click to cycle. Citations still work in every mode.',
-      provModeStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'
-        +((this.state.provMode==='lines')?'color:#15803d;background:#e9f6ee;border:1px solid #bfe3cc;'
-        :(this.state.provMode==='off')?'color:var(--ink3);background:var(--app);border:1px solid var(--line2);'
-        :'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
-      onCycleDepth:()=>this.cycleResearchDepth(),
-      depthBtnIcon:'\ue79e',depthBtnLabel:(this.state.researchDepth||'deep'),
-      depthTitle:'How much research per question: shallow (the strongest answer) · deep (several angles) · obsessive (exhaust the threads). Click to cycle.',
-      depthStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.webBrain!==false?'color:var(--ink2);background:var(--app);border:1px solid var(--line2);':'color:var(--ink3);background:var(--app);border:1px solid var(--line2);opacity:.5;'),
-      // THE STRATEGY SWITCH — how deep research SHAPES the gather (breadth · depth · holonic).
-      onCycleStrategy:()=>this.cycleResearchStrategy(),
-      strategyBtnLabel:'◇ '+(this.state.researchStrategy||'holonic'),
-      strategyTitle:'How deep research gathers: breadth (many sources, skim each) · depth (few sources, followed deep) · holonic (break the topic into facets and research each as its own whole). Click to cycle.',
-      strategyStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px;padding:4px 10px;flex:0 0 auto;cursor:pointer;'+(this.state.webBrain!==false?'color:var(--ink2);background:var(--app);border:1px solid var(--line2);':'color:var(--ink3);background:var(--app);border:1px solid var(--line2);opacity:.5;'),
-      // THE RESEARCH CONTROL on the composer — deep research replaced the essay
-      // organ (docs/deep-research-log.md). The accent half runs the grounded
-      // projection on the box text (researchGo → /research); the neutral half
-      // opens the SURFACE — the live report panel over the session's research
-      // log, which keeps populating as further research is asked in chat.
-      outputGoIcon:'\uE30C', // magnifying glass — RESEARCH
-      outputWriteLabel:'Research',
-      onOutputGo:()=>this.researchGo(),
-      outputGoTitle:'Deep research on what you typed — pin sources, bind spans, extract grounded propositions, and project a report where every claim is tethered to its exact span. The chat gets the cited reply; the Surface holds the live report.',
-      onOutputMenu:()=>this.onOpenDeepResearch(),
-      outputMenuTitle:this.state.drHasLog?'Open the live research surface — the report keeps populating as you research in chat':'Open the research surface — run grounded deep research in a live panel',
-      outputCurrentLabel:'Surface',
-      outputGoStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:7px 0 0 7px;padding:4px 10px;flex:0 0 auto;border-right:none;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);cursor:pointer;',
-      outputChooserStyle:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:0 7px 7px 0;padding:4px 9px;flex:0 0 auto;cursor:pointer;border:1px solid var(--accline);white-space:nowrap;'+(this.state.drHasLog?'color:#fff;background:var(--acc);':'color:var(--ink2);background:var(--app);'),
+      // THE EMERGENT READOUT (design/chat-redesign/REVISIONS.md): the six manual
+      // composer controls are gone. The route is read off the ask as you type \u2014
+      // intent, depth, register, breadth \u2014 and the same _read(q) derives the
+      // turn's config at send time. The chips are a readout, not buttons: there
+      // is nothing to set. Provenance marks are emergent too \u2014 clean
+      // hover-reveal, always (the root's data-prov attribute reads the constant
+      // below). Deep research still runs from the ask itself (the read relaxes
+      // into research) or the explicit /research command; the SURFACE \u2014 the
+      // live report panel over the session's research log \u2014 stays reachable
+      // from the readout row: a view, not a mode.
+      read:this._readView(),
+      provMode:'hover',
+      onOpenDeepResearch:()=>this.onOpenDeepResearch(),
+      surfaceTitle:this.state.drHasLog?'Open the live research surface \u2014 the report keeps populating as you research in chat':'Open the research surface \u2014 run grounded deep research in a live panel',
+      surfaceStyle:'margin-left:auto;flex:0 0 auto;font-size:11px;font-weight:600;border:none;background:transparent;cursor:pointer;white-space:nowrap;padding:2px 0 2px 9px;'+(this.state.drHasLog?'color:var(--acc);':'color:var(--ink3);'),
       backend:this.state.backend||'webllm',
       backendOptions:[{v:'webllm',label:'Llama-3.2-3B · runs in your browser'},
         {v:'qwen-coder-1.5b',label:'Qwen2.5-Coder 1.5B · code model, WebGPU'},
