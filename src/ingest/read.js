@@ -149,6 +149,36 @@ const renderReading = ({ docId, units, spine, structure, turns, frame }) => {
 
 const clip = (s, n = 72) => { const t = String(s).replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
 
+// readingJsonl(doc, opts) → the reading as JSONL: one typed JSON record per line, the same
+// append-only-stream shape the log and the audit already export in (reader/app.dc.js: "the
+// log exports as JSONL"). A surface to SEE the reading of any document, machine-readable and
+// diff-able. Record types, in reading order:
+//
+//   {type:'head'}        docId, counts (units, structure lines, turns, whether framed)
+//   {type:'structure'}   one per canonical EoT line — `eot` is the round-trippable surface
+//   {type:'turn'}        one per turning point — the full predictive read there
+//   {type:'rec'}         one per frame restructuring (only when the enacted layer was injected)
+//   {type:'stats'}       the enacted convergence stats (only when framed)
+//
+// Pure over the memoised readIngest — no model, no embedder. Each line is independently
+// JSON.parse-able; the whole is valid JSONL. `opts` flow through to readIngest (k, max,
+// budget, enacted).
+export const readingJsonl = (doc, opts = {}) => {
+  const r = readIngest(doc, opts);
+  const rows = [];
+  rows.push({ type: 'head', docId: r.docId, units: r.units, stride: r.stride,
+              structure: r.structure.lines.length, turns: r.turns.length, framed: !!r.enacted });
+  for (const eot of r.structure.lines) rows.push({ type: 'structure', eot });
+  for (const t of r.turns) rows.push({ type: 'turn', idx: t.idx, sentence: t.sentence,
+    surprisalBits: t.surprisalBits, bayesBits: t.bayesBits, bridge: t.bridge, bridgeAxis: t.bridgeAxis,
+    predicted: t.predicted, surprises: t.surprises });
+  if (r.enacted) {
+    for (const rec of r.enacted.recs) rows.push({ type: 'rec', layer: rec.layer, cursor: rec.cursor, strainSum: rec.strainSum });
+    if (r.enacted.stats) rows.push({ type: 'stats', ...r.enacted.stats });
+  }
+  return rows.map((x) => JSON.stringify(x)).join('\n');
+};
+
 // attachReading(doc, opts) — give an ingested doc a lazy, memoised `reading()` accessor, so
 // the moment of ingest OWNS the predictive read without paying for it until something asks.
 // Mirrors the lazy `sentenceEmbeddings` cache the organs already attach: the default read is
@@ -156,5 +186,6 @@ const clip = (s, n = 72) => { const t = String(s).replace(/\s+/g, ' ').trim(); r
 export const attachReading = (doc, baseOpts = {}) => {
   if (!doc || typeof doc.reading === 'function') return doc;
   doc.reading = (callOpts) => readIngest(doc, { ...baseOpts, ...(callOpts || {}) });
+  doc.readingJsonl = (callOpts) => readingJsonl(doc, { ...baseOpts, ...(callOpts || {}) });
   return doc;
 };
