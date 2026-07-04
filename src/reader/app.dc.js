@@ -1763,6 +1763,12 @@ class Component extends DCLogic {
     try{
       const {report,rootId}=await sess.research(subject,{
         sources,model,size,strategy,
+        // Skip Save-Page-Now in the conversational turn: from the browser it
+        // essentially never lands (CORS), so every source degrades to a local
+        // pin anyway — the slow save request is pure latency for no archive. The
+        // fast availability check still runs (a real snapshot, when one exists,
+        // still upgrades the pin), and the dedicated Surface keeps full archiving.
+        save:false,
         search:useWeb?drSearch:null,
         onGather:(query,have,want)=>this._beat(id,'search','Gathering “'+query+'” — '+have+'/'+want+' sources'),
         onSectionToken:(frameId,piece)=>{if(this._stopGen||liveDone)return;liveText.set(frameId,(liveText.get(frameId)||'')+piece);schedulePaint();},

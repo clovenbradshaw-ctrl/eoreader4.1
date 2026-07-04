@@ -74,13 +74,18 @@ export const liveView = (log, cursor = null) => {
 };
 
 // A one-line narration of an event — for the feed. Reads the event, never
-// invents; the live view is a rendering of the log, not a second truth.
+// invents; the live view is a rendering of the log, not a second truth. Each
+// line names WHAT the event touched — the source, the span it read, the terms
+// it reframed around — so a run of them reads as a research trail rather than a
+// column of opaque hashes.
 export const describeEvent = (e) => {
   if (!e) return '';
   switch (e.kind) {
     case RKIND.OPEN: return `frame opened — ${e.question}`;
-    case RKIND.PIN: return e.snapshotUrl ? `pinned ${e.url} @ ${e.capturedAt ?? e.snapshotId}` : `pinned locally (${e.contentHash.slice(0, 12)}…)`;
-    case RKIND.READ: return `read a span (bind ${e.bind?.overlap ?? '?'} terms)`;
+    case RKIND.PIN: return describePin(e);
+    case RKIND.READ: return e.span?.text
+      ? `read “${clip(e.span.text)}” — binds ${e.bind?.overlap ?? '?'} frame term${e.bind?.overlap === 1 ? '' : 's'}`
+      : `read a span (binds ${e.bind?.overlap ?? '?'} terms)`;
     case RKIND.EXTRACT: return `extracted: “${clip(e.span.text)}”`;
     case RKIND.EVA: return e.verdict === 'strain' ? `strain +${e.strainDelta} (sum ${e.strain})` : 'confirms the frame';
     case RKIND.CON: return `${e.relation}: ${e.a} ↔ ${e.b}`;
@@ -92,6 +97,58 @@ export const describeEvent = (e) => {
     case RKIND.PHRASE: return `phrased section — ${e.sentences.filter((s) => !s.glue).length}/${e.sentences.length} sentences bind`;
     default: return e.kind;
   }
+};
+
+// A pin narrated for a human: WHICH source, how big, and — the part the old
+// line hid — WHY it landed where it did. An archive snapshot is the strong case
+// (the citation can never rot). A LOCAL pin is the honest fallback, not a
+// failure: the exact bytes are still fingerprinted and embedded, so the claim
+// stands on the quote itself and the link was only ever corroboration. The two
+// local cases read differently because they ARE different — archive.org
+// unreachable vs. a pasted source that never had a URL — and both facts were
+// already in the event, just never surfaced.
+const describePin = (e) => {
+  const name = sourceName(e);
+  const size = e.chars ? ` · ${humanChars(e.chars)}` : '';
+  if (e.snapshotUrl) return `pinned ${name} to archive.org @ ${shortStamp(e.capturedAt ?? e.snapshotId)}${size}`;
+  const why = e.url
+    ? 'archive.org didn’t answer, so the embedded quote is the record'
+    : 'no URL to archive, so the pasted text is the record';
+  return `embedded ${name} locally${size} — ${why}`;
+};
+
+// A readable label for a source: a prettified URL (a Wikipedia slug reads back
+// as its title) beats a bare link; a human-given title beats a hash; a short
+// hash is the last resort so a line is never empty.
+const sourceName = (e) => {
+  const viaUrl = e.url ? prettyUrl(e.url) : null;
+  if (viaUrl) return `“${viaUrl}”`;
+  const t = String(e.title || '').trim();
+  if (t && !/^https?:\/\//i.test(t)) return `“${clip(t, 60)}”`;
+  const viaTitle = prettyUrl(t);
+  if (viaTitle) return `“${viaTitle}”`;
+  return `a source (${String(e.contentHash || '').slice(0, 12)}…)`;
+};
+
+// A URL reduced to its readable core: the last path segment (decoded, de-
+// underscored, de-suffixed) at its host — ".../wiki/Bottlenose_dolphin" →
+// "Bottlenose dolphin · en.wikipedia.org". Null when the input is not a URL.
+const prettyUrl = (u) => {
+  try {
+    const url = new URL(String(u));
+    const host = url.hostname.replace(/^www\./, '');
+    const seg = decodeURIComponent(url.pathname.split('/').filter(Boolean).pop() || '')
+      .replace(/\.[a-z0-9]{1,5}$/i, '').replace(/[_+]/g, ' ').trim();
+    return seg ? `${seg} · ${host}` : host;
+  } catch { return null; }
+};
+
+const humanChars = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(1)}M chars`
+  : n >= 1e3 ? `${Math.round(n / 1e3)}k chars` : `${n} chars`;
+
+const shortStamp = (s) => {
+  const m = String(s ?? '').match(/(\d{4})-?(\d{2})-?(\d{2})/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : String(s ?? '');
 };
 
 const clip = (s, n = 70) => { const t = String(s ?? ''); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
