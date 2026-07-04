@@ -445,17 +445,6 @@
                   <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
                   <div style="{{ m.bubbleStyle }}" onclick="{{ m.onCite }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
                   </sc-if>
-                  <!-- THE DISCOURSE STEER SUGGESTION — the metacognition read this turn as a make-this
-                       and ASKS before running: the permission prompt + Write it / Just answer. -->
-                  <sc-if value="{{ m.hasSuggest }}" hint-placeholder-val="{{ false }}">
-                    <div style="margin-top:4px;max-width:520px;border:1px solid var(--accline);background:var(--accbg);border-radius:14px;padding:12px 14px;">
-                      <div style="font-size:14px;color:var(--ink);line-height:1.55;margin-bottom:10px;">{{ m.suggestText }}</div>
-                      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                        <button onclick="{{ m.onSuggestWrite }}" style="font-size:12.5px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:9px;padding:7px 14px;cursor:pointer;">{{ m.suggestWriteLabel }}</button>
-                        <button onclick="{{ m.onSuggestAnswer }}" style="font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--card);border:1px solid var(--line2);border-radius:9px;padding:7px 14px;cursor:pointer;" style-hover="border-color:var(--accline);color:var(--acc)">{{ m.suggestAnswerLabel }}</button>
-                      </div>
-                    </div>
-                  </sc-if>
                   <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                     <div style="{{ m.groundStyle }}">
                       <sc-if value="{{ m.refsHas }}" hint-placeholder-val="{{ false }}">
@@ -1239,17 +1228,6 @@
                 </sc-if>
                 <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
                 <div style="{{ m.bubbleStyle }}" onclick="{{ m.onCite }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
-                </sc-if>
-                <!-- THE DISCOURSE STEER SUGGESTION — the metacognition read this turn as a make-this
-                     and ASKS before running: the permission prompt + Write it / Just answer. -->
-                <sc-if value="{{ m.hasSuggest }}" hint-placeholder-val="{{ false }}">
-                  <div style="margin-top:4px;max-width:520px;border:1px solid var(--accline);background:var(--accbg);border-radius:14px;padding:12px 14px;">
-                    <div style="font-size:14px;color:var(--ink);line-height:1.55;margin-bottom:10px;">{{ m.suggestText }}</div>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                      <button onclick="{{ m.onSuggestWrite }}" style="font-size:12.5px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:9px;padding:7px 14px;cursor:pointer;">{{ m.suggestWriteLabel }}</button>
-                      <button onclick="{{ m.onSuggestAnswer }}" style="font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--card);border:1px solid var(--line2);border-radius:9px;padding:7px 14px;cursor:pointer;" style-hover="border-color:var(--accline);color:var(--acc)">{{ m.suggestAnswerLabel }}</button>
-                    </div>
-                  </div>
                 </sc-if>
                 <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                   <div style="{{ m.groundStyle }}">
@@ -3719,49 +3697,6 @@ class Component extends DCLogic {
     });
   }
   closeDeepResearch(){if(this._drOverlay)this._drOverlay.style.display='none';}
-  // THE DISCOURSE STEER — the poem offer stays (composeArtifact is untouched);
-  // essay/story-shaped asks now flow to deep research through the longform gate,
-  // never to a compose organ, so the steer only ever suggests the poem.
-  _steerOf(read){
-    if(!read)return null;
-    if(read.kind==='poem')return {typeId:'poem',kindId:null,label:'a poem',short:'a poem'};
-    return null;
-  }
-  // Park the permission suggestion in the turn's pending bubble instead of answering. The stored
-  // `suggest` carries what "Write it" needs (topic + the measured output type/kind); the view
-  // renders the prompt and the two buttons (onSuggestWrite / onSuggestAnswer in the message map).
-  _parkSteer(id,q,steer){
-    const text='I think you may want me to write '+steer.label+' on this. Want me to?';
-    this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
-      if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,think:'',text:'',stance:'ground',
-        research:m[li].research?{...m[li].research,done:true}:undefined,
-        suggest:{topic:q,typeId:steer.typeId,kindId:steer.kindId,label:steer.label,text,
-          writeLabel:'Write '+steer.short,answerLabel:'Just answer'}};
-      return {...c,messages:m};})}),()=>this._scrollChat());
-  }
-  // "Write it" — accept the steer. Only the poem survives as a steered compose.
-  _acceptSteer(chatId,mi){
-    const c=(this.state.chats||[]).find(x=>x.id===chatId);if(!c)return;
-    const m=c.messages[mi];const sug=m&&m.suggest;if(!sug)return;
-    const{topic,typeId}=sug;
-    this._dropTurnAt(chatId,mi);
-    if(typeId==='poem')this.composeArtifact(topic);
-  }
-  // "Just answer" — decline the steer. Drop the suggestion turn and re-send the topic with
-  // steerBypass so it answers normally, without the steer gate re-firing.
-  _declineSteer(chatId,mi){
-    const c=(this.state.chats||[]).find(x=>x.id===chatId);if(!c)return;
-    const m=c.messages[mi];const sug=m&&m.suggest;if(!sug)return;
-    const topic=sug.topic;
-    this._dropTurnAt(chatId,mi);
-    this.sendChat(topic,{steerBypass:true});
-  }
-  // Remove the suggestion turn: the parked assistant bubble at mi and the user echo just before it.
-  _dropTurnAt(chatId,mi){
-    this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==chatId)return c;const m=c.messages.slice();
-      if(mi>=0&&mi<m.length){const start=(mi>0&&m[mi-1]&&m[mi-1].role==='user')?mi-1:mi;m.splice(start,(mi-start)+1);}
-      return {...c,messages:m};})}));
-  }
   // CREATIVE GENERATION over a topic — "write an emily dickinson poem about iced coffee",
   // "compose an essay on dolphins", "draft a haiku about the sea". The frame (write/compose/draft
   // + poem/essay/song/…) names a FORM, and the real topic rides in the "about/on X" tail. Taken at
@@ -4515,9 +4450,9 @@ class Component extends DCLogic {
     return true;
   }
 
-  async sendChat(qArg,opts={}){
-    // qArg lets an internal caller re-drive a turn (the "Just answer" decline re-sends the topic
-    // with {steerBypass:true}); the composer's Enter/Ask pass nothing and read the input box.
+  async sendChat(qArg){
+    // qArg lets an internal caller re-drive a turn; the composer's Enter/Ask pass nothing
+    // and read the input box.
     const q=this.norm(qArg!=null?qArg:this.state.chatInput);if(!q)return;
     this._stopGen=false;   // a fresh turn clears any prior stop
     // THE TURN'S CONFIG IS DERIVED, not stored (design/chat-redesign/REVISIONS.md):
@@ -4644,16 +4579,18 @@ class Component extends DCLogic {
     if(anchorGap)this._beat(id,'warn','“'+anchorGap.missing.join('”, “')+'” '+(anchorGap.missing.length>1?'aren’t':'isn’t')+' in your reading — that part needs the web, or an honest absence.');
     const meta=(read||anchorGap)?{...(read||{researchDrive:0}),anchorGap}:null;
     // THE DISCOURSE STEER (docs/discourse-routing.md) — the metacognition, NOT a regex, has said
-    // this turn is a make-this: its speech settled on `compose` and a form cleared its null. Rather
-    // than silently run the organ (the old _essayIntent behavior), ASK — park a permission
-    // suggestion in the pending bubble ("I think you may want me to write an argument essay…") and
-    // stop here. Explicit /essay, compose-verb, and continuation asks already returned above, so
-    // this catches only the paraphrased make-this the regexes miss. Bypassed when the user chose
-    // "Just answer" (re-sent with steerBypass), and soft: no read / no form / cold model → falls
-    // straight through to the answer path below, unchanged.
-    if(!opts.steerBypass&&read&&read.route==='compose'&&read.kind){
-      const steer=this._steerOf(read);
-      if(steer){this._parkSteer(id,q,steer);return;}
+    // this turn is a make-this: its speech settled on `compose` and the poem form cleared its
+    // crosstalk null. That measurement IS the decision — the same Born-overlap → null-gate →
+    // relaxation physics every other determination here runs on — so the turn composes NOW, in
+    // this bubble, with no permission prompt and nothing to pick; the register badge on the
+    // answer stays the honest readout of what the turn enacted. Explicit compose-verb and
+    // continuation asks already returned above, so this catches only the paraphrased make-this
+    // the regexes miss. Soft: no read / no settled form / cold model → falls straight through
+    // to the answer path below, unchanged. (Essay/story-shaped asks flow to deep research
+    // through the longform gate, never to a compose organ — only the poem composes here.)
+    if(read&&read.route==='compose'&&read.kind==='poem'){
+      const sfold={...fold,stance:'compose',focus:{kind:read.kind,subject:(fold&&fold.focus&&fold.focus.subject)||null}};
+      return this.composeArtifact(q,sfold,{reuseId:id});
     }
     // WEB AS BRAIN (default on): rather than let the small model answer from its own thin knowledge,
     // a question it can't ground in what's been read+folded sends the engine to the web first — it
@@ -5116,7 +5053,7 @@ class Component extends DCLogic {
     const a=/^[aeiou]/i.test(kind)?'an':'a';
     // REUSE the discourse bubble when sendChat's frame-binding fork already created it (and took
     // the read) — relabel it as the compose act and keep its trail, instead of appending a second
-    // user echo + bubble. Explicit-compose / steer-accept callers pass no reuseId → own bubble.
+    // user echo + bubble. Explicit-compose callers pass no reuseId → own bubble.
     const reuse=opts.reuseId!=null;
     let id=reuse?opts.reuseId:this.state.activeChat;
     const prevObj=this.activeChatObj();
@@ -6204,16 +6141,9 @@ class Component extends DCLogic {
       const thinking=!!m.pending&&!m.text&&!!m.think&&!hasResearch;
       // While the turn is still working with no answer text yet, the live trail IS the message —
       // suppress the empty pulsing bubble. Once a token streams in (or the turn settles) it shows.
-      // THE DISCOURSE STEER SUGGESTION (docs/discourse-routing.md): when the metacognition read the
-      // turn as a make-this, the bubble carries a `suggest` instead of an answer — the permission
-      // prompt + the two choices. It renders in its own block, so the (empty) answer bubble is
-      // suppressed. The handlers accept/decline off the stored steer (topic + measured type/kind).
-      const sug=(!isUser&&m.suggest)?m.suggest:null;
-      const showBubble=!thinking&&!sug&&!(pendingTurn&&!m.text);
+      const showBubble=!thinking&&!(pendingTurn&&!m.text);
       // main's streaming fills m.text on a still-pending bubble; show it as it arrives.
       return {isUser,pending:!!m.pending,thinking,think:m.think||'',showBubble,text:m.pending?(m.text||m.think||'…'):m.text,isMd:isMd||hasSvg,plain:!(isMd||hasSvg),html:bodyHtml,onCite:(e)=>this._onCite(e),
-        hasSuggest:!!sug,suggestText:sug?sug.text:'',suggestWriteLabel:sug?sug.writeLabel:'',suggestAnswerLabel:sug?sug.answerLabel:'',
-        onSuggestWrite:sug?(()=>this._acceptSteer(cur.id,mi)):null,onSuggestAnswer:sug?(()=>this._declineSteer(cur.id,mi)):null,
         thinkRowStyle:'max-width:80%;display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;color:var(--ink2);',
         thinkSpinnerStyle:'flex:0 0 auto;width:14px;height:14px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;',
         hasResearch,researchRunning,researchSteps,researchOpen:resOn,researchTitle,

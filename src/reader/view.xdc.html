@@ -398,17 +398,6 @@
                   <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
                   <div style="{{ m.bubbleStyle }}" onclick="{{ m.onCite }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
                   </sc-if>
-                  <!-- THE DISCOURSE STEER SUGGESTION — the metacognition read this turn as a make-this
-                       and ASKS before running: the permission prompt + Write it / Just answer. -->
-                  <sc-if value="{{ m.hasSuggest }}" hint-placeholder-val="{{ false }}">
-                    <div style="margin-top:4px;max-width:520px;border:1px solid var(--accline);background:var(--accbg);border-radius:14px;padding:12px 14px;">
-                      <div style="font-size:14px;color:var(--ink);line-height:1.55;margin-bottom:10px;">{{ m.suggestText }}</div>
-                      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                        <button onclick="{{ m.onSuggestWrite }}" style="font-size:12.5px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:9px;padding:7px 14px;cursor:pointer;">{{ m.suggestWriteLabel }}</button>
-                        <button onclick="{{ m.onSuggestAnswer }}" style="font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--card);border:1px solid var(--line2);border-radius:9px;padding:7px 14px;cursor:pointer;" style-hover="border-color:var(--accline);color:var(--acc)">{{ m.suggestAnswerLabel }}</button>
-                      </div>
-                    </div>
-                  </sc-if>
                   <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                     <div style="{{ m.groundStyle }}">
                       <sc-if value="{{ m.refsHas }}" hint-placeholder-val="{{ false }}">
@@ -1192,17 +1181,6 @@
                 </sc-if>
                 <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
                 <div style="{{ m.bubbleStyle }}" onclick="{{ m.onCite }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
-                </sc-if>
-                <!-- THE DISCOURSE STEER SUGGESTION — the metacognition read this turn as a make-this
-                     and ASKS before running: the permission prompt + Write it / Just answer. -->
-                <sc-if value="{{ m.hasSuggest }}" hint-placeholder-val="{{ false }}">
-                  <div style="margin-top:4px;max-width:520px;border:1px solid var(--accline);background:var(--accbg);border-radius:14px;padding:12px 14px;">
-                    <div style="font-size:14px;color:var(--ink);line-height:1.55;margin-bottom:10px;">{{ m.suggestText }}</div>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                      <button onclick="{{ m.onSuggestWrite }}" style="font-size:12.5px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:9px;padding:7px 14px;cursor:pointer;">{{ m.suggestWriteLabel }}</button>
-                      <button onclick="{{ m.onSuggestAnswer }}" style="font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--card);border:1px solid var(--line2);border-radius:9px;padding:7px 14px;cursor:pointer;" style-hover="border-color:var(--accline);color:var(--acc)">{{ m.suggestAnswerLabel }}</button>
-                    </div>
-                  </div>
                 </sc-if>
                 <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                   <div style="{{ m.groundStyle }}">
