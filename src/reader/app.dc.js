@@ -1329,7 +1329,7 @@ class Component extends DCLogic {
     // question (a fresh topic / a sparse fold), so behaviour never regresses.
     try{const pg=this.groundPropositions(q,scope);
       if(pg&&pg.promptSpans&&pg.promptSpans.length)
-        return {spans:pg.promptSpans,entities:a.entities||[],sources:[...new Set(pg.evidence.map(e=>e.u).filter(Boolean))],relevant:true,evidence:pg.evidence,prop:true};
+        return {spans:pg.promptSpans,entities:a.entities||[],sources:[...new Set(pg.evidence.map(e=>e.u).filter(Boolean))],relevant:true,evidence:pg.evidence,forks:pg.forks||[],prop:true};
     }catch(e){/* any fault → the keyword path below (never worse than today) */}
     // `relevant` = the question actually matched read text (keyword overlap). Only relevant
     // spans are shown as linked grounding; the fallback below still feeds the model context
@@ -1384,32 +1384,71 @@ class Component extends DCLogic {
       if(!t||t.irr)continue;                                        // speculative → not a fact to ground on
       const sent=e.sentIdx,s=this.norm(this.master.sentences[sent]||'');
       if(!s||s.length>this.MAX_PASSAGE||!this._proseOk(s.toLowerCase()))continue;
-      const rel=this.eotRel(t.v,t.neg),key=[rf,rt].sort().join('~')+'|'+rel;
+      const base=this.eotRel(t.v,false),rel=this.eotRel(t.v,t.neg),key=[rf,rt].sort().join('~')+'|'+rel;
       let g=groups.get(key);
-      if(!g){g={key,eot:t.eot,conf:t.conf||0,onRef:(Q.has(rf)&&Q.has(rt))?2:1,witnesses:[]};groups.set(key,g);}
+      // rf/rt/base/neg ride on the group so the selector can measure CONNECTION (shared endpoints)
+      // and detect FORKS (same endpoints + same base relation, opposite polarity).
+      if(!g){g={key,eot:t.eot,conf:t.conf||0,onRef:(Q.has(rf)&&Q.has(rt))?2:1,rf,rt,base,neg:!!t.neg,witnesses:[]};groups.set(key,g);}
       g.witnesses.push({source:this.master.sentenceSource[sent],text:s,sentIdx:sent});
       if((t.conf||0)>g.conf){g.conf=t.conf||0;g.eot=t.eot;}
     }
     if(!groups.size)return null;
-    return this._rankPropositions([...groups.values()],{budget});
+    return this._rankPropositions([...groups.values()],Q,{budget});
   }
-  // The pure rank+render half (no graph reads → unit-testable): count independent origins, order by
-  // corroboration → referent-centrality → confidence, render the top witness sentences until a token
-  // budget is spent (the prompt bound is a real constraint, never a fixed N), and carry the full set
-  // as evidence for citation.
-  _rankPropositions(groups,{budget=1600}={}){
-    const ranked=(groups||[]).map(g=>({...g,origins:this._independentOrigins(g.witnesses)}))
-      .sort((a,b)=>b.origins-a.origins||(b.onRef||0)-(a.onRef||0)||(b.conf||0)-(a.conf||0));
+  // The pure rank+render half (no graph reads → unit-testable). A workspace is bought for INTEGRATION,
+  // not storage: what matters is that the active set's members can reach each other, so the selector
+  // scores the SET, not the item. It picks greedily for MARGINAL combination value — a proposition that
+  // connects to what is already active (builds a mutually-reachable web, not a scatter of spokes), that
+  // is not redundant with a relation already held, and that COMPLETES A DEBATE (a fork pair is
+  // maximally integrating — the two claims only mean something together). Corroboration survives only
+  // as a quality floor, never the axis. The prompt fills to a token budget; the citation evidence is
+  // the full ordered set (unbounded); `forks` names the contested claims so the answer can present a
+  // disagreement AS a disagreement.
+  _rankPropositions(groups,refs,{budget=1600}={}){
+    const Q=(refs instanceof Set)?refs:new Set(refs||[]);
+    const G=(groups||[]).map(g=>({...g,origins:this._independentOrigins(g.witnesses)}));
+    // FORK detection (polarity): same endpoints + same base relation + opposite polarity = a contradiction.
+    for(let i=0;i<G.length;i++)for(let j=i+1;j<G.length;j++){
+      const a=G[i],b=G[j];
+      if(a.base&&a.base===b.base&&(!!a.neg)!==(!!b.neg)&&
+         ((a.rf===b.rf&&a.rt===b.rt)||(a.rf===b.rt&&a.rt===b.rf))){a.fork=true;b.fork=true;a._twin=b;b._twin=a;}
+    }
+    // SET-AWARE greedy selection: buy combination, not per-item score.
+    const quality=(g)=>1+Math.log(1+(g.origins||0))+0.3*(g.conf||0);       // corroboration/confidence as a FLOOR only
+    const active=new Set(Q);                                               // entities already reachable in the workspace
+    const relsAt=new Map();                                               // endpoint-pair → base relations already held (redundancy)
+    const chosen=[],pool=G.slice();
+    const scoreOf=(g)=>{
+      let s=quality(g);
+      const touches=(active.has(g.rf)?1:0)+(active.has(g.rt)?1:0);
+      if(touches>=2)s+=2.0;                                               // links two already-active nodes — pure integration
+      else if(touches>=1)s+=0.4;
+      const pk=[g.rf,g.rt].sort().join('~'),held=relsAt.get(pk);
+      if(held&&g.base&&held.has(g.base))s-=1.0;                           // a relation already represented adds no degree of freedom
+      if(g.fork){s+=1.0;if(g._twin&&chosen.includes(g._twin))s+=2.0;}     // a debate pair is maximally integrating — keep both
+      return s;
+    };
+    while(pool.length){
+      let bi=0,best=-Infinity;
+      for(let i=0;i<pool.length;i++){const sc=scoreOf(pool[i]);if(sc>best){best=sc;bi=i;}}
+      const g=pool.splice(bi,1)[0];chosen.push(g);
+      active.add(g.rf);active.add(g.rt);
+      const pk=[g.rf,g.rt].sort().join('~');if(!relsAt.has(pk))relsAt.set(pk,new Set());if(g.base)relsAt.get(pk).add(g.base);
+    }
+    // Render: the prompt takes chosen propositions' witness sentences until the budget is spent; the
+    // evidence carries them all (unbounded). Threshold only where we must act (the prompt), not the store.
     const promptSpans=[],evidence=[],seen=new Set();let used=0;
-    for(const g of ranked){
+    for(const g of chosen){
       const w=(g.witnesses||[])[0];if(!w)continue;
       const text=this.norm(String(w.text||''));if(!text)continue;
-      evidence.push({text:this._clipPassage(text),u:w.source,i:w.sentIdx,score:g.origins,eot:g.eot,origins:g.origins});
+      evidence.push({text:this._clipPassage(text),u:w.source,i:w.sentIdx,score:g.origins,eot:g.eot,origins:g.origins,...(g.fork?{fork:true}:{})});
       if(seen.has(w.sentIdx))continue;
-      const cost=Math.max(1,Math.ceil(text.length/4));                       // ~chars→tokens
+      const cost=Math.max(1,Math.ceil(text.length/4));                    // ~chars→tokens
       if(used+cost<=budget||!promptSpans.length){promptSpans.push({text:this._clipPassage(text),score:g.origins,i:w.sentIdx,u:w.source});used+=cost;seen.add(w.sentIdx);}
     }
-    return {promptSpans,evidence,relevant:true};
+    const forks=[],fseen=new Set();
+    for(const g of chosen){if(g.fork&&g._twin){const k=[g.key,g._twin.key].sort().join('||');if(!fseen.has(k)){fseen.add(k);forks.push({a:g.eot,b:g._twin.eot});}}}
+    return {promptSpans,evidence,relevant:true,forks};
   }
   // Independent-origin count — mirrors factcheck/propositions.js meaningfulSupport: a claim repeated
   // inside ONE source, or syndicated verbatim across sources, counts once; ≥2 genuinely-different
@@ -1825,6 +1864,14 @@ class Component extends DCLogic {
       disclosure:grounded
         ? 'Drawn from the overall shape of what you’ve read, not any one passage — the wording is the model’s own.'
         : 'The model’s own answer — nothing you’ve read bears on it, so it isn’t grounded in a source.'};
+  }
+  // The meta-reasoning cue that rides the graph slot for a proposition-grounded turn: empty unless the
+  // selected evidence holds a FORK (sources that contradict each other on the same claim), in which case
+  // the model is told to present the disagreement AS a disagreement — the grey band kept, not resolved.
+  _disagreementCue(ground){
+    return (ground&&ground.forks&&ground.forks.length)
+      ? 'Some of the sources disagree. Where the readings below conflict on the same point, present the competing claims as competing and say the sources disagree — do not resolve the disagreement or pick a side.'
+      : '';
   }
   // ── The office veto — a stale role the SOURCES have succeeded ─────────────────
   // The reader's claim-grain check (docs/proposition-audit.md; the engine sibling lives
@@ -2638,9 +2685,10 @@ class Component extends DCLogic {
         const pastTurns=prev.filter(m=>m.role==='user').slice(-6).map(m=>this.norm(m.text)).filter(Boolean);
         messages=this._ME.buildGroundedMessages({
           // Proposition-grounded turns carry their meaning in the witness sentences (spans) already;
-          // the centrality graph block (which never saw the question) is retired for them, kept only
-          // as the fallback when grounding dropped to the keyword path.
-          question:q, spans:ground.spans||[], graph:ground.prop?'':this.meaningGraph(sources),
+          // the centrality graph block (which never saw the question) is retired for them — the graph
+          // slot now carries only a disagreement cue when the evidence forks, else nothing. The
+          // centrality block is kept solely as the fallback when grounding dropped to the keyword path.
+          question:q, spans:ground.spans||[], graph:ground.prop?this._disagreementCue(ground):this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),
           task:this._isSummaryQ(q)?'summary':'answer',
           conversation:{pastTurns}, now:new Date(), shape,
@@ -3104,7 +3152,7 @@ class Component extends DCLogic {
       // asker, and what even the gathered reading still doesn't hold).
       const shape=grounded?[this._ME.LIBRARIAN_CUE,(this._ME.shapeForScope&&this._ME.shapeForScope(q))||'',this._steerLine(meta)].filter(Boolean).join('\n\n'):'';
       if(grounded){
-        messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:ground.prop?'':this.meaningGraph(sources),
+        messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:ground.prop?this._disagreementCue(ground):this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape});
       }else{messages=this._ME.buildChatMessages({question:q,history:[],now:new Date()});}
       this._auditRec(id,'answer-prompt',{prompt:messages.map(mm=>'['+mm.role+']\n'+mm.content).join('\n\n---\n\n')});

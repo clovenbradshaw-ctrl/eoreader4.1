@@ -30,7 +30,7 @@ const methodOf = (src, name) => {
 
 // A fake folded world: labelled entities + directed edges with per-edge source sentences.
 const worldHarness = (src) => {
-  const body = ['groundPropositions', '_rankPropositions', '_independentOrigins', '_nearDup', 'eotRel', 'junkRel', '_repOf']
+  const body = ['groundPropositions', '_rankPropositions', '_independentOrigins', '_nearDup', 'eotRel', 'junkRel', '_repOf', '_disagreementCue']
     .map((m) => methodOf(src, m)).join('\n');
   const Cls = new Function(`return class H {
     norm(s){ return String(s||'').replace(/\\s+/g,' ').trim(); }
@@ -116,19 +116,54 @@ for (const page of ['src/reader/app.dc.js', 'index.html']) {
     assert.equal(h._nearDup('', 'a b'), false);
   });
 
-  test(`${page}: _rankPropositions ranks by corroboration and budgets the prompt (evidence stays full)`, () => {
+  test(`${page}: the selector buys COMBINATION — a connector beats a disconnected, better-corroborated spoke`, () => {
+    const h = worldHarness(src);
+    // The two dolphin edges are well-corroborated (3 sources), so they lead and pull echolocation +
+    // navigation into the active set. The connector (echolocation→navigation, single source) then links
+    // two already-active nodes and is chosen AHEAD of a disconnected 2-source spoke — combination wins
+    // over corroboration once the neighbourhood is present. (On the very first pick, corroboration still
+    // leads: you load the best-attested fact about the referent, then build the connected web around it.)
+    const three = (t) => [{ source:'A', text:t+' a', sentIdx:0 }, { source:'B', text:t+' b', sentIdx:1 }, { source:'C', text:t+' c', sentIdx:2 }];
+    const groups = [
+      { key:'a', eot:'dolphin -> echolocation : uses',      rf:'d',  rt:'ec',  base:'uses',    conf:0.6, witnesses:three('dolphins use echolocation') },
+      { key:'b', eot:'dolphin -> navigation : aids',        rf:'d',  rt:'nav', base:'aids',    conf:0.6, witnesses:three('dolphins navigate') },
+      { key:'c', eot:'echolocation -> navigation : enables',rf:'ec', rt:'nav', base:'enables', conf:0.6, witnesses:[{ source:'A', text:'echolocation enables navigation', sentIdx:3 }] },
+      { key:'e', eot:'dolphin -> quirk : notes',            rf:'d',  rt:'qq',  base:'notes',   conf:0.6, witnesses:[{ source:'A', text:'a quirk', sentIdx:4 }, { source:'B', text:'a quirk again', sentIdx:5 }] },
+    ];
+    const r = h._rankPropositions(groups, new Set(['d']), { budget: 1600 });
+    const order = r.evidence.map((x) => x.eot);
+    const iConnector = order.indexOf('echolocation -> navigation : enables');
+    const iSpoke = order.indexOf('dolphin -> quirk : notes');
+    assert.ok(iConnector >= 0 && iSpoke >= 0);
+    assert.ok(iConnector < iSpoke, `the connector (1 source) beats the disconnected 2-source spoke once its neighbourhood is active (got ${order.join(' | ')})`);
+  });
+
+  test(`${page}: opposite-polarity claims on the same point are surfaced as a FORK (both sides ride)`, () => {
     const h = worldHarness(src);
     const groups = [
-      { key:'k1', eot:'A -> B : r', conf:0.6, onRef:1, witnesses:[{ source:'A', text:'single source claim here' }] },
-      { key:'k2', eot:'C -> D : s', conf:0.6, onRef:1, witnesses:[{ source:'A', text:'two source claim alpha' }, { source:'B', text:'two source claim beta gamma' }] },
+      { key:'p', eot:'working memory : capacity slots',     rf:'wm', rt:'slots', base:'capacity', neg:false, conf:0.6, witnesses:[{ source:'A', text:'working memory has about four slots', sentIdx:0 }] },
+      { key:'n', eot:'working memory : not-capacity slots', rf:'wm', rt:'slots', base:'capacity', neg:true,  conf:0.6, witnesses:[{ source:'B', text:'working memory does not have fixed slots', sentIdx:1 }] },
     ];
-    const big = h._rankPropositions(groups, { budget: 1600 });
-    assert.equal(big.evidence[0].origins, 2, 'the 2-origin proposition ranks first');
+    const r = h._rankPropositions(groups, new Set(['wm']), { budget: 1600 });
+    assert.equal(r.forks.length, 1, 'same endpoints + base relation + opposite polarity = one fork');
+    assert.ok(r.evidence.every((e) => e.fork), 'both forked propositions are tagged');
+    assert.equal(r.promptSpans.length, 2, 'both sides of the debate reach the prompt');
+    // The disagreement cue fires for a forked turn and is empty otherwise.
+    assert.match(h._disagreementCue({ forks: r.forks }), /disagree/i);
+    assert.equal(h._disagreementCue({ forks: [] }), '');
+  });
+
+  test(`${page}: the prompt is token-budgeted while the citation evidence stays full`, () => {
+    const h = worldHarness(src);
+    const groups = [
+      { key:'k1', eot:'A -> B : r', rf:'a', rt:'b', base:'r', conf:0.6, witnesses:[{ source:'A', text:'a fairly long single source claim here about things', sentIdx:0 }] },
+      { key:'k2', eot:'C -> D : s', rf:'c', rt:'d', base:'s', conf:0.6, witnesses:[{ source:'A', text:'another lengthy claim from a second place entirely', sentIdx:1 }, { source:'B', text:'and again from a third', sentIdx:2 }] },
+    ];
+    const big = h._rankPropositions(groups, new Set(['a', 'c']), { budget: 1600 });
     assert.equal(big.evidence.length, 2, 'evidence keeps every proposition');
-    // A tiny budget still yields the top proposition, and never more prompt spans than evidence.
-    const tiny = h._rankPropositions(groups, { budget: 1 });
+    const tiny = h._rankPropositions(groups, new Set(['a', 'c']), { budget: 1 });
     assert.ok(tiny.promptSpans.length >= 1, 'at least the top proposition always rides the prompt');
-    assert.ok(tiny.promptSpans.length <= tiny.evidence.length, 'prompt is a bounded subset of the evidence');
+    assert.ok(tiny.promptSpans.length <= tiny.evidence.length, 'the prompt is a bounded subset of the evidence');
     assert.equal(tiny.evidence.length, 2, 'the citation evidence is never truncated by the prompt budget');
   });
 }
