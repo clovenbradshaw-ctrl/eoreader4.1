@@ -11,7 +11,7 @@ export { emitEot, eotText, tupleToEotLine, tuplesToEot, valueLiteral } from './e
 // Read an ingested doc INTO EoT, layered with what the reading THINKS: the structure it
 // extracted (round-trippable canonical EoT) beside its prediction and surprise at every
 // turning point — every predictive channel the engine has, run at the moment of ingest.
-export { readIngest, attachReading } from './read.js';
+export { readIngest, readingJsonl, attachReading } from './read.js';
 // Web pages as groundable sources: admit a fetched payload as a provenance-tagged prose doc
 // that drops into the answer scope, cited + veto-checked like any source (docs/web-search.md).
 export { admitWebSource, createWebStore, webRecord, webContentHash,

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1115">
+  <title>eoreader4 · the reading, as JSONL</title>
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <style>
+    :root { --bg:#0f1115; }
+    * { box-sizing:border-box; }
+    html,body { margin:0; height:100%; background:var(--bg); }
+    /* The intro sits above the surface; the surface fills the rest. */
+    #wrap { display:flex; flex-direction:column; height:100%; }
+    #intro { flex:0 0 auto; padding:14px 16px 10px; background:#0b0d11; color:#c0caf5;
+             border-bottom:1px solid #262c39; font:13px/1.5 -apple-system,'Segoe UI',Roboto,sans-serif; }
+    #intro h1 { margin:0 0 4px; font-size:16px; font-weight:700; }
+    #intro p { margin:0; color:#8791a3; max-width:900px; }
+    #intro code { color:#e0af68; font-family:ui-monospace,Menlo,monospace; }
+    #intro .rds-t { color:#7aa2f7; } #intro .rds-y { color:#e0af68; }
+    #intro .rds-r { color:#f7768e; } #intro .rds-p { color:#bb9af7; }
+    #surface { flex:1 1 auto; min-height:0; }
+    #boot-err { color:#f7768e; padding:16px; font:13px ui-monospace,Menlo,monospace; }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="intro">
+      <h1>⛁ The reading, as JSONL</h1>
+      <p>Every ingested document is read through the whole predictive stack — the γ-mass prediction over who acts next,
+         the two surprise channels (novelty and Bayesian belief-shift), the connectivity bridge, the turning-point spine,
+         and the enacted frame loop. This surface streams that read as newline-delimited JSON: a
+         <span class="rds-t">head</span>, the extracted <span class="rds-t">structure</span> (round-trippable EoT),
+         a <span class="rds-y">turn</span> per turning point, and a <span class="rds-r">rec</span> where the reading's frame broke.
+         No model, no weights — it runs on the mechanical read.</p>
+    </div>
+    <div id="surface"></div>
+  </div>
+
+  <script type="module">
+    try {
+      const { mountReadingSurface } = await import('./src/reader/reading-surface.js');
+      const SAMPLE = [
+        'The office opened as usual. Papers were filed. The clerk sorted the mail. Routine held all morning.',
+        'A courier arrived with a sealed crate nobody had ordered. The crate was opened and the room changed.',
+        'Work stopped. The records were sealed. Filing resumed days later. The clerk sorted the mail again.',
+      ].join(' ');
+      mountReadingSurface(document.getElementById('surface'), { text: SAMPLE, title: 'Reading — JSONL' });
+    } catch (e) {
+      document.getElementById('surface').innerHTML =
+        '<div id="boot-err">Could not load the engine modules: ' + (e && e.message ? e.message : e) +
+        '<br><br>Serve the repo root (e.g. <code>npm run serve</code>) and open /reading.html — ES modules need http, not file://.</div>';
+      throw e;
+    }
+  </script>
+</body>
+</html>

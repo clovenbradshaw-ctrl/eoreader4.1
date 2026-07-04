@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { parseText } from '../src/perceiver/parse/pipeline.js';
 import { ingestText } from '../src/organs/in/text.js';
 import { eotDoc, parseEOT } from '../src/ingest/eot.js';
-import { readIngest } from '../src/ingest/read.js';
+import { readIngest, readingJsonl } from '../src/ingest/read.js';
 import { enactedReadingTo } from '../src/enact/index.js';
 
 // ingest/read.js — the moment of ingest reads the whole document through every predictive
@@ -88,6 +88,56 @@ test('an EoT document reads itself — eotDoc carries the same accessor', () => 
   assert.ok(r.structure.lines.length > 0, 'its structure reads out');
   const parsed = parseEOT(r.text);
   assert.equal(parsed.diagnostics.length, 0, 'and the read is valid EoT');
+});
+
+test('readingJsonl is a valid JSONL stream — one typed record per line', () => {
+  const doc = parseText(STORY, { docId: 'd.md' });
+  const jsonl = readingJsonl(doc);
+  const lines = jsonl.split('\n');
+  assert.ok(lines.length > 1, 'more than one record');
+
+  // Every line is independently JSON.parse-able and carries a type.
+  const records = lines.map((l) => JSON.parse(l));
+  for (const r of records) assert.ok(typeof r.type === 'string', `each record is typed: ${JSON.stringify(r)}`);
+
+  // The first is the head; the stream has structure and turn records.
+  assert.equal(records[0].type, 'head');
+  assert.equal(records[0].docId, 'd.md');
+  const types = new Set(records.map((r) => r.type));
+  assert.ok(types.has('structure'), 'the structure layer is streamed');
+  assert.ok(types.has('turn'), 'the thinking layer is streamed');
+
+  // A structure record's `eot` round-trips (it is the canonical surface).
+  const struct = records.find((r) => r.type === 'structure');
+  assert.ok(struct && typeof struct.eot === 'string' && struct.eot.length > 0);
+
+  // A turn record carries the predictive channels.
+  const turn = records.find((r) => r.type === 'turn');
+  assert.ok(typeof turn.surprisalBits === 'number' && typeof turn.bayesBits === 'number');
+  assert.ok(Array.isArray(turn.predicted) && Array.isArray(turn.surprises));
+});
+
+test('readingJsonl streams the frame layer when the enacted reader is injected', () => {
+  const doc = parseText(STORY, { docId: 'd.md' });
+  const jsonl = readingJsonl(doc, { enacted: (d) => enactedReadingTo(d, (d.units || d.sentences).length - 1) });
+  const records = jsonl.split('\n').map((l) => JSON.parse(l));
+  assert.equal(records[0].framed, true, 'the head marks the read as framed');
+  assert.ok(records.some((r) => r.type === 'rec'), 'a frame-restructuring record is streamed');
+});
+
+test('ingestText exposes readingJsonl() alongside reading()', async () => {
+  const doc = await ingestText(STORY);
+  assert.equal(typeof doc.readingJsonl, 'function');
+  const jsonl = doc.readingJsonl();
+  assert.equal(JSON.parse(jsonl.split('\n')[0]).type, 'head');
+});
+
+test('readingJsonl is unfazed by an empty spine', () => {
+  const empty = parseText('', { docId: 'empty' });
+  const jsonl = readingJsonl(empty);
+  const head = JSON.parse(jsonl.split('\n')[0]);
+  assert.equal(head.type, 'head');
+  assert.equal(head.units, 0);
 });
 
 test('readIngest is unfazed by a trivial / empty spine', () => {
