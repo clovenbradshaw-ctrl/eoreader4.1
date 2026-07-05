@@ -258,6 +258,95 @@ export const formatNumber = (v) => {
   return String(Number(s));
 };
 
+// ── the computation record ──────────────────────────────────────────────────
+// A computed figure should be auditable, not a bare number: which engine, the
+// full expression, and each operation with its operands and running value
+// ("sqrt(16) = 4", then "4 × 3 = 12"). Built on the SAME safe grammar as the
+// evaluator — an AST is produced (nothing is executed as code) and folded
+// bottom-up, recording each reduction as a step. Pure and dependency-free, so a
+// record is available in the browser and offline alike; returns null on any
+// malformed expression (the answer still stands, it simply carries no record).
+const OP_SYM  = { '+': '+', '-': '−', '*': '×', '/': '÷', '^': '^', '%': 'mod' };
+const OP_WORD = { '+': 'add', '-': 'subtract', '*': 'multiply', '/': 'divide', '^': 'exponent', '%': 'modulo' };
+
+// A parallel recursive-descent that builds nodes instead of folding to a number,
+// mirroring the evaluator's grammar exactly so it accepts precisely what evaluates.
+const parseAst = (tokens) => {
+  let pos = 0;
+  const peek = () => tokens[pos];
+  const eat = (v) => { const tk = tokens[pos]; if (!tk || (v != null && tk.v !== v)) throw new Error('parse error'); pos++; return tk; };
+  const expr = () => { let l = term(); while (peek() && peek().t === 'op' && (peek().v === '+' || peek().v === '-')) { const op = eat().v; l = { type: 'bin', op, a: l, b: term() }; } return l; };
+  const term = () => { let l = unary(); while (peek() && peek().t === 'op' && (peek().v === '*' || peek().v === '/' || peek().v === '%')) { const op = eat().v; l = { type: 'bin', op, a: l, b: unary() }; } return l; };
+  const unary = () => { if (peek() && peek().t === 'op' && (peek().v === '+' || peek().v === '-')) { const op = eat().v; return { type: 'unary', op, a: unary() }; } return power(); };
+  const power = () => { const base = postfix(); if (peek() && peek().t === 'op' && peek().v === '^') { eat('^'); return { type: 'bin', op: '^', a: base, b: unary() }; } return base; };
+  const postfix = () => { let v = primary(); while (peek() && peek().t === 'op' && peek().v === '!') { eat('!'); v = { type: 'fact', a: v }; } return v; };
+  const primary = () => {
+    const tk = peek();
+    if (!tk) throw new Error('unexpected end');
+    if (tk.t === 'num') { eat(); return { type: 'num', v: tk.v }; }
+    if (tk.t === 'op' && tk.v === '(') { eat('('); const v = expr(); eat(')'); return v; }
+    if (tk.t === 'name') {
+      eat();
+      if (tk.v in CONSTS) return { type: 'const', name: tk.v };
+      if (!FUNCS[tk.v]) throw new Error('unknown name');
+      eat('(');
+      const args = [expr()];
+      while (peek() && peek().t === 'op' && peek().v === ',') { eat(','); args.push(expr()); }
+      eat(')');
+      return { type: 'call', name: tk.v, args };
+    }
+    throw new Error('parse error');
+  };
+  const root = expr();
+  if (pos !== tokens.length) throw new Error('trailing input');
+  return root;
+};
+
+// Fold the AST bottom-up, pushing a step for every non-trivial reduction.
+const foldNode = (node, steps) => {
+  switch (node.type) {
+    case 'num': return node.v;
+    case 'const': return CONSTS[node.name];
+    case 'unary': { const a = foldNode(node.a, steps); return node.op === '-' ? -a : a; }
+    case 'fact': { const a = foldNode(node.a, steps); const v = factorial(a); steps.push({ text: `${formatNumber(a)}! = ${formatNumber(v)}`, op: 'factorial', operands: [a], value: v }); return v; }
+    case 'bin': {
+      const a = foldNode(node.a, steps), b = foldNode(node.b, steps);
+      const v = node.op === '+' ? a + b : node.op === '-' ? a - b : node.op === '*' ? a * b : node.op === '/' ? a / b : node.op === '%' ? a % b : Math.pow(a, b);
+      steps.push({ text: `${formatNumber(a)} ${OP_SYM[node.op] || node.op} ${formatNumber(b)} = ${formatNumber(v)}`, op: OP_WORD[node.op] || node.op, operands: [a, b], value: v });
+      return v;
+    }
+    case 'call': {
+      const args = node.args.map((x) => foldNode(x, steps));
+      const v = FUNCS[node.name](...args);
+      steps.push({ text: `${node.name}(${args.map(formatNumber).join(', ')}) = ${formatNumber(v)}`, op: node.name, operands: args, value: v });
+      return v;
+    }
+    default: throw new Error('bad node');
+  }
+};
+
+// The leaf operands (literal numbers and named constants) in reading order.
+const collectOperands = (node, out = []) => {
+  if (!node) return out;
+  if (node.type === 'num') out.push({ value: node.v, text: formatNumber(node.v) });
+  else if (node.type === 'const') out.push({ value: CONSTS[node.name], text: node.name, name: node.name });
+  else { if (node.a) collectOperands(node.a, out); if (node.b) collectOperands(node.b, out); if (node.args) node.args.forEach((x) => collectOperands(x, out)); }
+  return out;
+};
+
+export const traceExpression = (expr, engine = 'math.js') => {
+  try {
+    const ast = parseAst(tokenize(String(expr)));
+    const steps = [];
+    const result = foldNode(ast, steps);
+    if (typeof result !== 'number' || !Number.isFinite(result)) return null;
+    const operators = [...new Set(steps.map((s) => s.op))];
+    return { engine, expr: String(expr).trim(), result, resultText: formatNumber(result), steps, operators, operands: collectOperands(ast) };
+  } catch {
+    return null;
+  }
+};
+
 // The async answerer the route stage uses — math.js (or the fallback) responds to a math
 // problem. Returns the mechanical answer shape, or null when the question is not math.
 export const answerMath = async (question) => {
