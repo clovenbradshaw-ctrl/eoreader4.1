@@ -1302,6 +1302,43 @@ class Component extends DCLogic {
   // (The fixed facet battery — a hardcoded overview/analysis/history/… list appended to the subject
   // — was retired: _planFacets now plans discourse-aware angle queries through the engine's shared
   // facet brain (modelPlanner + planQueries), with the neutral facets kept only as an offline fallback.)
+  // ── FOLLOW-UP SUBJECT CARRY (pre-semantic) ─────────────────────────────────────
+  // A thin or anaphoric follow-up names no subject of its own: "do they have society?"
+  // carries "dolphins" only in the THREAD, not the string, and a typo ("socieity") drops
+  // the one real word. Grounding on the bare tokens then retrieves whatever GENERIC words
+  // ("have", "like") happen to match — off-topic noise (the dolphins follow-up that pulled
+  // folklore, Wicca and Greek myth into the prompt). So a thin turn's RETRIEVAL query folds
+  // in the thread's carried subject; the relevance ranker then orders what comes back. This
+  // is structural — prior user turns + the fold's focus, minus stopwords and the generic
+  // ask-verbs — no model call, in the spirit of keeping the inner logic pre-semantic. Only
+  // the retrieval query changes; the question the model is SHOWN is left exactly as asked.
+  //
+  // The thread's subject as bare content words: the fold's focus plus the last couple of
+  // user turns, minus stopwords, the generic ask-verbs (_subjStop) and the current question
+  // itself — what is LEFT is the topic ("sociality", "dolphins").
+  _carriedSubject(prev,fold,exclude){
+    if(!this._subjStop)this._namedSubjects('');            // build the generic ask-verb stop set
+    const ex=this.norm(exclude||'').toLowerCase();
+    const terms=new Set();
+    const add=(s)=>{for(const w of String(s||'').toLowerCase().split(/[^a-z0-9]+/))
+      if(w.length>3&&!this.STOP.has(w)&&!this._subjStop.has(w))terms.add(w);};
+    const fs=fold&&fold.focus&&fold.focus.subject;if(fs)add(fs);
+    for(const m of (prev||[]).filter(m=>m&&m.role==='user'&&m.text&&this.norm(m.text).toLowerCase()!==ex).slice(-2))add(m.text);
+    return [...terms].slice(0,6);
+  }
+  // The RETRIEVAL query for a turn. A self-contained ask (names its own subject, no anaphor)
+  // retrieves on its own words, unchanged. A thin or anaphoric follow-up gets the carried
+  // subject appended so the fold retrieves the real topic instead of generic-word noise.
+  // Retrieval-only — never the question the model is shown; a first turn is untouched.
+  _groundingQuery(q,prev,fold){
+    const s=String(q||'');
+    if(!this._subjStop)this._namedSubjects('');
+    const anaphoric=/\b(they|them|their|theirs|it|its|this|that|these|those|one|ones|he|him|his|she|her|hers|same)\b/i.test(s);
+    const own=s.toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>3&&!this.STOP.has(w)&&!this._subjStop.has(w));
+    if(!anaphoric&&own.length)return q;                    // names its own subject and no anaphor — retrieve on its own terms
+    const carried=this._carriedSubject(prev,fold,q).filter(w=>!own.includes(w));
+    return carried.length?(q+' '+carried.join(' ')):q;
+  }
   // The read context for a question, as the verbatim spans the model leans on (plus the
   // source chips/entities to show). `sources` is the chat's source set — empty ranges over
   // everything read. Empty spans when nothing relevant has been read.
@@ -1399,7 +1436,7 @@ class Component extends DCLogic {
       if((t.conf||0)>g.conf){g.conf=t.conf||0;g.eot=t.eot;}
     }
     if(!groups.size)return null;
-    return this._rankPropositions([...groups.values()],Q,{budget});
+    return this._rankPropositions([...groups.values()],Q,{budget,qwords});
   }
   // _chainBetween(Q,scope,{maxLen}) → the shortest MULTI-HOP path of propositions joining two of the
   // question's referents, as an ordered [{edge,from,to}], or null. Connectivity is measured on the same
@@ -1453,9 +1490,27 @@ class Component extends DCLogic {
   // as a quality floor, never the axis. The prompt fills to a token budget; the citation evidence is
   // the full ordered set (unbounded); `forks` names the contested claims so the answer can present a
   // disagreement AS a disagreement.
-  _rankPropositions(groups,refs,{budget=1600}={}){
+  _rankPropositions(groups,refs,{budget=1600,qwords=[]}={}){
     const Q=(refs instanceof Set)?refs:new Set(refs||[]);
     const G=(groups||[]).map(g=>({...g,origins:this._independentOrigins(g.witnesses)}));
+    // ON-QUESTION RELEVANCE — the fold's job is to do the thinking so the small model only needs
+    // enough to speak for one turn. Until now a proposition qualified merely by TOUCHING a question
+    // referent, and once a broad anchor ("dolphin") is a referent EVERY fact about it is eligible; the
+    // selection below then ordered them by corroboration + graph-integration alone, so the prompt window
+    // filled with whatever was best-attested/best-connected about the anchor (anatomy, sleep, size)
+    // rather than what the ask was ABOUT (sociality). The discriminating words ("social", "behavior")
+    // gated the referent set and then stopped mattering. This restores them as a per-proposition WEIGHT:
+    // how much of the question's own wording each witness carries, every word IDF-scaled across the
+    // candidates so the universal anchor (in nearly every witness) counts for almost nothing while a
+    // rare, on-topic word is decisive. Empty qwords (a referent-only ask, the unit tests) → relevance 0
+    // → the corroboration/combination selection is byte-for-byte unchanged.
+    const qws=[...new Set((qwords||[]).map(w=>String(w||'').toLowerCase()).filter(w=>w.length>2))];
+    const gToks=G.map(g=>new Set((g.witnesses||[]).map(w=>String(w.text||'').toLowerCase()).join(' ').split(/[^a-z0-9]+/).filter(Boolean)));
+    const hitsW=(toks,w)=>toks.has(w)||(w.length>3&&[...toks].some(t=>t.includes(w)||(t.length>3&&w.includes(t))));
+    const df=new Map(qws.map(w=>[w,0]));
+    if(qws.length)G.forEach((g,gi)=>{for(const w of qws)if(hitsW(gToks[gi],w))df.set(w,df.get(w)+1);});
+    const N=G.length||1,idf=w=>Math.log(1+N/Math.max(1,df.get(w)||0));
+    G.forEach((g,gi)=>{let r=0;for(const w of qws)if(hitsW(gToks[gi],w))r+=idf(w);g._rel=r;});
     // FORK detection (polarity): same endpoints + same base relation + opposite polarity = a contradiction.
     for(let i=0;i<G.length;i++)for(let j=i+1;j<G.length;j++){
       const a=G[i],b=G[j];
@@ -1468,7 +1523,7 @@ class Component extends DCLogic {
     const relsAt=new Map();                                               // endpoint-pair → base relations already held (redundancy)
     const chosen=[],pool=G.slice();
     const scoreOf=(g)=>{
-      let s=quality(g);
+      let s=quality(g)+(g._rel||0);                                        // on-question relevance — the discriminating words the referent gate dropped
       const touches=(active.has(g.rf)?1:0)+(active.has(g.rt)?1:0);
       if(touches>=2)s+=2.0;                                               // links two already-active nodes — pure integration
       else if(touches>=1)s+=0.4;
@@ -1487,13 +1542,17 @@ class Component extends DCLogic {
     // Render: the prompt takes chosen propositions' witness sentences until the budget is spent; the
     // evidence carries them all (unbounded). Threshold only where we must act (the prompt), not the store.
     const promptSpans=[],evidence=[],seen=new Set();let used=0;
-    for(const g of chosen){
+    for(let ci=0;ci<chosen.length;ci++){const g=chosen[ci];
       const w=(g.witnesses||[])[0];if(!w)continue;
       const text=this.norm(String(w.text||''));if(!text)continue;
       evidence.push({text:this._clipPassage(text),u:w.source,i:w.sentIdx,score:g.origins,eot:g.eot,origins:g.origins,...(g.fork?{fork:true}:{})});
       if(seen.has(w.sentIdx))continue;
       const cost=Math.max(1,Math.ceil(text.length/4));                    // ~chars→tokens
-      if(used+cost<=budget||!promptSpans.length){promptSpans.push({text:this._clipPassage(text),score:g.origins,i:w.sentIdx,u:w.source});used+=cost;seen.add(w.sentIdx);}
+      // The prompt span carries its SELECTION RANK as score (highest = chosen first), not its raw
+      // corroboration count: orderSpansForFrame (model/prompt.js) keeps only the top-scored spans for
+      // the token window, so the frame must honor the relevance-aware selection above — otherwise a
+      // well-corroborated but OFF-question span is re-promoted into the window (the dolphins failure).
+      if(used+cost<=budget||!promptSpans.length){promptSpans.push({text:this._clipPassage(text),score:chosen.length-ci,i:w.sentIdx,u:w.source});used+=cost;seen.add(w.sentIdx);}
     }
     const forks=[],fseen=new Set();
     for(const g of chosen){if(g.fork&&g._twin){const k=[g.key,g._twin.key].sort().join('||');if(!fseen.has(k)){fseen.add(k);forks.push({a:g.eot,b:g._twin.eot});}}}
@@ -2534,9 +2593,29 @@ class Component extends DCLogic {
   // answer has to work from — and WHAT it is on (the matched figures), never a bare count. No
   // matches → say honestly what the reasoning stands on instead ("the meaning graph").
   _thinkGround(ground){const n=(ground&&ground.spans&&ground.spans.length)||0;
-    const ents=((ground&&ground.entities)||[]).map(e=>typeof e==='string'?e:((e&&(e.label||e.name))||'')).filter(Boolean).slice(0,3);
+    const ents=((ground&&ground.entities)||[]).map(e=>this._entLabel(e)).filter(Boolean).slice(0,3);
     if(!n)return 'No passage matches this directly — reasoning from the meaning graph of what you’ve read…';
     return 'Re-reading '+n+' matching passage'+(n!==1?'s':'')+(ents.length?(' — on '+ents.join(', ')):'')+'…';}
+  // An entity's human LABEL for the thinking trail. The trail printed raw internal ids ("Re-reading
+  // 32 matching passages — on ehf0ylmbnsj, eq4rku4bwmc…") when entities arrived as ids rather than
+  // labels; resolve an id-looking token through the graph, and drop anything that still reads as an
+  // id, so the visible thinking stays human-readable. id-like = all-alphanumeric, 8+ chars, has a
+  // digit (a real word label — "echolocation", "sociality" — never trips it).
+  _entLabel(e){
+    const idLike=s=>/^[a-z0-9]{8,}$/i.test(s)&&/\d/.test(s);
+    let s=String((typeof e==='string')?e:((e&&(e.label||e.name||e.id))||''));
+    if(s&&idLike(s)&&this.labelOf){const lab=String(this.labelOf(s)||'');if(lab&&!idLike(lab))s=lab;}
+    return (!s||idLike(s))?'':this.norm(s);}
+  // THE PROTO-ANSWER, surfaced (the fold does the thinking). The ranked on-question propositions ARE
+  // a proto, almost-readable draft of the answer; showing them as a reasoning beat — fold-rank order,
+  // best first — makes the visible thinking the fold's CONCLUSION, not a bare count, so the model is
+  // only left to phrase it for one turn. Honest by construction: rides ONLY when the reading actually
+  // matched the question (ground.relevant), never on the opening-lines fallback, and never beyond the
+  // spans the fold chose.
+  _thinkProto(ground){
+    if(!ground||!ground.relevant)return '';
+    const spans=((ground&&ground.spans)||[]).slice(0,4).map(s=>this.truncLabel(this.norm((s&&s.text)||''),140)).filter(Boolean);
+    return spans.length?('The fold’s proto-answer, best first: '+spans.map(t=>'“'+t+'”').join(' · ')):'';}
   // COMPOSING, made legible. The bare "Composing the answer…" sat frozen for the whole decode —
   // the model can prefill a grounded prompt for many seconds before the first token, and that dead
   // air is exactly what the live trail exists to kill. So the opening beat NAMES the grounded supply
@@ -2927,10 +3006,11 @@ class Component extends DCLogic {
     // read — not a depth/type dial.
     // 2) the spans that surface for this question, scoped to the chat's sources (none when
     //    isolated — and none in the CREATIVE register, which answers from the model alone)
-    const ground=(isolated||amode==='creative')?{spans:[],entities:[],sources:[],relevant:false}:this.groundNotes(q,sources);
+    const ground=(isolated||amode==='creative')?{spans:[],entities:[],sources:[],relevant:false}:this.groundNotes(this._groundingQuery(q,prev,fold),sources);
     // 3) the model — the VOICE OF A READER grounded in those sources and their meaning
     //    graph, so it speaks from the document instead of as a blank-slate assistant.
     this._setThink(id,this._thinkGround(ground));
+    {const _proto=this._thinkProto(ground);if(_proto)this._beat(id,'think',_proto);}   // surface the fold's proto-answer as the reasoning step
     const guard=this._stallGuard();
     try{
       const model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);
@@ -3462,8 +3542,10 @@ class Component extends DCLogic {
     // names the subject (the corpus still doesn't know it), answer honestly rather than letting
     // the model confabulate it from whatever was gathered. (Skipped for an isolated chat.)
     if(!isolated&&!this._subjectsKnown(q,sources.length?sources:[...new Set([...(gathered||[])])])){finish(this._noSubjectPatch(q,sources));return;}
-    const ground=isolated?{spans:[],entities:[],sources:[],relevant:false}:this.groundNotes(q,sources);
+    const _prev=cur?cur.messages.filter(m=>m.text&&!m.pending):[];
+    const ground=isolated?{spans:[],entities:[],sources:[],relevant:false}:this.groundNotes(this._groundingQuery(q,_prev,null),sources);
     this._setThink(id,this._thinkGround(ground));
+    {const _proto=this._thinkProto(ground);if(_proto)this._beat(id,'think',_proto);}   // surface the fold's proto-answer as the reasoning step
     const guard=this._stallGuard();
     try{
       const model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);

@@ -139,6 +139,36 @@ for (const page of ['src/reader/app.dc.js', 'index.html']) {
     assert.ok(iConnector < iSpoke, `the connector (1 source) beats the disconnected 2-source spoke once its neighbourhood is active (got ${order.join(' | ')})`);
   });
 
+  test(`${page}: relevance — an on-question proposition outranks a better-corroborated off-question one`, () => {
+    // The dolphins-sociality failure: a broad anchor ("dolphin") makes EVERY dolphin-fact eligible, so
+    // the prompt window used to fill with the best-corroborated/best-connected facts about the anchor
+    // (teeth, sleep, size) rather than what the ask was ABOUT. The fold must do that thinking — surface
+    // the on-question spans — so the small model gets enough to speak coherently for the turn.
+    const h = worldHarness(src);
+    const groups = [
+      { key:'soc',   eot:'dolphin -> pods : form',  rf:'d', rt:'pods', base:'form', conf:0.7,
+        witnesses:[{ source:'A', text:'Dolphins are highly social animals that form fluid pods.', sentIdx:0 }] },
+      { key:'teeth', eot:'dolphin -> teeth : have',  rf:'d', rt:'th',   base:'have', conf:0.7,
+        witnesses:[{ source:'A', text:'Dolphins have conical teeth.', sentIdx:1 },
+                   { source:'B', text:'Dolphins use conical teeth to hunt.', sentIdx:2 }] },
+    ];
+    // With NO question words the ranker is unchanged: the 2-source teeth claim leads by corroboration.
+    const plain = h._rankPropositions(groups, new Set(['d']), { budget: 1600 });
+    assert.match(plain.promptSpans[0].text, /teeth/i, 'no qwords → corroboration still leads (backward compatible)');
+    // With the question's words, the on-topic proposition is pulled ahead of the corroborated spoke —
+    // "social" is rare across the candidates (high IDF) while the anchor "dolphins" is universal (near-zero).
+    const ranked = h._rankPropositions(groups, new Set(['d']), { budget: 1600, qwords: ['social', 'behavior', 'dolphins'] });
+    assert.match(ranked.promptSpans[0].text, /social/i, 'qwords → the on-question proposition leads the prompt');
+    const iSoc = ranked.promptSpans.findIndex((s) => /social/i.test(s.text));
+    const iTeeth = ranked.promptSpans.findIndex((s) => /teeth/i.test(s.text));
+    assert.ok(iSoc >= 0 && iTeeth >= 0 && iSoc < iTeeth, 'relevance outranks corroboration for the prompt window');
+    // The prompt-span SCORE is the selection rank, so orderSpansForFrame keeps the on-question span in the window.
+    assert.ok(ranked.promptSpans[iSoc].score > ranked.promptSpans[iTeeth].score, 'the on-question span scores above the corroborated spoke in the frame ordering');
+    // The universal anchor alone must NOT create relevance: a bare "dolphins" ask leaves corroboration in charge.
+    const anchorOnly = h._rankPropositions(groups, new Set(['d']), { budget: 1600, qwords: ['dolphins'] });
+    assert.match(anchorOnly.promptSpans[0].text, /teeth/i, 'the anchor word is in every witness (near-zero IDF) → it does not reorder');
+  });
+
   test(`${page}: opposite-polarity claims on the same point are surfaced as a FORK (both sides ride)`, () => {
     const h = worldHarness(src);
     const groups = [
