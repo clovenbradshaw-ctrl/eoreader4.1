@@ -4803,8 +4803,13 @@ class Component extends DCLogic {
       // a pointed lookup keeps just the librarian register and answers straight.
       // The discourse read rides in as ONE steering line — what would satisfy the asker, and what
       // the reading does NOT hold (so absence is said plainly instead of padded from priors).
+      // A LONGFORM ask ("write me an essay") folds in the SELF-AWARE capability cue: a small
+      // in-browser reader is not a long-form essayist, so it says so plainly and gives a short
+      // grounded rundown instead of a slow, padded, part-invented essay.
       const steer=this._steerLine(meta);
-      const shape=grounded?[this._ME.LIBRARIAN_CUE,(this._ME.shapeForScope&&this._ME.shapeForScope(q))||'',steer].filter(Boolean).join('\n\n'):'';
+      const sectioned=(this._ME.shapeForScope&&this._ME.shapeForScope(q))||'';
+      const longform=this._explicitLongform(q);
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,sectioned,longform?this._ME.CAPABILITY_CUE:'',steer].filter(Boolean).join('\n\n'):'';
       if(grounded){
         const pastTurns=prev.filter(m=>m.role==='user').slice(-6).map(m=>this.norm(m.text)).filter(Boolean);
         messages=this._ME.buildGroundedMessages({
@@ -4831,9 +4836,12 @@ class Component extends DCLogic {
       let acc='',raf=0;
       const paint=()=>{raf=0;const head=this._composeTick(acc);this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,think:head};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
-      // A sectioned answer needs room for the lead + parts + follow-ups; a straight lookup keeps the tighter budget.
+      // Only a genuinely SECTIONED broad grounded answer gets the 900-token room to breathe; a plain
+      // lookup — and a longform ask we're deliberately keeping short and grounded — stays on the
+      // tighter 512. (The budget once keyed off `shape`, which always carries the librarian cue when
+      // grounded, so every grounded answer silently ran to 900; it now keys off the sectioned read.)
       // The creative register writes hotter — invention is the point; grounded stays cool and faithful.
-      const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:shape?900:512,temperature:amode==='creative'?0.85:0.4,onToken,signal:guard.signal}),guard.race]);
+      const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:(grounded&&sectioned&&!longform)?900:512,temperature:amode==='creative'?0.85:0.4,onToken,signal:guard.signal}),guard.race]);
       guard.clear();
       this._auditRec(id,'answer-raw',{output:String(raw||'')});
       // An isolated chat draws on nothing read, so there's no structural fallback to pull from.
@@ -5322,7 +5330,12 @@ class Component extends DCLogic {
       // The research/web chat path: same librarian register (+ sectioned shape on a broad question),
       // plus the discourse read's steering line when the turn carried one (what would satisfy the
       // asker, and what even the gathered reading still doesn't hold).
-      const shape=grounded?[this._ME.LIBRARIAN_CUE,(this._ME.shapeForScope&&this._ME.shapeForScope(q))||'',this._steerLine(meta)].filter(Boolean).join('\n\n'):'';
+      // A LONGFORM ask ("write me an essay") also folds in the SELF-AWARE capability cue: this is a
+      // small in-browser reader, not a long-form essayist, so it says so plainly and gives a short
+      // grounded rundown rather than grinding out a slow, padded, part-invented essay.
+      const sectioned=(this._ME.shapeForScope&&this._ME.shapeForScope(q))||'';
+      const longform=this._explicitLongform(q);
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,sectioned,longform?this._ME.CAPABILITY_CUE:'',this._steerLine(meta)].filter(Boolean).join('\n\n'):'';
       if(grounded){
         messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:ground.prop?this._groundCue(ground):this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape});
@@ -5332,8 +5345,11 @@ class Component extends DCLogic {
       let acc='',raf=0;
       const paint=()=>{raf=0;const head=this._composeTick(acc);this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,think:head};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
-      // A sectioned answer needs room for the lead + parts + follow-ups; a straight lookup keeps the tighter budget.
-      const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:shape?900:512,temperature:0.4,onToken,signal:guard.signal}),guard.race]);
+      // Only a genuinely SECTIONED broad grounded answer gets the 900-token room to breathe; a plain
+      // lookup — and a longform ask we're deliberately keeping short and grounded — stays on the
+      // tighter 512. (The budget once keyed off `shape`, which always carries the librarian cue when
+      // grounded, so every grounded answer silently ran to 900; it now keys off the sectioned read.)
+      const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:(grounded&&sectioned&&!longform)?900:512,temperature:0.4,onToken,signal:guard.signal}),guard.race]);
       guard.clear();
       this._auditRec(id,'answer-raw',{output:String(raw||'')});
       // normMd (not norm): keep the reply's line structure so lists/headings survive into _md.
