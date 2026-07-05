@@ -58,6 +58,7 @@ export { ingestOcr }         from './ocr.js';
 export { ingestDocling }     from './docling.js';
 export { ingestWebpage }     from './webpage.js';
 export { ingestTable }       from './table.js';
+export { ingestJson }        from './json.js';
 export { readWarc, ingestWarc } from './warc.js';
 export { ingestMusic }       from './music.js';
 export { ingestFrequencies } from './frequency.js';

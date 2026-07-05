@@ -6747,6 +6747,81 @@ class Component extends DCLogic {
       '<div class="eo-tcap">'+esc(cap)+'</div>'+
       '</div></body></html>';
   }
+  // A JSON source reads as a key-path TREE, not run-on prose — its unit is the path, each leaf
+  // a typed value. The parsed tree rides on the json organ doc (organs/in/json.js) as `_organ.data`,
+  // and this recurses it into nested native <details> (collapsible with no script), themed with the
+  // same reading variables the book uses so font-size / paper theme / accent apply live. String
+  // values stay entity-linkable — decorateFrame's TreeWalker walks the row text like any prose.
+  _jsonTreeHtml(p){
+    const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const org=p._organ||{},data=org.data;
+    const rp=this.state.readPrefs||this._defaultRead,tm=this.READ_THEMES[rp.theme]||this.READ_THEMES.light,a=this.curAccent();
+    const v=(n,d)=>'--eo-'+n+':'+d+';';
+    const mono='ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+    const sans='-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif';
+    // Type colors are fixed saturated mid-tones — legible on the light, sepia AND dark papers,
+    // so they need no live re-theming (only the structural fg/bg/rule ride the --eo-* vars).
+    const TCOL={string:'#16a34a',number:'#2563eb',boolean:'#c2410c','null':'#8a94a6'};
+    const typeOf=x=>x===null?'null':Array.isArray(x)?'array':typeof x;
+    const isC=x=>x!==null&&typeof x==='object';
+    let n=0;const CAP=4000;let capped=false;
+    const valHtml=x=>{const t=typeOf(x);const c=TCOL[t]||'var(--eo-fg)';
+      const disp=t==='string'?'"'+esc(x)+'"':esc(String(x));
+      return '<span class="eo-jval" style="color:'+c+'">'+disp+'</span>';};
+    const keyHtml=k=>k==null?'':'<span class="eo-jkey">'+esc(String(k))+'</span><span class="eo-jp">: </span>';
+    const build=(key,val,depth)=>{
+      if(n++>CAP){capped=true;return '';}
+      const t=typeOf(val);
+      if(isC(val)){
+        const entries=t==='array'?val.map((x,i)=>[i,x]):Object.entries(val);
+        const o=t==='array'?'[':'{',c=t==='array'?']':'}';
+        if(!entries.length)return '<div class="eo-jrow">'+keyHtml(key)+'<span class="eo-jp">'+o+c+'</span></div>';
+        const kids=entries.map(([k,x])=>build(k,x,depth+1)).join('');
+        return '<details class="eo-jnode" open><summary class="eo-jsum">'+keyHtml(key)+
+          '<span class="eo-jp">'+o+'</span><span class="eo-jn">'+entries.length+'</span></summary>'+
+          '<div class="eo-jkids">'+kids+'</div><div class="eo-jrow eo-jc"><span class="eo-jp">'+c+'</span></div></details>';
+      }
+      return '<div class="eo-jrow">'+keyHtml(key)+valHtml(val)+'</div>';
+    };
+    const tree=(data===undefined)?'<div class="eo-jrow"><span class="eo-jp">(empty)</span></div>':build(null,data,0);
+    const co=org.counts||{leaves:0,containers:0};
+    const byline=(p.propCount!=null?p.propCount:this.countPropositions(p.sentences||[]))+' propositions · '+
+      co.leaves+' value'+(co.leaves!==1?'s':'')+' · '+co.containers+' object'+(co.containers!==1?'s':'')+' · read as a tree';
+    const cap='Read as a tree — the unit is the key-path, each leaf a typed value the chat can cite by path (e.g. '+
+      (org.nodes&&org.nodes.find(x=>x.leaf)?org.nodes.find(x=>x.leaf).path:'a.b.c')+'). Names in string values are linked.'+
+      (capped?' · Large file — showing the first '+CAP.toLocaleString()+' nodes.':'');
+    return '<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+
+      '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.7))+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+
+        v('bg',tm.bg)+v('fg',tm.fg)+v('fg2',tm.fg2)+v('rule',tm.rule)+v('acc',a)+v('hov',this.hexA(a,.07))+'}'+
+      'html,body{margin:0;background:var(--eo-bg);}'+
+      'body{font:var(--eo-fs)/var(--eo-lh) var(--eo-ff);color:var(--eo-fg);-webkit-font-smoothing:antialiased;}'+
+      '.eo-book{max-width:1000px;margin:0 auto;padding:40px 30px 120px;}'+
+      'h1.eo-title{font:700 1.7em/1.18 var(--eo-ff);letter-spacing:-.018em;color:var(--eo-fg);margin:0 0 5px;}'+
+      '.eo-byline{font:.66em/1.5 '+sans+';color:var(--eo-fg2);margin:0 0 22px;}'+
+      '.eo-tscroll{border:1px solid var(--eo-rule);border-radius:12px;overflow:auto;max-height:calc(100vh - 150px);background:var(--eo-bg);padding:10px 14px;}'+
+      '.eo-jtree{font-family:'+mono+';font-size:max(12px,calc(var(--eo-fs) * .72));line-height:1.85;}'+
+      '.eo-jnode{margin:0;}'+
+      '.eo-jsum{cursor:pointer;list-style:none;border-radius:5px;padding:0 3px;}'+
+      '.eo-jsum::-webkit-details-marker{display:none;}'+
+      '.eo-jsum::before{content:"\\25B8";display:inline-block;width:1.1em;margin-left:-.15em;color:var(--eo-fg2);transition:transform .12s ease;}'+
+      '.eo-jnode[open]>.eo-jsum::before{transform:rotate(90deg);}'+
+      '.eo-jsum:hover{background:var(--eo-hov);}'+
+      '.eo-jkids{padding-left:1.1em;margin-left:.35em;border-left:1px solid var(--eo-rule);}'+
+      '.eo-jrow{padding-left:1.25em;border-radius:5px;}'+
+      '.eo-jrow.eo-jc{padding-left:.1em;}'+
+      '.eo-jkey{color:var(--eo-fg);font-weight:600;}'+
+      '.eo-jp{color:var(--eo-fg2);}'+
+      '.eo-jn{color:var(--eo-fg2);font-size:.82em;margin-left:.5em;font-family:'+sans+';}'+
+      '.eo-jval{word-break:break-word;}'+
+      '.eo-tcap{font:.62em/1.55 '+sans+';color:var(--eo-fg2);margin:12px 3px 0;display:flex;align-items:baseline;gap:7px;}'+
+      '.eo-tcap::before{content:"\\7B\\7D";font-family:'+mono+';font-weight:700;color:var(--eo-acc);}'+
+      '</style></head><body><div class="eo-book">'+
+      '<h1 class="eo-title">'+esc(p.title||'Untitled')+'</h1>'+
+      '<div class="eo-byline">'+esc(byline)+'</div>'+
+      '<div class="eo-tscroll"><div class="eo-jtree">'+tree+'</div></div>'+
+      '<div class="eo-tcap">'+esc(cap)+'</div>'+
+      '</div></body></html>';
+  }
   // Render a source as a readable BOOK — drop-cap prose, an engine-found table of
   // contents, and the passages the reading flagged as important. This is the same
   // treatment Project Gutenberg books get, now given to EVERY document we've actually
@@ -6754,11 +6829,17 @@ class Component extends DCLogic {
   // raw live page is a URL we haven't read yet (browsing ahead of the reading), which
   // has no parsed propositions to draw a contents or find its surprises from.
   //
-  // A TABLE source detours to _tableHtml — a CSV reads as a grid, not run-on prose.
+  // A TABLE source detours to _tableHtml (a CSV reads as a grid); a JSON source to _jsonTreeHtml
+  // (a config reads as a key-path tree) — neither is run-on prose.
   _renderBook(url,p){
     if(p&&p.modality==='table'&&p._organ&&(p._organ.records||[]).length){
       this._pageUrl=url;
       this.setState({bookView:true,pageDoc:this._tableHtml(p),bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,bookProgress:0,pageLoading:false,pageErr:null});
+      return;
+    }
+    if(p&&p.modality==='json'&&p._organ&&p._organ.data!==undefined){
+      this._pageUrl=url;
+      this.setState({bookView:true,pageDoc:this._jsonTreeHtml(p),bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,bookProgress:0,pageLoading:false,pageErr:null});
       return;
     }
     const b=this._bookHtml(p);this._pageUrl=url;

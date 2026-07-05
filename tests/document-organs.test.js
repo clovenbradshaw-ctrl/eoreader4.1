@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { ingestPdf, ingestOcr, ingestDocling, ingestWebpage, ingestTable, readWarc, ingestWarc } from '../src/organs/in/index.js';
+import { ingestPdf, ingestOcr, ingestDocling, ingestWebpage, ingestTable, ingestJson, readWarc, ingestWarc } from '../src/organs/in/index.js';
 import { readingAt } from '../src/perceiver/index.js';
 
 // The layout-bearing adapters share one span-assembler: every unit records its
@@ -66,6 +66,31 @@ test('Table: rows are records, columns are DEF facts; same key is NOT auto-merge
   assert.equal(doc.projectGraph().entities.size, 2);   // two rows, two records — not collapsed
   assert.deepEqual(doc.column('Amount'), ['2900', '1000']);
   assert.equal(doc.rowAt(0).cells.donor, 'ACME LLC');
+});
+
+test('JSON: containers are entities, leaves are DEF facts addressed by key-path', () => {
+  const doc = ingestJson({ name: 'reader-config.json',
+    data: { reader: { grounding: 'strict' }, research: { depth: 'deep', maxSources: 12, tags: ['a', 'b'] } } });
+  assert.equal(doc.modality, 'json');
+  assert.equal(doc.counts.leaves, 5);       // grounding, depth, maxSources, tags.0, tags.1
+  assert.equal(doc.counts.containers, 4);   // root, reader, research, tags[]
+  // Every leaf reads as a "path: value." line — one sentence per value, period-terminated.
+  assert.ok(doc.sentences.includes('research.depth: deep.'));
+  assert.ok(doc.sentences.includes('research.tags.0: a.'));
+  // The parsed tree rides along for the viewer; a leaf keeps its typed kind.
+  assert.equal(doc.data.research.maxSources, 12);
+  const depth = doc.nodes.find(n => n.path === 'research.depth');
+  assert.equal(depth.leaf, true); assert.equal(depth.kind, 'string'); assert.equal(depth.value, 'deep');
+  // Containers raise onto the spine (INS + CON), leaves as DEF — the same shape the table uses.
+  const ops = doc.log.snapshot().reduce((a, e) => (a[e.op] = (a[e.op] || 0) + 1, a), {});
+  assert.equal(ops.INS, 4); assert.equal(ops.DEF, 5); assert.ok(ops.CON >= 3);
+});
+
+test('JSON: a primitive root and empty containers do not crash', () => {
+  assert.equal(ingestJson({ data: 42 }).counts.leaves, 1);
+  const empty = ingestJson({ data: { a: {}, b: [] } });
+  assert.equal(empty.counts.leaves, 0);
+  assert.equal(empty.counts.containers, 3);   // root, a{}, b[]
 });
 
 test('WARC: the record is the frozen, hashable, addressable source', () => {

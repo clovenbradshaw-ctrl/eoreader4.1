@@ -68,6 +68,12 @@ export async function importAnyFile(file, opts = {}) {
     return await fromCsv(file, title, name, ext);
   }
 
+  // JSON — parsed to a key-path tree (json organ). Malformed JSON falls through to text.
+  if (mime.includes('json') || ext === 'json') {
+    say('Reading the JSON…');
+    return await fromJson(file, title, name);
+  }
+
   // Image — a scan reads as a document (Tesseract word boxes, ocr organ); a photograph,
   // where OCR finds no prose, reads as a SCENE (Florence-2 regions, image organ).
   if (mime.startsWith('image/') || IMAGE_EXT.includes(ext)) {
@@ -140,6 +146,16 @@ async function fromCsv(file, title, name, ext) {
   const { ingestTable } = await IN();
   const doc = ingestTable({ name, columns, rows });
   return { text: doc.sentences.join('\n'), title, meta: { modality: 'table', doc } };
+}
+
+async function fromJson(file, title, name) {
+  const text = await file.text();
+  let data;
+  try { data = JSON.parse(text); }
+  catch (e) { return { text, title, meta: { modality: 'text' } }; } // not valid JSON — read it as text
+  const { ingestJson } = await IN();
+  const doc = ingestJson({ name, data });
+  return { text: doc.sentences.join('\n'), title, meta: { modality: 'json', doc } };
 }
 
 async function fromXlsx(file, title, name) {
