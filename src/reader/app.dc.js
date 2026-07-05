@@ -25,6 +25,12 @@ class Component extends DCLogic {
     this._activeGuards=new Set(); this._stopGen=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
     this.state={ ready:false, engineErr:null, pages:[], selId:null, siteView:null, sitesDir:false, docView:null, dataView:null, query:'', url:'', busy:false, feed:[],
+      // Corpus search — the smartest-possible-grep surface (docs/corpus-search.md): a query
+      // typed here retrieves ranked passages from EVERY source read, embedder-free (lexical
+      // token overlap + fuzzy spelling), never touching a model. corpusResultsQuery names the
+      // query the current corpusResults actually answer, so a debounced in-flight search never
+      // renders a stale hit list under the newly-typed text.
+      corpusQuery:'', corpusResults:null, corpusResultsQuery:'',
       // In-flight imports — a file starts here THE MOMENT it's picked, so it shows in the
       // Sources panel instantly (with a live "what it's doing" status) instead of only
       // appearing once the slow extractor — whisper, pdf.js, Tesseract — has finished. Each:
@@ -6077,6 +6083,59 @@ class Component extends DCLogic {
     return {text:ranked[0].s,before:cx.before,after:cx.after,hasCtx:cx.hasCtx,srcId:this.srcId(u),host:this.short(u),when:p?fmtDate(p.ts):'',hasWhen:!!(p&&p.ts),
       jumpUrl:this.tfURL(u,this.master.sentences[i]),onOpen:()=>this.openSource(u),onGo:()=>this._scrollToText(ranked[0].s)};
   }
+  // ── corpus search: the smartest-possible-grep surface, no LLM in the loop ──────────
+  // A query here does not ask a model anything — it runs the engine's own lexical
+  // retrieval (src/retrieve/lexical.js: exact token overlap, widened at the edges by a
+  // fuzzy edit-distance match so a misspelling or a near-miss inflection still hits,
+  // never a phantom) against `_logDoc`, the single merged corpus rebuild() already
+  // maintains across every source read so far. One call surfaces the best-matching
+  // passages from all hundred documents at once — sub-millisecond, offline, auditable.
+  // Lazily loaded (module code, not a model) and cached — src/retrieve/lexical.js has
+  // no network dependency, so this never blocks on anything warming up.
+  async _ensureRetrieveMod(){
+    if(!this._RT)this._RT=await import(new URL('src/retrieve/lexical.js',document.baseURI).href);
+    return this._RT;
+  }
+  // Debounced entry point the search box calls on every keystroke: the box's own value
+  // updates immediately (so typing never stutters), the actual retrieval fires ~160ms
+  // after the user stops, and a stale response (the query moved on while the one-time
+  // module import or a slow tick was in flight) is dropped rather than overwriting a
+  // newer, in-progress query's results.
+  runCorpusSearch(q){
+    const query=String(q||'');
+    this.setState({corpusQuery:query});
+    clearTimeout(this._corpusDebounce);
+    if(!query.trim()){this.setState({corpusResults:null,corpusResultsQuery:''});return;}
+    this._corpusDebounce=setTimeout(()=>this._doCorpusSearch(query.trim()),160);
+  }
+  async _doCorpusSearch(query){
+    if(!this.master||!this.master.sentences.length){this.setState({corpusResults:[],corpusResultsQuery:query});return;}
+    let hits=[];
+    try{ const {retrieveLexical}=await this._ensureRetrieveMod(); hits=retrieveLexical(this._logDoc,query,120); }catch(e){ hits=[]; }
+    if((this.state.corpusQuery||'').trim()!==query)return;   // the query moved on — drop this stale answer
+    this.setState({corpusResults:hits,corpusResultsQuery:query});
+  }
+  // Rank → view rows. Caps any one source at a handful of hits so a long book a query
+  // touches often can't crowd a short source it also matches out of the list entirely —
+  // every activated source keeps a seat, the point of searching ACROSS a hundred documents
+  // rather than grepping one at a time.
+  _corpusResultRows(){
+    const q=(this.state.corpusQuery||'').trim();
+    if(!q||!this.master||this.state.corpusResultsQuery!==q)return [];
+    const perSrc=new Map(),out=[];
+    for(const r of (this.state.corpusResults||[])){
+      const u=this.master.sentenceSource[r.idx];
+      const n=perSrc.get(u)||0; if(n>=4)continue; perSrc.set(u,n+1);
+      out.push(r); if(out.length>=30)break;
+    }
+    return out.map(r=>{
+      const u=this.master.sentenceSource[r.idx],p=this.pageOf(u),cx=this._spanContext(r.idx);
+      const text=this.stripRefs(this.norm(this.master.sentences[r.idx]));
+      return {key:'cs'+r.idx,pct:Math.round(Math.min(1,r.score)*100),text,before:cx.before,after:cx.after,hasCtx:cx.hasCtx,
+        host:this.short(u),title:this.truncLabel((p&&p.title)||this.short(u),40),
+        onOpen:()=>this._goToPassage(u,text)};
+    });
+  }
   // ── citation chips: small numbered markers that sit by a summary and, on
   // hover, reveal the exact source sentence + who + when the fold drew on. ─
   citeChips(idxList,opts){
@@ -7690,6 +7749,13 @@ class Component extends DCLogic {
         style:'font-size:12px;font-weight:600;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'var(--line2)')+';background:'+(sel?'var(--accbg)':'var(--card)')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),
       sources:[],srcCount:0,srcEmpty:true,imports:this._importRows(),hasImports:(this.state.imports||[]).length>0,onSrcImport:()=>this.onImportClick(),
       writtenDocs:this._writtenDocRows(),hasWrittenDocs:this._docsMap().size>0,
+      // Corpus search box — see runCorpusSearch/_corpusResultRows. browseMode gates the
+      // ordinary Chats/Sources/Documents lists off while a search is active, so the panel
+      // shows either what you've read or what a query found in it, never a jumble of both.
+      corpusQuery:this.state.corpusQuery||'',onCorpusQuery:e=>this.runCorpusSearch(e&&e.target?e.target.value:''),
+      onCorpusClear:()=>this.runCorpusSearch(''),corpusActive:!!(this.state.corpusQuery||'').trim(),
+      browseMode:!(this.state.corpusQuery||'').trim(),
+      corpusResults:this._corpusResultRows(),corpusCount:0,hasCorpusResults:false,corpusEmpty:false,
       // Transcription option — a second whisper witness so audio/video readings can be audited.
       audioAudit:!!this.state.audioAudit,onToggleAudioAudit:()=>this.setState(s=>({audioAudit:!s.audioAudit})),
       audioAuditStyle:'display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;border-radius:7px;padding:5px 9px;cursor:pointer;border:1px solid '+(this.state.audioAudit?'var(--accline)':'var(--line2)')+';background:'+(this.state.audioAudit?'var(--accbg)':'var(--app)')+';color:'+(this.state.audioAudit?'var(--acc)':'var(--ink3)')+';',
@@ -7939,6 +8005,9 @@ class Component extends DCLogic {
         rowStyle:'display:flex;align-items:center;gap:10px;padding:'+(depth?'7px 11px':'9px 11px')+';border-radius:9px;margin-bottom:3px;margin-left:'+(depth*15)+'px;cursor:pointer;border:1px solid '+(isA?'var(--accline)':'transparent')+';background:'+(isA?'var(--accbg)':'transparent')+';'+(depth?'border-left:2px solid '+c+'55;border-radius:0 9px 9px 0;':'')};});
     base.srcCount=this.master.pages.length;base.srcEmpty=this.master.pages.length===0&&(this.state.imports||[]).length===0;
     base.hasSources=this.master.pages.length>0;
+    base.corpusCount=base.corpusResults.length;base.hasCorpusResults=base.corpusResults.length>0;
+    base.corpusPending=base.corpusActive&&this.state.corpusResultsQuery!==(this.state.corpusQuery||'').trim();
+    base.corpusEmpty=base.corpusActive&&!base.corpusPending&&!base.hasCorpusResults;
     base.sitesDirBtnStyle='margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;border-radius:6px;padding:3px 8px;cursor:pointer;letter-spacing:.02em;'+(this.state.sitesDir?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink3);background:transparent;border:1px solid var(--line2);');
 
     // The "+" new-tab surface, once you already have sources read: a blank centre that offers
