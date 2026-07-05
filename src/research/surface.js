@@ -70,106 +70,95 @@ const defaultSearch = async (query, { k = 5 } = {}) => {
   } catch { return []; }
 };
 
+// Panel-native: the surface lives in the app's right column (≈380px), not a
+// standalone page — one narrow scrolling column, compact type, no wide
+// max-widths. Every section is sized to read at panel width so the whole run
+// fits the same slot the entity panel uses.
 const SURFACE_CSS = `
-.drs{display:flex;flex-direction:column;height:100%;background:#f5f6f8;color:#1a1c20;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13.5px}
+.drs{display:flex;flex-direction:column;height:100%;background:var(--card,#fff);color:#1a1c20;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px}
 .drs *{box-sizing:border-box}
-.drs-head{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:12px 18px;background:#fff;border-bottom:1px solid #e5e7eb}
-.drs-head h1{font-size:15px;margin:0;font-weight:700}
-.drs-head .drs-sub{font-size:11px;color:#5b6572}
-.drs-close{margin-left:auto;width:28px;height:28px;border:1px solid #e5e7eb;background:#fff;border-radius:7px;cursor:pointer;font-size:14px;line-height:1}
-.drs-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding:16px 18px 40px}
-.drs-panel{background:#fff;border:1px solid #e5e7eb;border-radius:11px;padding:14px 16px;margin:0 auto 12px;max-width:820px}
-.drs label{display:block;font-size:11px;font-weight:700;color:#5b6572;text-transform:uppercase;letter-spacing:.04em;margin:10px 0 4px}
+.drs-head{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:10px 13px;background:var(--card,#fff);border-bottom:1px solid #e5e7eb;position:sticky;top:0;z-index:4}
+.drs-close{margin-left:auto;width:24px;height:24px;border:none;background:transparent;color:#9aa1ab;border-radius:6px;cursor:pointer;font-size:14px;line-height:1}
+.drs-close:hover{background:#eef0f3;color:#1a1c20}
+.drs-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding:12px 13px 40px}
+.drs label{display:block;font-size:10.5px;font-weight:700;color:#5b6572;text-transform:uppercase;letter-spacing:.04em;margin:9px 0 4px}
 .drs input[type=text],.drs textarea{width:100%;border:1px solid #d7dbe2;border-radius:8px;padding:8px 10px;font:inherit;background:#fff}
-.drs textarea{min-height:64px;resize:vertical}
-.drs-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.drs-btn{border:1px solid #d7dbe2;background:#fff;border-radius:8px;padding:7px 13px;font:inherit;font-weight:600;cursor:pointer}
+.drs textarea{min-height:52px;resize:vertical}
+.drs-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.drs-btn{border:1px solid #d7dbe2;background:#fff;border-radius:8px;padding:7px 12px;font:inherit;font-weight:600;cursor:pointer}
 .drs-btn:hover{background:#eef0f3}
 .drs-btn-acc{background:#2563eb;border-color:#2563eb;color:#fff}
 .drs-btn-acc:hover{background:#1d4ed8}
 .drs-btn[disabled]{opacity:.5;cursor:default}
-.drs-src{display:flex;align-items:center;gap:8px;border:1px solid #e5e7eb;border-radius:8px;padding:6px 10px;margin:5px 0;font-size:12.5px;background:#fafbfc}
+.drs-src{display:flex;align-items:center;gap:8px;border:1px solid #e5e7eb;border-radius:8px;padding:6px 10px;margin:5px 0;font-size:12px;background:#fafbfc}
 .drs-src .drs-x{margin-left:auto;border:none;background:none;cursor:pointer;color:#9aa2ad;font-size:13px}
-.drs-hint{font-size:11.5px;color:#9aa2ad}
-.drs-err{color:#991b1b;font-size:12px;margin-top:6px}
-.drs-live{display:block;max-width:560px;margin:0 auto 12px}
-.drs-query{display:flex;align-items:center;gap:9px;background:#f5f6f8;border:1px solid #dde0e5;border-radius:11px;padding:9px 13px;margin-top:4px}
-.drs-q-text{font-size:15px;font-weight:700;color:#1b1f24;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.drs-q-badges{display:flex;gap:5px;flex:0 0 auto}
-.drs-q-badge{font-size:10px;font-weight:600;color:#5b34d6;background:#f1edfc;border:1px solid #d8ccf7;border-radius:6px;padding:2px 7px}
-.drs-settle-head{display:flex;align-items:baseline;gap:8px;margin-top:16px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9aa1ab}
-.drs-settle-label{margin-left:auto;font-size:11.5px;font-weight:700;text-transform:none;letter-spacing:0}
-.drs-settle-bar{margin-top:7px;height:8px;border-radius:5px;background:#eef0f3;overflow:hidden}
+.drs-hint{font-size:11px;color:#9aa2ad;line-height:1.5}
+.drs-err{color:#991b1b;font-size:12px;margin-top:7px}
+/* — the ask box: the trigger, always at the top of the panel — */
+.drs-ask-box{border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#fafbfc}
+.drs-ask-title{font-size:13px;font-weight:700;color:#1b1f24;margin:0 0 3px}
+.drs-ask-sub{font-size:11px;color:#5b6572;margin:0 0 9px;line-height:1.45}
+.drs-ask-box .drs-q{font-size:13.5px;padding:9px 11px;border-radius:9px}
+.drs-ask-box .drs-q:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.13)}
+.drs-opts{display:flex;flex-direction:column;gap:7px;margin-top:9px}
+.drs-optrow{display:flex;align-items:center;gap:8px}
+.drs-optlab{flex:0 0 62px;font-size:10px;font-weight:700;color:#9aa1ab;text-transform:uppercase;letter-spacing:.04em}
+.drs-seg{display:inline-flex;background:#eef0f3;border-radius:8px;padding:3px;flex:1}
+.drs-seg button{flex:1;border:none;background:none;font:inherit;font-size:11.5px;font-weight:600;color:#5b6572;padding:5px 4px;border-radius:6px;cursor:pointer}
+.drs-seg button.on{background:#fff;color:#1a1c20;box-shadow:0 1px 2px rgba(16,24,40,.12)}
+.drs-run{width:100%;margin-top:11px;padding:10px;font-size:13.5px;border-radius:9px}
+.drs-adv-toggle{display:block;margin-top:10px;border:none;background:none;color:#2563eb;font:inherit;font-size:12px;font-weight:600;cursor:pointer;padding:0}
+.drs-adv{margin-top:9px;border-top:1px solid #eaecef;padding-top:4px}
+.drs-ask-box.running .drs-ask-sub,.drs-ask-box.running .drs-opts,.drs-ask-box.running .drs-adv-toggle,.drs-ask-box.running .drs-adv{display:none}
+.drs-ask-box.running{padding:9px 10px}
+.drs-ask-box.running .drs-ask-title{font-size:11px;color:#9aa1ab;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+/* — the live run — */
+.drs-live{display:block;margin-top:14px}
+.drs-settle-head{display:flex;align-items:baseline;gap:8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9aa1ab}
+.drs-settle-label{margin-left:auto;font-size:11px;font-weight:700;text-transform:none;letter-spacing:0}
+.drs-settle-bar{margin-top:6px;height:7px;border-radius:5px;background:#eef0f3;overflow:hidden}
 .drs-settle-fill{height:100%;border-radius:5px;background:#5b34d6;width:0%;transition:width .5s cubic-bezier(.4,0,.2,1)}
-.drs-status{margin-top:8px;display:flex;align-items:center;gap:8px;font-size:12.5px;color:#5a626d}
+.drs-status{margin-top:8px;display:flex;align-items:center;gap:7px;font-size:12px;color:#5a626d}
 .drs-status-icon{font-size:12px;color:#5b34d6}
-.drs-reading{margin-top:14px;border:1px solid #d8ccf7;background:#f1edfc;border-radius:12px;padding:11px 13px;display:flex;align-items:center;gap:9px}
-.drs-reading-spin{width:14px;height:14px;flex:0 0 auto;border-radius:50%;border:2px solid #d8ccf7;border-top-color:#5b34d6;animation:drs-spin .8s linear infinite;display:inline-block;box-sizing:border-box}
+.drs-reading{margin-top:12px;border:1px solid #d8ccf7;background:#f1edfc;border-radius:11px;padding:9px 11px;display:flex;align-items:center;gap:9px}
+.drs-reading-spin{width:13px;height:13px;flex:0 0 auto;border-radius:50%;border:2px solid #d8ccf7;border-top-color:#5b34d6;animation:drs-spin .8s linear infinite;display:inline-block;box-sizing:border-box}
 @keyframes drs-spin{to{transform:rotate(360deg)}}
-.drs-reading-title{font-size:12.5px;font-weight:700;color:#1b1f24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.drs-reading-sub{font-size:11px;color:#5a626d;margin-top:1px}
-.drs-sec{margin-top:16px;margin-bottom:8px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9aa1ab}
+.drs-reading-title{font-size:12px;font-weight:700;color:#1b1f24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drs-reading-sub{font-size:10.5px;color:#5a626d;margin-top:1px}
+.drs-sec{margin-top:15px;margin-bottom:7px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9aa1ab}
 .drs-sec-note{font-weight:500;text-transform:none;letter-spacing:0;color:#9aa1ab}
+/* — terms being researched: what it's actually looking for — */
+.drs-terms{display:flex;flex-wrap:wrap;gap:5px}
+.drs-term{font-size:11.5px;font-weight:600;color:#3730a3;background:#eef2ff;border:1px solid #d8ddfb;border-radius:99px;padding:3px 10px}
+.drs-term.on{color:#fff;background:#5b34d6;border-color:#5b34d6}
 .drs-subs{display:flex;flex-direction:column;gap:2px}
-.drs-sub{display:flex;align-items:center;gap:9px;padding:6px 2px}
-.drs-sub-mark{flex:0 0 auto;width:17px;display:flex;align-items:center;justify-content:center}
-.drs-sub-done{width:17px;height:17px;border-radius:50%;background:rgba(21,128,61,.10);color:#15803d;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.drs-sub{display:flex;align-items:center;gap:8px;padding:5px 2px}
+.drs-sub-mark{flex:0 0 auto;width:16px;display:flex;align-items:center;justify-content:center}
+.drs-sub-done{width:16px;height:16px;border-radius:50%;background:rgba(21,128,61,.10);color:#15803d;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:700}
 .drs-sub-spin{width:9px;height:9px;border-radius:50%;border:2px solid #d8ccf7;border-top-color:#5b34d6;animation:drs-spin .8s linear infinite;display:inline-block;box-sizing:border-box}
-.drs-sub-dot{width:9px;height:9px;border-radius:50%;background:#dde0e5;display:inline-block}
-.drs-sub-t{flex:1;min-width:0;font-size:12.5px;color:#1b1f24}
+.drs-sub-dot{width:8px;height:8px;border-radius:50%;background:#dde0e5;display:inline-block}
+.drs-sub-t{flex:1;min-width:0;font-size:12px;color:#1b1f24;line-height:1.35}
 .drs-sub-t.q{color:#9aa1ab}
-.drs-sub-st{margin-left:auto;flex:0 0 auto;font-size:10.5px;color:#9aa1ab}
-.drs-finds{display:flex;flex-direction:column;gap:6px}
-.drs-find{display:flex;align-items:baseline;gap:9px;padding:7px 9px;border-radius:9px;background:#f5f6f8;border:1px solid #e6e8ec}
+.drs-sub-st{margin-left:auto;flex:0 0 auto;font-size:10px;color:#9aa1ab}
+.drs-finds{display:flex;flex-direction:column;gap:5px}
+.drs-find{display:flex;align-items:baseline;gap:8px;padding:7px 9px;border-radius:9px;background:#f5f6f8;border:1px solid #e6e8ec}
 .drs-find.warn{background:#fef3e2;border-color:#f4d9ad}
-.drs-find-i{flex:0 0 auto;font-size:12px;width:16px;text-align:center;color:#9aa1ab}
+.drs-find-i{flex:0 0 auto;font-size:11px;width:14px;text-align:center;color:#9aa1ab}
 .drs-find.warn .drs-find-i{color:#b45309}
-.drs-find-t{font-size:12.5px;color:#1b1f24;line-height:1.4}
+.drs-find-t{font-size:12px;color:#1b1f24;line-height:1.4}
 .drs-find.warn .drs-find-t{color:#92400e}
-.drs-find-h{font-size:10.5px;color:#9aa1ab;margin-top:1px}
-.drs-covnote{margin-top:9px;line-height:1.5}
-.drs-live .drs-panel{margin:0}
-.drs-frame-terms{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#3730a3}
-.drs-strainbar{height:8px;background:#eef0f3;border-radius:99px;overflow:hidden;margin:8px 0 4px}
-.drs-strainbar>div{height:100%;background:linear-gradient(90deg,#60a5fa,#8b5cf6);transition:width .3s}
-.drs-grid9{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;font-family:ui-monospace,monospace;font-size:10.5px}
-.drs-cell{border:1px dashed #d7dbe2;border-radius:6px;text-align:center;padding:5px 2px;color:#9aa2ad}
-.drs-cell.on{border-style:solid;background:#eff6ff;border-color:#bfdbfe;color:#1a1c20}
-.drs-cell.cor{background:#dcfce7;border-color:#86efac}
-.drs-cell.con{background:#fef3c7;border-color:#fcd34d}
+.drs-find-h{font-size:10px;color:#9aa1ab;margin-top:2px}
 .drs-cov{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-.drs-cov-cell{border:1px solid #e6e8ec;border-radius:9px;padding:8px 9px;background:#fff}
+.drs-cov-cell{border:1px solid #e6e8ec;border-radius:9px;padding:7px 8px;background:#fff}
 .drs-cov-cell.grn{background:rgba(21,128,61,.10)}
 .drs-cov-cell.amb{background:#fef3e2;border-color:#f4d9ad}
 .drs-cov-cell.acc{background:#f1edfc}
-.drs-cov-v{font-size:17px;font-weight:800;line-height:1}
-.drs-cov-l{font-size:9.5px;color:#9aa1ab;margin-top:4px;line-height:1.2}
+.drs-cov-v{font-size:16px;font-weight:800;line-height:1}
+.drs-cov-l{font-size:9px;color:#9aa1ab;margin-top:4px;line-height:1.2}
 .drs-covnote{margin-top:8px;line-height:1.5}
-.drs-feed{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#5b6572;max-height:180px;overflow-y:auto;margin:0;padding-left:18px}
-.drs-feed li{margin:2px 0}
-.drs-ask{border:1px solid #c7d2fe;background:#eef2ff;border-radius:10px;padding:11px 13px;margin:9px 0}
-.drs-ask .drs-trig{font-family:ui-monospace,monospace;font-size:10px;font-weight:700;color:#3730a3;background:#e0e7ff;border-radius:99px;padding:1px 8px}
-.drs-ask p{margin:6px 0;white-space:pre-wrap}
-.drs-report-wrap{background:#fff;border:1px solid #e5e7eb;border-radius:11px;padding:20px 22px;max-width:820px;margin:0 auto}
-.drs-badgechip{font-family:ui-monospace,monospace;font-size:11px;font-weight:700;border-radius:99px;padding:2px 10px}
-.drs-mark{font-size:14px;font-weight:700;letter-spacing:.01em}
-.drs-hero{max-width:720px;margin:26px auto 8px;padding:8px 18px}
-.drs-hero h1{font-size:27px;margin:0 0 8px;font-weight:700;letter-spacing:-.015em}
-.drs-tagline{margin:0 0 18px;color:#5b6572;font-size:14px;line-height:1.5}
-.drs-hero .drs-q{font-size:16px;padding:13px 15px;border-radius:11px;border:1px solid #d7dbe2;box-shadow:0 1px 2px rgba(16,24,40,.04)}
-.drs-hero .drs-q:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.14)}
-.drs-choices{display:flex;flex-wrap:wrap;align-items:flex-end;gap:16px;margin-top:16px}
-.drs-choice{display:flex;flex-direction:column;gap:5px}
-.drs-choice-label{font-size:11px;font-weight:700;color:#5b6572;text-transform:uppercase;letter-spacing:.04em}
-.drs-seg{display:inline-flex;background:#eef0f3;border-radius:9px;padding:3px}
-.drs-seg button{border:none;background:none;font:inherit;font-size:13px;font-weight:600;color:#5b6572;padding:6px 13px;border-radius:7px;cursor:pointer}
-.drs-seg button.on{background:#fff;color:#1a1c20;box-shadow:0 1px 2px rgba(16,24,40,.12)}
-.drs-choices .drs-run{margin-left:auto;padding:10px 22px;font-size:14px;border-radius:9px}
-.drs-adv-toggle{display:inline-block;margin-top:16px;border:none;background:none;color:#2563eb;font:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:0}
-.drs-adv{margin-top:10px;border-top:1px solid #eaecef;padding-top:6px}
-@media (max-width:560px){.drs-choices .drs-run{margin-left:0;width:100%}}
+.drs-report-wrap{background:#fff;border:1px solid #e5e7eb;border-radius:11px;padding:14px 15px;margin-top:14px}
+.drs-mark{font-size:13px;font-weight:700;letter-spacing:.01em}
 ${REPORT_CSS}
-@media (max-width:700px){.drs-live{grid-template-columns:1fr}}
 `;
 
 // mountResearchSurface(el, opts) → { destroy, session }
@@ -199,40 +188,40 @@ export const mountResearchSurface = (el, opts = {}) => {
       ${opts.onClose ? '<button class="drs-close" title="Close">✕</button>' : ''}
     </div>
     <div class="drs-body">
-      <div class="drs-hero">
-        <h1>What do you want to research?</h1>
-        <p class="drs-tagline">It reads the web, pins every source, and grounds each claim in an exact quote you can click.</p>
-        <input type="text" class="drs-q" placeholder="e.g. dolphins, the 2008 financial crisis, CRISPR…" />
-        <div class="drs-choices">
-          <div class="drs-choice">
-            <span class="drs-choice-label">How much</span>
+      <div class="drs-ask-box">
+        <p class="drs-ask-title">Ask a research question</p>
+        <p class="drs-ask-sub">It reads the web, pins every source, and grounds each claim in an exact quote you can click.</p>
+        <textarea class="drs-q" rows="2" placeholder="e.g. What did the 2025 metro-contracts audit find?"></textarea>
+        <div class="drs-opts">
+          <div class="drs-optrow">
+            <span class="drs-optlab">How much</span>
             <div class="drs-seg" data-group="size">
               <button data-value="brief">Brief</button>
               <button data-value="standard" class="on">Standard</button>
               <button data-value="deep">Deep</button>
             </div>
           </div>
-          <div class="drs-choice">
-            <span class="drs-choice-label">How to look</span>
+          <div class="drs-optrow">
+            <span class="drs-optlab">How to look</span>
             <div class="drs-seg" data-group="strategy">
               <button data-value="breadth" title="Many sources, each read lightly — survey the landscape">Breadth</button>
               <button data-value="depth" title="Few sources, followed deep — chase one thread far">Depth</button>
               <button data-value="holonic" class="on" title="Break the topic into facets and research each as its own whole">Holonic</button>
             </div>
           </div>
-          <button class="drs-btn drs-btn-acc drs-run">Research</button>
         </div>
+        <button class="drs-btn drs-btn-acc drs-run">✦ Research</button>
         <div class="drs-err" style="display:none"></div>
-        <button class="drs-adv-toggle" type="button">＋ Add your own sources or sub-questions</button>
+        <button class="drs-adv-toggle" type="button">＋ Add sources or sub-questions</button>
         <div class="drs-adv" hidden>
           <label>Sub-questions <span style="font-weight:400;text-transform:none">(optional, one per line — overrides the automatic breakdown)</span></label>
           <textarea class="drs-subqs" placeholder="Who awarded the contract?&#10;What did the audit find?"></textarea>
           <label>Your own sources</label>
           <div class="drs-srclist"></div>
           <div class="drs-row" style="margin-top:6px">
-            <input type="text" class="drs-url" placeholder="https:// … add a source by URL" style="flex:1;min-width:200px" />
+            <input type="text" class="drs-url" placeholder="https:// … add a source" style="flex:1;min-width:150px" />
             <button class="drs-btn drs-addurl">Pin URL</button>
-            <button class="drs-btn drs-addpaste">Paste text…</button>
+            <button class="drs-btn drs-addpaste">Paste…</button>
           </div>
           <div class="drs-paste" style="display:none;margin-top:6px">
             <input type="text" class="drs-paste-title" placeholder="Source title (e.g. 'City audit 2021, p.14')" style="margin-bottom:6px" />
@@ -249,28 +238,26 @@ export const mountResearchSurface = (el, opts = {}) => {
             </select>
           </label>
         </div>
-        <div class="drs-hint" style="margin-top:14px">${opts.model ? 'A model is connected — each section gets one bind-checked summary; every sentence must tie to a real quote or it is greyed.' : 'Grounded and honest: no sources found → it says so, never an invented report.'}</div>
       </div>
       <div class="drs-live" style="display:none">
-        <div class="drs-query"><span class="drs-q-text"></span><span class="drs-q-badges"><span class="drs-q-badge">Deep</span><span class="drs-q-badge">Holonic</span></span></div>
         <div class="drs-settle-head"><span>How settled the picture is</span><span class="drs-settle-label"></span></div>
         <div class="drs-settle-bar"><div class="drs-settle-fill"></div></div>
         <div class="drs-status"><span class="drs-status-icon">◔</span><span class="drs-status-text"></span></div>
         <div class="drs-reading" style="display:none"><span class="drs-reading-spin"></span><div style="min-width:0;flex:1"><div class="drs-reading-title"></div><div class="drs-reading-sub"></div></div></div>
+        <div class="drs-sec drs-sec-terms">Terms being researched</div>
+        <div class="drs-terms"></div>
         <div class="drs-sec">The question, broken down</div>
         <div class="drs-subs"></div>
-        <div class="drs-sec">What it's found <span class="drs-sec-note">· each ties to a real quote</span></div>
+        <div class="drs-sec">Propositions found <span class="drs-sec-note">· each ties to a real quote</span></div>
         <div class="drs-finds"></div>
         <div class="drs-sec">Coverage so far</div>
         <div class="drs-cov"></div>
         <div class="drs-covnote drs-hint"></div>
-        <ol class="drs-feed" style="display:none"></ol>
-        <div class="drs-asks"></div>
       </div>
       <div class="drs-report-wrap" style="display:none">
         <div class="drs-row" style="justify-content:flex-end;margin-bottom:6px">
-          <button class="drs-btn drs-dl">Download report (self-contained)</button>
-          <button class="drs-btn drs-dl-log">Download log (JSONL)</button>
+          <button class="drs-btn drs-dl">Download report</button>
+          <button class="drs-btn drs-dl-log">Log (JSONL)</button>
         </div>
         <div class="drs-report-target"></div>
       </div>
@@ -281,8 +268,6 @@ export const mountResearchSurface = (el, opts = {}) => {
   const $ = (sel) => root.querySelector(sel);
   const srcList = $('.drs-srclist');
   const errBox = $('.drs-err');
-  const feed = $('.drs-feed');
-  const asksBox = $('.drs-asks');
 
   const showErr = (m) => { errBox.style.display = m ? '' : 'none'; errBox.textContent = m || ''; };
 
@@ -340,7 +325,6 @@ export const mountResearchSurface = (el, opts = {}) => {
 
   const paintLive = (log) => {
     const v = liveView(log);
-    $('.drs-q-text').textContent = v.query || '';
     const lab = $('.drs-settle-label'); lab.textContent = v.settle.label; lab.style.color = v.settle.color;
     const fill = $('.drs-settle-fill'); fill.style.width = v.settle.pct + '%'; fill.style.background = v.settle.color;
     $('.drs-status-text').textContent = v.statusText;
@@ -349,6 +333,14 @@ export const mountResearchSurface = (el, opts = {}) => {
     const rd = $('.drs-reading');
     if (v.reading) { rd.style.display = ''; $('.drs-reading-title').textContent = v.reading.title; $('.drs-reading-sub').textContent = v.reading.host + ' · ' + v.reading.note; }
     else rd.style.display = 'none';
+    // terms being researched — the load-bearing terms each frame reads against;
+    // the ones the active frame is chasing right now are filled solid.
+    const termsSec = $('.drs-sec-terms'); const termsBox = $('.drs-terms');
+    if (v.terms && v.terms.length) {
+      if (termsSec) termsSec.style.display = '';
+      termsBox.style.display = '';
+      termsBox.innerHTML = v.terms.map((t) => `<span class="drs-term${t.active ? ' on' : ''}">${esc(t.text)}</span>`).join('');
+    } else { if (termsSec) termsSec.style.display = 'none'; termsBox.style.display = 'none'; }
     // the question, broken down
     $('.drs-subs').innerHTML = v.subs.map((s) => {
       const mark = s.state === 'done' ? '<span class="drs-sub-done">✓</span>' : s.state === 'reading' ? '<span class="drs-sub-spin"></span>' : '<span class="drs-sub-dot"></span>';
@@ -374,9 +366,10 @@ export const mountResearchSurface = (el, opts = {}) => {
       renderReportFragment(session.report()) + renderTraceFragment(session.log);
     $('.drs-report-wrap').style.display = '';
   };
-  // Once a run is under way the setup form steps aside — the drawer is the live
-  // read (the prototype), not a form with a panel below it.
-  const enterRun = () => { const h = $('.drs-hero'); if (h) h.style.display = 'none'; };
+  // Once a run is under way the ask box collapses to just its question line + the
+  // Research button (re-asking stays one click away), so the live read owns the
+  // panel's height instead of a tall setup form sitting above it.
+  const enterRun = () => { const b = $('.drs-ask-box'); if (b) b.classList.add('running'); };
   const unsubscribe = session.subscribe((log, event) => {
     if (event) { enterRun(); $('.drs-live').style.display = ''; paintLive(log); }
     else if (!session.running) { enterRun(); paintReport(); }
@@ -390,7 +383,6 @@ export const mountResearchSurface = (el, opts = {}) => {
     showErr('');
     const runBtn = $('.drs-run');
     runBtn.disabled = true; runBtn.textContent = 'Researching…';
-    asksBox.innerHTML = '';
     enterRun(); $('.drs-live').style.display = '';
     const subQuestions = $('.drs-subqs').value.split('\n').map((s) => s.trim()).filter(Boolean);
     try {
