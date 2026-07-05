@@ -3756,6 +3756,10 @@ class Component extends DCLogic {
     const webOn=true;   // the web toggle is gone — coverage/isolation below still gate the walk
     const covered=!isolated&&this.groundNotes(subject,existing).relevant;
     if(webOn&&!covered&&!opts.noWalk){
+      // The redesigned live drawer follows the walk (the prototype's "runs live"):
+      // it subscribes to the same session this turn writes into, so it narrates the
+      // read in plain language — how settled · now reading · what it's found · coverage.
+      try{this.onOpenDeepResearch();}catch(e){}
       this._beat(id,'start','Deep research on “'+subject+'” — reading the web first, then projecting the grounded report from pinned spans.');
       this._busy=true;this.setState({busy:true});
       const extraSeeds=seed.focus?[]:await this._planFacets(subject,seed,cur);

@@ -95,14 +95,55 @@ export const liveView = (log, cursor = null) => {
     forcedBy: rec.forcedBy,
   }));
 
+  // ── the prototype live shape: the run narrated the way a person reads it ────
+  const badge = r.convergence.badge;
+  const SETTLE = {
+    open:       { pct: r.propositions.length ? 22 : 8, label: 'gathering',  color: '#b45309' },
+    converging: { pct: 64,  label: 'converging', color: '#5b34d6' },
+    settled:    { pct: 100, label: 'settled',    color: '#15803d' },
+    contested:  { pct: 46,  label: 'contested',  color: '#b45309' },
+    thrash:     { pct: 34,  label: 'thrashing',  color: '#dc2626' },
+  };
+  const settle = SETTLE[badge] || SETTLE.open;
+  const query = (r.root && r.root.question) || (framePanel && framePanel.question) || '';
+  const pinName = (pin) => pin ? (pin.title || prettyUrl(pin.url) || 'a source') : '';
+  const pinHost = (pin) => { try { return new URL(pin.url).hostname.replace(/^www\./, ''); } catch { return pin && pin.url ? '' : 'local'; } };
+
+  // sub-questions: the frame tree (minus the root — it's the query pill above),
+  // each done / reading / queued. A frame is "done" once it has read anything
+  // into it (promoted OR background evidence, or a phrased summary).
+  const activeId = activeFrame ? activeFrame.id : null;
+  const rootId = r.root ? r.root.id : null;
+  const subs = r.sections.filter((s) => s.frameId !== rootId).map((s) => {
+    const done = (s.propositions && s.propositions.length) || (s.background && s.background.length) || s.phrase;
+    const reading = !done && s.frameId === activeId;
+    return { text: s.question, state: done ? 'done' : reading ? 'reading' : 'queued' };
+  });
+
+  // the source being read now (the newest pin), and what's been found so far
+  const lastPin = r.pins.length ? r.pins[r.pins.length - 1] : null;
+  const reading = (lastPin && badge !== 'settled') ? { title: pinName(lastPin), host: pinHost(lastPin), note: 'pulling quotes…' } : null;
+  const findings = [];
+  for (const p of r.propositions.slice(-6)) {
+    const pin = r.pinById[p.pinId];
+    findings.push({ text: clip(p.span.text, 96), host: pin ? pinName(pin) : '', icon: (p.corroboratedBy && p.corroboratedBy.length) ? '◆' : '▤', warn: false });
+  }
+  for (const v of r.voids.slice(-2)) findings.push({ text: `${v.term || v.terrain} — off-topic, set aside`, host: '', icon: '⚠', warn: true });
+
+  const statusText = badge === 'settled' ? 'Converged — the picture is settled'
+    : lastPin ? `Reading source ${r.pins.length}${r.reads.length ? ` · ${r.propositions.length} claims so far` : ''}`
+    : (at ? describeEvent(log[at - 1]) : 'Planning the lines of inquiry…');
+
   return {
     cursor: at,
     framePanel, grid, coverage: coverageSummary(r), coverageNote: coverageNote(r), path, recMoments,
+    // prototype fields
+    query, settle, subs, reading, findings, statusText, phase: badge === 'settled' ? 'done' : 'live',
     questions: r.questions.map(({ ask, answer }) => ({
       id: ask.id, trigger: ask.trigger, text: ask.text, options: ask.options,
       answered: !!answer, reply: answer?.reply ?? null,
     })),
-    badge: r.convergence.badge,
+    badge,
     counts: {
       pins: r.pins.length, reads: r.reads.length,
       propositions: r.propositions.length,
