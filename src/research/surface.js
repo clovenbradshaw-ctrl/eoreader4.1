@@ -92,7 +92,42 @@ const SURFACE_CSS = `
 .drs-src .drs-x{margin-left:auto;border:none;background:none;cursor:pointer;color:#9aa2ad;font-size:13px}
 .drs-hint{font-size:11.5px;color:#9aa2ad}
 .drs-err{color:#991b1b;font-size:12px;margin-top:6px}
-.drs-live{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:820px;margin:0 auto 12px}
+.drs-live{display:block;max-width:560px;margin:0 auto 12px}
+.drs-query{display:flex;align-items:center;gap:9px;background:#f5f6f8;border:1px solid #dde0e5;border-radius:11px;padding:9px 13px;margin-top:4px}
+.drs-q-text{font-size:15px;font-weight:700;color:#1b1f24;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drs-q-badges{display:flex;gap:5px;flex:0 0 auto}
+.drs-q-badge{font-size:10px;font-weight:600;color:#5b34d6;background:#f1edfc;border:1px solid #d8ccf7;border-radius:6px;padding:2px 7px}
+.drs-settle-head{display:flex;align-items:baseline;gap:8px;margin-top:16px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9aa1ab}
+.drs-settle-label{margin-left:auto;font-size:11.5px;font-weight:700;text-transform:none;letter-spacing:0}
+.drs-settle-bar{margin-top:7px;height:8px;border-radius:5px;background:#eef0f3;overflow:hidden}
+.drs-settle-fill{height:100%;border-radius:5px;background:#5b34d6;width:0%;transition:width .5s cubic-bezier(.4,0,.2,1)}
+.drs-status{margin-top:8px;display:flex;align-items:center;gap:8px;font-size:12.5px;color:#5a626d}
+.drs-status-icon{font-size:12px;color:#5b34d6}
+.drs-reading{margin-top:14px;border:1px solid #d8ccf7;background:#f1edfc;border-radius:12px;padding:11px 13px;display:flex;align-items:center;gap:9px}
+.drs-reading-spin{width:14px;height:14px;flex:0 0 auto;border-radius:50%;border:2px solid #d8ccf7;border-top-color:#5b34d6;animation:drs-spin .8s linear infinite;display:inline-block;box-sizing:border-box}
+@keyframes drs-spin{to{transform:rotate(360deg)}}
+.drs-reading-title{font-size:12.5px;font-weight:700;color:#1b1f24;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drs-reading-sub{font-size:11px;color:#5a626d;margin-top:1px}
+.drs-sec{margin-top:16px;margin-bottom:8px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#9aa1ab}
+.drs-sec-note{font-weight:500;text-transform:none;letter-spacing:0;color:#9aa1ab}
+.drs-subs{display:flex;flex-direction:column;gap:2px}
+.drs-sub{display:flex;align-items:center;gap:9px;padding:6px 2px}
+.drs-sub-mark{flex:0 0 auto;width:17px;display:flex;align-items:center;justify-content:center}
+.drs-sub-done{width:17px;height:17px;border-radius:50%;background:rgba(21,128,61,.10);color:#15803d;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:700}
+.drs-sub-spin{width:9px;height:9px;border-radius:50%;border:2px solid #d8ccf7;border-top-color:#5b34d6;animation:drs-spin .8s linear infinite;display:inline-block;box-sizing:border-box}
+.drs-sub-dot{width:9px;height:9px;border-radius:50%;background:#dde0e5;display:inline-block}
+.drs-sub-t{flex:1;min-width:0;font-size:12.5px;color:#1b1f24}
+.drs-sub-t.q{color:#9aa1ab}
+.drs-sub-st{margin-left:auto;flex:0 0 auto;font-size:10.5px;color:#9aa1ab}
+.drs-finds{display:flex;flex-direction:column;gap:6px}
+.drs-find{display:flex;align-items:baseline;gap:9px;padding:7px 9px;border-radius:9px;background:#f5f6f8;border:1px solid #e6e8ec}
+.drs-find.warn{background:#fef3e2;border-color:#f4d9ad}
+.drs-find-i{flex:0 0 auto;font-size:12px;width:16px;text-align:center;color:#9aa1ab}
+.drs-find.warn .drs-find-i{color:#b45309}
+.drs-find-t{font-size:12.5px;color:#1b1f24;line-height:1.4}
+.drs-find.warn .drs-find-t{color:#92400e}
+.drs-find-h{font-size:10.5px;color:#9aa1ab;margin-top:1px}
+.drs-covnote{margin-top:9px;line-height:1.5}
 .drs-live .drs-panel{margin:0}
 .drs-frame-terms{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:#3730a3}
 .drs-strainbar{height:8px;background:#eef0f3;border-radius:99px;overflow:hidden;margin:8px 0 4px}
@@ -217,21 +252,20 @@ export const mountResearchSurface = (el, opts = {}) => {
         <div class="drs-hint" style="margin-top:14px">${opts.model ? 'A model is connected — each section gets one bind-checked summary; every sentence must tie to a real quote or it is greyed.' : 'Grounded and honest: no sources found → it says so, never an invented report.'}</div>
       </div>
       <div class="drs-live" style="display:none">
-        <div class="drs-panel">
-          <label style="margin-top:0">Now researching</label>
-          <div class="drs-frame-q" style="font-size:12.5px"></div>
-          <div class="drs-frame-terms"></div>
-          <div class="drs-strainbar"><div style="width:0%"></div></div>
-          <div class="drs-hint">how settled the picture is · <span class="drs-badgechip"></span></div>
-          <label>Coverage so far</label>
-          <div class="drs-cov"></div>
-          <div class="drs-covnote drs-hint"></div>
-        </div>
-        <div class="drs-panel">
-          <label style="margin-top:0">What it's reading</label>
-          <ol class="drs-feed"></ol>
-          <div class="drs-asks"></div>
-        </div>
+        <div class="drs-query"><span class="drs-q-text"></span><span class="drs-q-badges"><span class="drs-q-badge">Deep</span><span class="drs-q-badge">Holonic</span></span></div>
+        <div class="drs-settle-head"><span>How settled the picture is</span><span class="drs-settle-label"></span></div>
+        <div class="drs-settle-bar"><div class="drs-settle-fill"></div></div>
+        <div class="drs-status"><span class="drs-status-icon">◔</span><span class="drs-status-text"></span></div>
+        <div class="drs-reading" style="display:none"><span class="drs-reading-spin"></span><div style="min-width:0;flex:1"><div class="drs-reading-title"></div><div class="drs-reading-sub"></div></div></div>
+        <div class="drs-sec">The question, broken down</div>
+        <div class="drs-subs"></div>
+        <div class="drs-sec">What it's found <span class="drs-sec-note">· each ties to a real quote</span></div>
+        <div class="drs-finds"></div>
+        <div class="drs-sec">Coverage so far</div>
+        <div class="drs-cov"></div>
+        <div class="drs-covnote drs-hint"></div>
+        <ol class="drs-feed" style="display:none"></ol>
+        <div class="drs-asks"></div>
       </div>
       <div class="drs-report-wrap" style="display:none">
         <div class="drs-row" style="justify-content:flex-end;margin-bottom:6px">
@@ -306,23 +340,28 @@ export const mountResearchSurface = (el, opts = {}) => {
 
   const paintLive = (log) => {
     const v = liveView(log);
-    $('.drs-frame-q').textContent = v.framePanel?.question || '';
-    $('.drs-frame-terms').textContent = v.framePanel?.terms?.length ? 'DEF: ' + v.framePanel.terms.join(' · ') : '';
-    $('.drs-strainbar > div').style.width = Math.round((v.framePanel?.strainRatio || 0) * 100) + '%';
-    const chip = $('.drs-badgechip');
-    chip.textContent = v.badge;
-    chip.style.background = { settled: '#dcfce7', converging: '#dcfce7', contested: '#fef3c7', thrash: '#fee2e2', open: '#e0e7ff' }[v.badge] || '#e0e7ff';
+    $('.drs-q-text').textContent = v.query || '';
+    const lab = $('.drs-settle-label'); lab.textContent = v.settle.label; lab.style.color = v.settle.color;
+    const fill = $('.drs-settle-fill'); fill.style.width = v.settle.pct + '%'; fill.style.background = v.settle.color;
+    $('.drs-status-text').textContent = v.statusText;
+    const si = $('.drs-status-icon'); si.textContent = v.phase === 'done' ? '✓' : '◔'; si.style.color = v.phase === 'done' ? '#15803d' : '#5b34d6';
+    // now reading — the current source, not an id
+    const rd = $('.drs-reading');
+    if (v.reading) { rd.style.display = ''; $('.drs-reading-title').textContent = v.reading.title; $('.drs-reading-sub').textContent = v.reading.host + ' · ' + v.reading.note; }
+    else rd.style.display = 'none';
+    // the question, broken down
+    $('.drs-subs').innerHTML = v.subs.map((s) => {
+      const mark = s.state === 'done' ? '<span class="drs-sub-done">✓</span>' : s.state === 'reading' ? '<span class="drs-sub-spin"></span>' : '<span class="drs-sub-dot"></span>';
+      return `<div class="drs-sub"><span class="drs-sub-mark">${mark}</span><span class="drs-sub-t${s.state === 'queued' ? ' q' : ''}">${esc(s.text)}</span><span class="drs-sub-st">${s.state === 'reading' ? 'reading…' : s.state}</span></div>`;
+    }).join('') || '<div class="drs-hint">planning the lines of inquiry…</div>';
+    // what it's found — real findings tied to real sources; off-topic set aside (amber)
+    $('.drs-finds').innerHTML = v.findings.map((f) =>
+      `<div class="drs-find${f.warn ? ' warn' : ''}"><span class="drs-find-i">${f.icon}</span><div style="min-width:0;flex:1"><div class="drs-find-t">${esc(f.text)}</div>${f.host ? `<div class="drs-find-h">${esc(f.host)}</div>` : ''}</div></div>`).join('') || '<div class="drs-hint">nothing read yet — starting the crawl…</div>';
+    // coverage tiles (the plain-language grid)
     const covColor = { ink: '#1b1f24', ink2: '#5a626d', ink3: '#9aa1ab', grn: '#15803d', amb: '#b45309', acc: '#5b34d6' };
     $('.drs-cov').innerHTML = v.coverage.map((c) =>
       `<div class="drs-cov-cell ${c.tone === 'grn' ? 'grn' : c.tone === 'amb' ? 'amb' : c.tone === 'acc' ? 'acc' : ''}"><div class="drs-cov-v" style="color:${covColor[c.tone] || '#1b1f24'}">${esc(String(c.value))}</div><div class="drs-cov-l">${esc(c.label)}</div></div>`).join('');
     $('.drs-covnote').textContent = v.coverageNote;
-    const last = log[log.length - 1];
-    if (last) {
-      const li = document.createElement('li');
-      li.textContent = describeEvent(last);
-      feed.appendChild(li);
-      feed.scrollTop = feed.scrollHeight;
-    }
   };
 
   // The live tether: anything that appends to the session's log — this panel's
@@ -335,11 +374,14 @@ export const mountResearchSurface = (el, opts = {}) => {
       renderReportFragment(session.report()) + renderTraceFragment(session.log);
     $('.drs-report-wrap').style.display = '';
   };
+  // Once a run is under way the setup form steps aside — the drawer is the live
+  // read (the prototype), not a form with a panel below it.
+  const enterRun = () => { const h = $('.drs-hero'); if (h) h.style.display = 'none'; };
   const unsubscribe = session.subscribe((log, event) => {
-    if (event) { $('.drs-live').style.display = ''; paintLive(log); }
-    else if (!session.running) paintReport();
+    if (event) { enterRun(); $('.drs-live').style.display = ''; paintLive(log); }
+    else if (!session.running) { enterRun(); paintReport(); }
   });
-  if (session.log.length) { $('.drs-live').style.display = ''; paintReport(); }
+  if (session.log.length) { enterRun(); $('.drs-live').style.display = ''; paintReport(); }
 
   $('.drs-run').addEventListener('click', async () => {
     if (session.running) return;
@@ -349,7 +391,7 @@ export const mountResearchSurface = (el, opts = {}) => {
     const runBtn = $('.drs-run');
     runBtn.disabled = true; runBtn.textContent = 'Researching…';
     asksBox.innerHTML = '';
-    $('.drs-live').style.display = '';
+    enterRun(); $('.drs-live').style.display = '';
     const subQuestions = $('.drs-subqs').value.split('\n').map((s) => s.trim()).filter(Boolean);
     try {
       await session.research(q, {
