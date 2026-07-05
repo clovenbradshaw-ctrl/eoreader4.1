@@ -32,8 +32,11 @@ export const docCreate = ({ id, title, author = 'you', t = 0 }) =>
 // A committed block. `grounding` is a grounding-check result (see doc/ground.js):
 // { kind:'source', span, srcId, host } when it binds to a recorded span, or
 // { kind:'void' } when it is the writer's own words, marked so.
-export const blockAdd = ({ id, docId, blockId, text, grounding, author = 'you', t = 0 }) =>
-  ev(DKIND.BLOCK, { id, docId, blockId, text: String(text || ''), grounding: grounding || { kind: 'void' }, author, t });
+// `html` carries the block's inline rich formatting (bold/italic/links/…); `text`
+// is always the plain-text projection (what grounding and search read). `type`
+// is the block's shape: p · h1 · h2 · h3 · ul · ol · quote (default p).
+export const blockAdd = ({ id, docId, blockId, text, html = '', type = 'p', grounding, author = 'you', t = 0 }) =>
+  ev(DKIND.BLOCK, { id, docId, blockId, text: String(text || ''), html: String(html || ''), type: type || 'p', grounding: grounding || { kind: 'void' }, author, t });
 
 // A tracked change. `kind` ∈ insert | replace | delete.
 //   insert  — a new block placed after `afterId` (or at the end when null)
@@ -41,11 +44,11 @@ export const blockAdd = ({ id, docId, blockId, text, grounding, author = 'you', 
 //   delete  — `targetId` is removed (`before` keeps its text)
 // `grounding` is the raw check result from groundText(text, record): it carries
 // whether the change binds to the Record, and to which span.
-export const changePropose = ({ id, docId, changeId, kind, targetId = null, afterId = null, blockId = null, text = '', before = '', grounding = null, author = 'you', when = '', t = 0 }) =>
+export const changePropose = ({ id, docId, changeId, kind, targetId = null, afterId = null, blockId = null, text = '', html = '', type = 'p', before = '', grounding = null, author = 'you', when = '', t = 0 }) =>
   // `op` carries the change operation (insert/replace/delete); the event's own
   // `kind` field stays CHANGE_PROPOSE (do not name the operation `kind` — it would
   // shadow the event kind and the projection would never see the proposal).
-  ev(DKIND.PROPOSE, { id, docId, changeId: changeId || id, op: kind, targetId, afterId, blockId: blockId || changeId || id, text: String(text || ''), before: String(before || ''), grounding: grounding || { grounded: false }, author, when, t });
+  ev(DKIND.PROPOSE, { id, docId, changeId: changeId || id, op: kind, targetId, afterId, blockId: blockId || changeId || id, text: String(text || ''), html: String(html || ''), type: type || 'p', before: String(before || ''), grounding: grounding || { grounded: false }, author, when, t });
 
 export const changeAccept = ({ id, docId, changeId, t = 0 }) =>
   ev(DKIND.ACCEPT, { id, docId, changeId, t });
