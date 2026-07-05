@@ -827,7 +827,12 @@ class Component extends DCLogic {
           if(ne.subject&&ne.subject.id!=null)ne.subject={...ne.subject,id:fix(ne.subject.id)};if(ne.object&&ne.object.id!=null)ne.object={...ne.object,id:fix(ne.object.id)};}
         m.events.push(ne);}
       pg.sentences.forEach(s=>{m.sentences.push(s);m.sentenceSource.push(pg.url);});
-      m.pages.push({url:pg.url,title:pg.title,text:pg.text||'',sentences:pg.sentences||[],ts:pg.ts,via:pg.via,image:pg.image||null,parent:pg.parent||null,wikiLinks:pg.wikiLinks||null,author:pg.author||null,authorDates:pg.authorDates||null,published:pg.published||null,seqStart:so,sentStart:no});
+      m.pages.push({url:pg.url,title:pg.title,text:pg.text||'',sentences:pg.sentences||[],ts:pg.ts,via:pg.via,image:pg.image||null,parent:pg.parent||null,wikiLinks:pg.wikiLinks||null,author:pg.author||null,authorDates:pg.authorDates||null,published:pg.published||null,seqStart:so,sentStart:no,
+        // How the source was read + the organ's own doc must survive the merge: pageOf() reads
+        // from here, and the center renderer keys off `modality` (a table reads as a grid, audio
+        // shows its player), while `_organ` carries the addressable structure — the table's
+        // columns/records, the transcript's timed words — that _renderBook / _transcriptDoc need.
+        modality:pg.modality||'text',_organ:pg._organ||null,media:pg.media||null,mediaKind:pg.mediaKind||null,propCount:pg.propCount,audit:pg.audit||null});
     }
     // The sense that distinguishes a forked referent ("a 1995 film") is a DEFEASIBLE DEF on
     // the referent — not part of its identity. Appended after the body so the INS exists.
@@ -6675,13 +6680,88 @@ class Component extends DCLogic {
       parts.join('\n')+'</div></body></html>';
     return {html,toc,bookmarks};
   }
+  // A TABLE source (CSV / spreadsheet) is not prose — its unit is the ROW, each cell a
+  // recorded value paired to a column header. So it renders as an actual <table>, not the
+  // run-on sentences the book path would make of it. The columns and per-row cells come off
+  // the table organ doc (organs/in/table.js) kept on the page as `_organ`. It is themed with
+  // the SAME reading variables the book uses (--eo-fs / theme / accent), so font-size, paper
+  // theme and accent all still apply live; numeric columns right-align in tabular-figures
+  // mono. The entity decorator needs no special case — decorateFrame's TreeWalker walks the
+  // <td> text nodes exactly as it walks a <p>, so names inside cells stay clickable.
+  _tableHtml(p){
+    const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const org=p._organ||{};
+    let cols=(org.columns||[]).map(String);
+    let keys=(org.keys&&org.keys.length===cols.length)?org.keys.slice():cols.map((c,i)=>(org.keys&&org.keys[i])||String(i));
+    const all=org.records||[];
+    // A very wide CSV would blow the DOM out; render a generous window and say so honestly.
+    const CAP=5000,records=all.slice(0,CAP),truncated=all.length>CAP;
+    // No declared columns but rows carry cells — recover the headers from the first record.
+    if(!cols.length&&records[0]&&records[0].cells){keys=Object.keys(records[0].cells);cols=keys.slice();}
+    // A column is numeric when most of its non-empty cells parse as a number / currency / %.
+    const numRe=/^[-+]?[$£€¥]?\s?-?[\d,]*\.?\d+\s?%?$/;
+    const isNum=keys.map(k=>{let n=0,num=0;for(const r of records){const val=r.cells[k];if(val==null||val==='')continue;n++;if(numRe.test(String(val).trim()))num++;}return n>=4&&num/n>=0.75;});
+    const rp=this.state.readPrefs||this._defaultRead,tm=this.READ_THEMES[rp.theme]||this.READ_THEMES.light,a=this.curAccent();
+    const v=(n,d)=>'--eo-'+n+':'+d+';';
+    const sans='-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif';
+    const mono='ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+    const headCells=cols.map((c,ci)=>'<th class="eo-th'+(isNum[ci]?' eo-num':'')+'" scope="col">'+esc(c)+'</th>').join('');
+    let body='';
+    records.forEach((r,i)=>{
+      const tds=keys.map((k,ci)=>'<td class="eo-td'+(isNum[ci]?' eo-num':'')+'">'+esc(r.cells[k])+'</td>').join('');
+      body+='<tr><td class="eo-rn">'+(i+1)+'</td>'+tds+'</tr>';
+    });
+    const rowsN=all.length,colsN=cols.length;
+    const byline=(p.propCount!=null?p.propCount:this.countPropositions(p.sentences||[]))+' propositions · '+
+      rowsN+' row'+(rowsN!==1?'s':'')+' · '+colsN+' column'+(colsN!==1?'s':'')+' · read as a table';
+    const cap='Read as a table — the row is the unit, each cell a recorded value. Names in cells are linked; click one to open its entity.'+
+      (truncated?' · Showing the first '+CAP.toLocaleString()+' of '+rowsN.toLocaleString()+' rows.':'');
+    return '<!doctype html><html><head><meta charset="utf-8"><base target="_blank">'+
+      '<style>:root{'+v('fs',(rp.fs||19)+'px')+v('lh',String(rp.lh||1.7))+v('ff',this.READ_FONTS[rp.font]||this.READ_FONTS.serif)+
+        v('bg',tm.bg)+v('fg',tm.fg)+v('fg2',tm.fg2)+v('rule',tm.rule)+v('acc',a)+v('hov',this.hexA(a,.09))+'}'+
+      'html,body{margin:0;background:var(--eo-bg);}'+
+      'body{font:var(--eo-fs)/var(--eo-lh) var(--eo-ff);color:var(--eo-fg);-webkit-font-smoothing:antialiased;}'+
+      '.eo-book{max-width:1180px;margin:0 auto;padding:40px 30px 120px;}'+
+      'h1.eo-title{font:700 1.7em/1.18 var(--eo-ff);letter-spacing:-.018em;color:var(--eo-fg);margin:0 0 5px;}'+
+      '.eo-byline{font:.66em/1.5 '+sans+';color:var(--eo-fg2);margin:0 0 22px;}'+
+      // border-collapse:separate keeps the sticky header's own border painted while scrolling
+      // (collapse drops it) — a data grid, not prose, so a header that follows the scroll pays off.
+      '.eo-tscroll{border:1px solid var(--eo-rule);border-radius:12px;overflow:auto;max-height:calc(100vh - 150px);background:var(--eo-bg);}'+
+      // min-width (not width) 100%: fill a narrow table, but let a wide one size to its content
+      // and scroll horizontally inside .eo-tscroll rather than squeezing columns to one char wide.
+      'table.eo-table{border-collapse:separate;border-spacing:0;min-width:100%;font-family:'+sans+';font-size:max(12px,calc(var(--eo-fs) * .68));line-height:1.45;}'+
+      '.eo-table th,.eo-table td{padding:9px 13px;border-bottom:1px solid var(--eo-rule);text-align:left;vertical-align:top;}'+
+      '.eo-table thead th{position:sticky;top:0;z-index:2;background:var(--eo-rule);color:var(--eo-fg2);font-weight:700;font-size:.82em;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;}'+
+      '.eo-table td{color:var(--eo-fg);max-width:340px;overflow-wrap:break-word;}'+
+      '.eo-table th.eo-num,.eo-table td.eo-num{text-align:right;}'+
+      '.eo-table td.eo-num{font-family:'+mono+';font-variant-numeric:tabular-nums;white-space:nowrap;}'+
+      '.eo-table th.eo-rn,.eo-table td.eo-rn{color:var(--eo-fg2);font-family:'+mono+';font-size:.86em;font-weight:600;text-align:right;white-space:nowrap;padding-right:14px;-webkit-user-select:none;user-select:none;}'+
+      '.eo-table tbody tr:hover td{background:var(--eo-hov);}'+
+      '.eo-table tbody tr:last-child td{border-bottom:none;}'+
+      '.eo-tcap{font:.62em/1.55 '+sans+';color:var(--eo-fg2);margin:12px 3px 0;display:flex;align-items:baseline;gap:7px;}'+
+      '.eo-tcap::before{content:"\\26C1";font-size:1.25em;line-height:1;color:var(--eo-acc);}'+
+      '</style></head><body><div class="eo-book">'+
+      '<h1 class="eo-title">'+esc(p.title||'Untitled')+'</h1>'+
+      '<div class="eo-byline">'+esc(byline)+'</div>'+
+      '<div class="eo-tscroll"><table class="eo-table"><thead><tr><th class="eo-rn" scope="col">#</th>'+headCells+'</tr></thead><tbody>'+body+'</tbody></table></div>'+
+      '<div class="eo-tcap">'+esc(cap)+'</div>'+
+      '</div></body></html>';
+  }
   // Render a source as a readable BOOK — drop-cap prose, an engine-found table of
   // contents, and the passages the reading flagged as important. This is the same
   // treatment Project Gutenberg books get, now given to EVERY document we've actually
   // read: an imported text, a book, OR a web page. The only thing that still loads as a
   // raw live page is a URL we haven't read yet (browsing ahead of the reading), which
   // has no parsed propositions to draw a contents or find its surprises from.
-  _renderBook(url,p){const b=this._bookHtml(p);this._pageUrl=url;
+  //
+  // A TABLE source detours to _tableHtml — a CSV reads as a grid, not run-on prose.
+  _renderBook(url,p){
+    if(p&&p.modality==='table'&&p._organ&&(p._organ.records||[]).length){
+      this._pageUrl=url;
+      this.setState({bookView:true,pageDoc:this._tableHtml(p),bookToc:[],bookmarks:[],bmRail:[],tocOpen:false,bookProgress:0,pageLoading:false,pageErr:null});
+      return;
+    }
+    const b=this._bookHtml(p);this._pageUrl=url;
     this.setState({bookView:true,pageDoc:b.html,bookToc:b.toc,bookmarks:b.bookmarks||[],bmRail:[],tocOpen:false,bookProgress:this.loadReadPos(url),pageLoading:false,pageErr:null});}
   _bookReady(p){return !!(p&&(this.norm(p.text||'').length>=60||(p.sentences&&p.sentences.length)));}
   // Is a fetched body plain text rather than HTML? Trusts an explicit content-type,
