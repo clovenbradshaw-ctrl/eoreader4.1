@@ -1841,6 +1841,83 @@ class Component extends DCLogic {
     if(this._drSurface&&this._drSurface.destroy){try{this._drSurface.destroy();}catch(e){}this._drSurface=null;}
     if(this._drDock){this._drDock.remove();this._drDock=null;}
   }
+  // ── DOCUMENTS (src/doc/) — EO change tracking: a written document as a fold of
+  // an append-only edit log, every edit grounding-checked against the Record. A
+  // Google-Docs-style page docked full-screen; the reader is the only host. ──
+  _docLib(){
+    if(this._docLibP)return this._docLibP;
+    this._docLibP=this._importRetry('src/doc/index.js');
+    this._docLibP.catch(()=>{this._docLibP=null;});
+    return this._docLibP;
+  }
+  // The Record as grounding fodder: every recorded sentence, tagged with its
+  // source id + host, so an edit can bind to a real span you have read.
+  _docRecord(){
+    const m=this.master; if(!m||!m.sentences) return [];
+    const out=[];
+    for(let i=0;i<m.sentences.length;i++){
+      const u=m.sentenceSource[i], t=this.stripRefs(this.norm(m.sentences[i]));
+      if(t&&t.length>12) out.push({id:'S'+i,text:t,srcId:this.srcId(u),host:this.short(u)});
+    }
+    return out;
+  }
+  // Seed a fresh document from what's in front of you: the active chat's last
+  // grounded answer becomes the opening lines (each re-checked against the
+  // Record), else a blank page titled from the current reading.
+  _docSeed(){
+    const cur=this.activeChatObj&&this.activeChatObj();
+    const vp=this.state.viewUrl?this.pageOf(this.state.viewUrl):null;
+    const pageTitle=(vp&&vp.title)||null;
+    let title=pageTitle?('Notes on '+this.truncLabel(pageTitle,48)):'Untitled document';
+    let blocks=[];
+    const msgs=(cur&&cur.messages)||[];
+    for(let i=msgs.length-1;i>=0;i--){
+      const mm=msgs[i];
+      if(mm.role==='asst'&&mm.text&&mm.text.length>24){
+        blocks=this._splitSentences(mm.text).slice(0,8).map(t=>({text:t}));
+        if(cur&&cur.title) title=this.truncLabel(cur.title,52);
+        break;
+      }
+    }
+    return {title,blocks};
+  }
+  _splitSentences(text){
+    return String(text||'').replace(/\s+/g,' ').trim()
+      .split(/(?<=[.!?])\s+(?=[A-Z0-9“"'])/).map(s=>s.trim()).filter(s=>s.length>3);
+  }
+  async onOpenDoc(){
+    if(this._docDock){this._docDock.style.display='';return;}
+    let lib;
+    try{lib=await this._docLib();}
+    catch(e){alert('The document module failed to load: '+((e&&e.message)||e));return;}
+    if(!lib||typeof lib.mountDocSurface!=='function'){alert('The document module is unavailable.');return;}
+    const dock=document.createElement('div');
+    // A focused full-screen editor: sit above the always-on-top EOT ledger FAB
+    // (z 2147482999) so its Suggest bar is never intercepted; the doc's own ✕
+    // closes back to the reader (and the ledger) underneath.
+    dock.style.cssText='position:fixed;inset:0;z-index:2147483000;background:#f4f5f7;';
+    document.body.appendChild(dock);
+    this._docDock=dock;
+    this._docSurface=lib.mountDocSurface(dock,{
+      record:this._docRecord(),
+      seed:this._docSeed(),
+      author:'you',
+      onClose:()=>this.closeDoc(),
+    });
+  }
+  closeDoc(){
+    if(this._docSurface&&this._docSurface.destroy){try{this._docSurface.destroy();}catch(e){}this._docSurface=null;}
+    if(this._docDock){this._docDock.remove();this._docDock=null;}
+  }
+  // "/doc <line>" from the chat: open the document if needed, then propose the
+  // line as a tracked change (grounding-checked), reviewed in the doc surface.
+  async _docCommand(text){
+    if(!this._docSurface)await this.onOpenDoc();
+    if(this._docSurface&&this._docSurface.proposeFromText){
+      this._docSurface.proposeFromText(text,{author:'eo'});
+      if(this._docSurface.setMode)this._docSurface.setMode('suggesting');
+    }
+  }
   // CREATIVE GENERATION over a topic — "write an emily dickinson poem about iced coffee",
   // "compose an essay on dolphins", "draft a haiku about the sea". The frame (write/compose/draft
   // + poem/essay/song/…) names a FORM, and the real topic rides in the "about/on X" tail. Taken at
@@ -2674,6 +2751,12 @@ class Component extends DCLogic {
     {
       const drCmd=/^\/(?:research|essay)\b[\s:]*/i.exec(q);
       if(drCmd){const t=this.norm(q.slice(drCmd[0].length));if(t)return this._drCommand(t);}
+    }
+    // DOC — "/doc <line>" opens the document surface (if needed) and proposes the
+    // line as a grounded, tracked change you review there (chat → document edit).
+    {
+      const docCmd=/^\/doc\b[\s:]*/i.exec(q);
+      if(docCmd){const t=this.norm(q.slice(docCmd[0].length));if(t)return this._docCommand(t);}
     }
     // COMPOSE — a generative artifact ("write an emily dickinson poem", "compose a sonnet about
     // the sea") is a make-this, not a question. It must be caught BEFORE _shouldWeb, or the web
@@ -7156,6 +7239,7 @@ class Component extends DCLogic {
       read:this._readView(),
       provMode:'hover',
       onOpenDeepResearch:()=>this.onOpenDeepResearch(),
+      onOpenDoc:()=>this.onOpenDoc(),
       surfaceTitle:this.state.drHasLog?'Open the live research surface \u2014 the report keeps populating as you research in chat':'Open the research surface \u2014 run grounded deep research in a live panel',
       surfaceStyle:'margin-left:auto;flex:0 0 auto;font-size:11px;font-weight:600;border:none;background:transparent;cursor:pointer;white-space:nowrap;padding:2px 0 2px 9px;'+(this.state.drHasLog?'color:var(--acc);':'color:var(--ink3);'),
       backend:this.state.backend||'webllm',
