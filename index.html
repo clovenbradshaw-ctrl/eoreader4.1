@@ -2011,7 +2011,7 @@ class Component extends DCLogic {
     // whatever's decoding; `_stopGen` latches a user stop until the next turn starts.
     this._activeGuards=new Set(); this._stopGen=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
-    this.state={ ready:false, engineErr:null, pages:[], selId:null, siteView:null, sitesDir:false, docView:null, query:'', url:'', busy:false, feed:[],
+    this.state={ ready:false, engineErr:null, pages:[], selId:null, siteView:null, sitesDir:false, docView:null, dataView:null, query:'', url:'', busy:false, feed:[],
       // In-flight imports — a file starts here THE MOMENT it's picked, so it shows in the
       // Sources panel instantly (with a live "what it's doing" status) instead of only
       // appearing once the slow extractor — whisper, pdf.js, Tesseract — has finished. Each:
@@ -2932,6 +2932,13 @@ class Component extends DCLogic {
       // when this came from a chat's Add-source picker, tag it in so the chat is about it.
       this._dropImport(id);
       if(chatId&&read&&read.url)this.addChatSource(read.url,chatId);
+      // A table is DATA, not prose: keep the parsed columns/rows keyed by the source
+      // so a chat scoped to it can COMPUTE (via math.js), and open it as a table
+      // surface tab rather than leaving it read as a wall of row-sentences.
+      if(read&&read.url&&r&&r.meta&&r.meta.modality==='table'&&r.meta.doc){
+        this._tablesMap().set(read.url,r.meta.doc);
+        this.openTable(read.url);
+      }
     }catch(e){ const msg=((e&&e.message)?e.message:String(e)); this._patchImport(id,{error:msg,status:''}); this.feedLine('warn','Could not import '+name+' — '+msg); }
   }
   // ── Chat — grounded in what's been READ, no LLM ──────────────────────────
@@ -4038,6 +4045,100 @@ class Component extends DCLogic {
     const tryPropose=(n)=>{ if(this._docSurface&&this._docSurface.proposeFromText){this._docSurface.proposeFromText(text,{author:'eo'});if(this._docSurface.setMode)this._docSurface.setMode('suggesting');} else if(n>0)setTimeout(()=>tryPropose(n-1),120); };
     tryPropose(12);
   }
+  // ── TABLES (src/data/) — a CSV/spreadsheet as DATA: opened as a table surface
+  // tab, and answered by COMPUTING over the cells (math.js) when a chat is scoped
+  // to it, rather than read as a wall of row-sentences. ──────────────────────
+  _dataLib(){
+    if(this._dataLibP)return this._dataLibP;
+    this._dataLibP=this._importRetry('src/data/index.js');
+    this._dataLibP.catch(()=>{this._dataLibP=null;});
+    return this._dataLibP;
+  }
+  _tablesMap(){ return this._tables||(this._tables=new Map()); }
+  _tableTitle(url){ const p=this.pageOf(url); return (p&&p.title)||this.short(url)||'Table'; }
+  // a friendly row noun read off the table title ("metro-contracts-2025.csv" →
+  // "contracts") — the last real word, pluralised; a plain "rows" as the fallback.
+  _tableRowNoun(url){
+    const t=(this._tableTitle(url)||'').replace(/\.[a-z0-9]+$/i,'');
+    const words=t.toLowerCase().split(/[^a-z]+/).filter(w=>w.length>=4);
+    const w=words.length?words[words.length-1]:'row';
+    return /s$/.test(w)?w:w+'s';
+  }
+  openTable(url){
+    url=this.norm(url); this._ensureTabs();
+    const existing=(this._tabs||[]).find(t=>{const loc=(t.hist||[])[t.hpos];return loc&&loc.t==='data'&&loc.id===url;});
+    if(existing){this._activateTab(existing.id);return;}
+    this._saveLive();
+    const tid=this._tabId();
+    this._tabs.push({id:tid,kind:'new',hist:[],hpos:-1,viewMode:this.state.viewMode||'native',chatId:null});
+    this._activeTab=tid;this._hist=[];this._hpos=-1;this._pageUrl=null;
+    this._pushLoc({t:'data',id:url});
+    const patch={dataView:url,docView:null,siteView:null,sitesDir:false,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
+    if(this.phone())patch.pane='doc';
+    this.setState(s=>({...patch,histRev:(s.histRev||0)+1}),()=>this._syncDataDock());
+    this._scrollMainTop();
+  }
+  _syncDataDock(){
+    const url=this.state.dataView;
+    if(!url){ if(this._dataDock)this._dataDock.style.display='none'; return; }
+    if(this._dataDock&&this._dataMountedUrl===url){ this._positionDataDock(); return; }
+    this._mountDataDock(url);
+  }
+  async _mountDataDock(url){
+    let lib; try{lib=await this._dataLib();}catch(e){return;}
+    if(!lib||typeof lib.mountDataSurface!=='function'||this.state.dataView!==url)return;
+    if(!this._dataDock){
+      const dock=document.createElement('div');
+      dock.style.cssText='position:fixed;z-index:45;background:#fff;overflow:hidden;border-left:1px solid var(--line,#e6e8ec);';
+      document.body.appendChild(dock);
+      this._dataDock=dock;
+      this._dataDockReposition=()=>this._positionDataDock();
+      window.addEventListener('resize',this._dataDockReposition,{passive:true});
+      const sc=document.getElementById('eo-main-scroll');
+      if(typeof ResizeObserver!=='undefined'){this._dataDockRO=new ResizeObserver(this._dataDockReposition);this._dataDockRO.observe(document.body);if(sc)this._dataDockRO.observe(sc);}
+    }
+    this._dataDock.style.display='';this._positionDataDock();
+    if(this._dataSurface&&this._dataSurface.destroy){try{this._dataSurface.destroy();}catch(e){}this._dataSurface=null;}
+    const table=this._tablesMap().get(url);
+    this._dataSurface=lib.mountDataSurface(this._dataDock,{
+      table, name:this._tableTitle(url),
+      onClose:()=>this.closeTableTab(url),
+    });
+    this._dataMountedUrl=url;
+  }
+  _positionDataDock(){
+    const dock=this._dataDock;if(!dock)return;
+    const sc=document.getElementById('eo-main-scroll');
+    const r=(sc&&sc.offsetParent!==null&&this.state.dataView)?sc.getBoundingClientRect():null;
+    if(r&&r.width>60){dock.style.display='';dock.style.top=r.top+'px';dock.style.left=r.left+'px';dock.style.width=r.width+'px';dock.style.height=r.height+'px';}
+    else dock.style.display='none';
+  }
+  closeTableTab(url){
+    const t=(this._tabs||[]).find(x=>{const loc=(x.hist||[])[x.hpos];return loc&&loc.t==='data'&&loc.id===url;});
+    if(t)this.closeTab(t.id);
+    else this.setState({dataView:null},()=>this._syncDataDock());
+  }
+  // Chat over a table: when the active chat is scoped to a CSV/spreadsheet source,
+  // route a counting/summing/averaging ask through math.js and answer with the
+  // computation record, lighting the cells it used. Returns true if it handled it.
+  async _tableChat(q){
+    const cur=this.activeChatObj(); if(!cur)return false;
+    const urls=this.chatSourcesOf(cur)||[];
+    let url=urls.find(u=>this._tablesMap().has(u));
+    // also handle a chat opened straight from the table tab (dataView) with no tag
+    if(!url&&this.state.dataView&&this._tablesMap().has(this.state.dataView))url=this.state.dataView;
+    if(!url)return false;
+    const lib=await this._dataLib(); if(!lib||typeof lib.answerTable!=='function')return false;
+    let ans=null;
+    try{ ans=lib.answerTable(q,this._tablesMap().get(url),{rowNoun:this._tableRowNoun(url)}); }catch(e){ ans=null; }
+    if(!ans)return false;
+    // light the cells in the open table surface, if it's this table
+    try{ if(this._dataSurface&&this._dataMountedUrl===url&&ans.record&&ans.record.cells)this._dataSurface.highlightCells(ans.record.cells); }catch(e){}
+    let id=cur.id;
+    this.setState(st=>({chats:st.chats.map(c=>c.id===id?{...c,messages:[...c.messages,{role:'user',text:q},{role:'asst',pending:false,text:ans.text,mathRecord:ans.record,modelNote:'Computed over '+this._tableTitle(url)+' with math.js — every figure traces to a cell.'}]}:c),chatInput:''}));
+    this._scrollChat();
+    return true;
+  }
   // CREATIVE GENERATION over a topic — "write an emily dickinson poem about iced coffee",
   // "compose an essay on dolphins", "draft a haiku about the sea". The frame (write/compose/draft
   // + poem/essay/song/…) names a FORM, and the real topic rides in the "about/on X" tail. Taken at
@@ -4884,6 +4985,9 @@ class Component extends DCLogic {
     // below can strip it to a "subject" and research it. The cheap sync pre-gate keeps a
     // non-math turn from ever loading the module; the module makes the strict final call.
     if(this._looksMath(q)&&await this._mathChat(q))return;
+    // TABLE — when the chat is scoped to a CSV/spreadsheet, a counting/summing/
+    // averaging ask is COMPUTED over the cells (math.js), not read as prose.
+    if(await this._tableChat(q))return;
     // DEEP RESEARCH — an EXPLICIT "/research <topic>" (or the composer's Research control)
     // runs the grounded projection directly (src/research/): pin, bind, extract, strain,
     // project. The essay organ is gone; this is the long-output path the reader focuses on.
@@ -8082,7 +8186,7 @@ class Component extends DCLogic {
     const t=this._tabs.find(x=>x.id===id);if(!t)return;
     this._activeTab=id;this._pageUrl=null;
     this._hist=t.hist||[];this._hpos=(t.hpos==null?this._hist.length-1:t.hpos);
-    const patch={viewMode:t.viewMode||'native',panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,previewWiki:null,siteView:null,sitesDir:false,docView:null,histRev:(this.state.histRev||0)+1};
+    const patch={viewMode:t.viewMode||'native',panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,previewWiki:null,siteView:null,sitesDir:false,docView:null,dataView:null,histRev:(this.state.histRev||0)+1};
     if(t.kind==='chat'){this.setState({...patch,activeChat:t.chatId,viewUrl:null,selId:null,newTabOpen:false});return;}
     if(t.kind==='new'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,newTabOpen:true});return;}
     const loc=(this._hpos>=0&&this._hist)?this._hist[this._hpos]:null;
@@ -8091,6 +8195,7 @@ class Component extends DCLogic {
     else if(loc&&loc.t==='site'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,siteView:loc.url,newTabOpen:false});}
     else if(loc&&loc.t==='sites'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,sitesDir:true,newTabOpen:false});}
     else if(loc&&loc.t==='doc'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,docView:loc.id,newTabOpen:false});}
+    else if(loc&&loc.t==='data'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,dataView:loc.id,newTabOpen:false});}
     else{this.setState({...patch,activeChat:null,viewUrl:null,selId:null,newTabOpen:true});}
   }
   // Route a chat into a tab: reuse the tab already hosting it, else convert a blank new tab,
@@ -8550,6 +8655,7 @@ class Component extends DCLogic {
     if(loc.t==='sites')return 'All sites';
     if(loc.t==='site')return this.truncLabel(((this.pageOf(loc.url)||{}).title)||this.short(loc.url),22);
     if(loc.t==='doc')return this.truncLabel(this._docTitle(loc.id),22);
+    if(loc.t==='data')return this.truncLabel(this._tableTitle(loc.id),22);
     return (g&&g.entities&&g.entities.has(loc.id))?this.labelOf(loc.id):'…';}
   // Build the tab strip from the tab list \u2014 one chip per open tab, its glyph marking the kind:
   // chat (accent star) \u00b7 reader-view page \u00b7 search glyph \u00b7 a coloured dot for a live page /
@@ -8563,6 +8669,7 @@ class Component extends DCLogic {
         if(loc.t==='sites'){dotGlyph='\u25a6';dotStyle='font-size:12px;line-height:1;color:var(--acc);flex:0 0 auto;';}
         else if(loc.t==='site'){const c=this.hashColor(this.short(loc.url));dotGlyph='\u25c8';dotStyle='font-size:11px;line-height:1;color:'+c+';flex:0 0 auto;';}
         else if(loc.t==='doc'){dotGlyph='\u270e';dotStyle='font-size:12px;line-height:1;color:var(--acc);flex:0 0 auto;';}
+        else if(loc.t==='data'){dotGlyph='\u25a6';dotStyle='font-size:12px;line-height:1;color:#4338ca;flex:0 0 auto;';}
         else if(isSearch){dotGlyph='\ue30c';dotStyle='font-family:\'Phosphor\';font-size:13px;line-height:1;color:#9aa1ab;flex:0 0 auto;';}
         else if(reader){dotGlyph='\ud83d\udcd6';dotStyle='font-size:12px;line-height:1;flex:0 0 auto;';}
         else if(isWeb){dotStyle='width:8px;height:8px;border-radius:50%;flex:0 0 auto;background:#9aa1ab;';}
@@ -8988,6 +9095,7 @@ class Component extends DCLogic {
     // (panel resize/toggle, left rail collapse) — a re-render is exactly when the box moved.
     if(this._drDock)this._positionDrDock();
     this._syncDocDock();
+    this._syncDataDock();
   }
   _scheduleDecorate(){clearTimeout(this._decoT);let tries=0;const tick=()=>{const ifr=document.querySelector('iframe[data-eo-center]');const d=ifr&&ifr.contentDocument;if(d&&d.body&&d.body.childNodes.length){this.decorateFrame(d,ifr);}else if(tries++<50){this._decoT=setTimeout(tick,80);}};this._decoT=setTimeout(tick,60);}
   _frameOffset(){const ifr=document.querySelector('iframe[data-eo-center]');if(!ifr)return{x:0,y:0};const r=ifr.getBoundingClientRect();return{x:r.left,y:r.top};}
@@ -9359,7 +9467,7 @@ class Component extends DCLogic {
       url:this.state.url,onUrlInput:e=>this.onUrlInput(e),onUrlKey:e=>this.onUrlKey(e),onReadUrl:()=>this.doReadUrl(),
       onBack:()=>this.goBack(),onForward:()=>this.goForward(),onReloadTop:()=>this.forceUpdate(),onNewTab:()=>this.newTab(),
       onImportClick:()=>this.onImportClick(),onImportFile:e=>this.onImportFile(e),
-      onToggleDetect:()=>this.toggleDetect(),detect:this.state.detect,showWeb:false,web:null,srcCtxOn:false,docOn:false,
+      onToggleDetect:()=>this.toggleDetect(),detect:this.state.detect,showWeb:false,web:null,srcCtxOn:false,docOn:false,dataOn:false,
       detectDesc:this.state.detect?'On — every page you open is read into memory.':'Off — pages open without being read. Turn on to build memory.',
       detectSwitch:'flex:0 0 auto;width:34px;height:20px;border-radius:11px;padding:2px;transition:background .15s;background:'+(this.state.detect?'var(--acc)':'#cfd3da')+';',
       detectKnob:'width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2);transition:transform .15s;transform:translateX('+(this.state.detect?'14px':'0')+');',
@@ -9684,6 +9792,7 @@ class Component extends DCLogic {
       // centre view-model just steps aside (the tab strip above it stays live).
       base.docOn=true;return base;
     }
+    if(this.state.dataView){ base.dataOn=true;return base; }
     if(this.state.sitesDir){
       base.sitesDirOn=true;base.sitesDir=this.sitesDirectory(entInSrc);
       return base;
