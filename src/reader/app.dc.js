@@ -24,6 +24,11 @@ class Component extends DCLogic {
     // whatever's decoding; `_stopGen` latches a user stop until the next turn starts.
     this._activeGuards=new Set(); this._stopGen=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
+    // The reader's own identity verdicts ("same person" / "not the same") — user
+    // assertions on an open same_as? asterisk (core/asterisk.js), folded back into
+    // every rebuild as real SYN events so they carry exactly as much weight as any
+    // other identity event, just the heaviest kind (recordIdentityJudgment).
+    this._identityJudgments=[];
     this.state={ ready:false, engineErr:null, pages:[], selId:null, siteView:null, sitesDir:false, docView:null, dataView:null, query:'', url:'', busy:false, feed:[],
       // In-flight imports — a file starts here THE MOMENT it's picked, so it shows in the
       // Sources panel instantly (with a live "what it's doing" status) instead of only
@@ -504,6 +509,14 @@ class Component extends DCLogic {
     const __res=(typeof window!=='undefined'&&window.__resources)||{};
     try{ this.E=await import(__res.eoEngine||'./eoreader4-bundle.js'); }
     catch(e){ this.setState({ready:true,engineErr:String(e)}); return; }
+    // The shipped engine bundle is a frozen snapshot (README/MIGRATION-POINTER) and
+    // predates the ontological asterisk (core/asterisk.js — held identity, sameAs/
+    // splits/idMerges). projectGraph is otherwise pure and self-contained under
+    // core/, so it loads fine straight from source, the same way _limnChat loads
+    // the limner organ below. Best-effort: on any failure this._PG stays null and
+    // rebuild() falls back to the bundle's own projectGraph — today's behavior,
+    // never worse.
+    try{ this._PG=await import(new URL('src/core/project.js',document.baseURI).href); }catch(e){ this._PG=null; }
     // Seed an EMPTY memory so this.master/this.graph exist before anything is read. Without it
     // the graph is undefined on a fresh session, and any path that reads it before the first
     // page is folded (the curiosity walk's entity-count, feed research) throws. rebuild([]) is
@@ -837,6 +850,50 @@ class Component extends DCLogic {
     // The sense that distinguishes a forked referent ("a 1995 film") is a DEFEASIBLE DEF on
     // the referent — not part of its identity. Appended after the body so the INS exists.
     for(const f of forks){if(f.sense)m.events.push({op:'DEF',id:f.id,key:'sense',value:f.sense,sentIdx:null,seq:m.events.length,defeasible:true,__page:f.url});}
+    // Cross-document identity candidates — "import a bunch of documents about a
+    // given thing": a label sighted under more than one still-distinct id, in
+    // more than one source, with the two never once sighted together on the same
+    // page (a within-page repeat is the parser's OWN coreference call — a real
+    // decision, not a coincidence of naming). That is exactly the ontological
+    // asterisk (core/asterisk.js) — held here as a same_as? candidate, never
+    // force-merged and never left silently apart. The identity projection
+    // resolves it from there: promoted to one figure on convergent
+    // discriminators, forked to a confirmed split on conflicting ones, or left
+    // open for the reader to settle (Graph panel / chat — recordIdentityJudgment
+    // always wins, see core/project.js). Already-forked (sensed) referents are
+    // skipped — cross-source.js already told those two apart on real grounds.
+    {
+      const normLbl=(s)=>String(s||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+      const sensed=new Set();for(const f of forks)if(f.sense)sensed.add(f.id);
+      const byNorm=new Map();     // norm → Map<id, Set<page>>
+      const labelOfId=new Map();  // id → first-seen label
+      for(const e of m.events){
+        if(e.op!=='INS'||e.kind==='view'||e.id==null||sensed.has(e.id))continue;
+        if(!labelOfId.has(e.id))labelOfId.set(e.id,e.label??e.id);
+        const norm=normLbl(e.label??e.id);if(!norm)continue;
+        let byId=byNorm.get(norm);if(!byId)byNorm.set(norm,(byId=new Map()));
+        let pages=byId.get(e.id);if(!pages)byId.set(e.id,(pages=new Set()));
+        if(e.__page)pages.add(e.__page);
+      }
+      const already=new Set();let emitted=0;
+      for(const byId of byNorm.values()){
+        const ids=[...byId.keys()];
+        if(ids.length<2||ids.length>12)continue;   // a common token, not a name — skip the combinatorics
+        for(let i=0;i<ids.length&&emitted<300;i++)for(let j=i+1;j<ids.length&&emitted<300;j++){
+          const a=ids[i],b=ids[j],pagesA=byId.get(a),pagesB=byId.get(b);
+          let disjoint=true;for(const p of pagesA)if(pagesB.has(p)){disjoint=false;break;}
+          if(!disjoint)continue;
+          const key=a<b?a+'␟'+b:b+'␟'+a;if(already.has(key))continue;already.add(key);emitted++;
+          m.events.push({op:'SYN',kind:'same_as?',from:a,to:b,label:labelOfId.get(a),sentIdx:null,seq:m.events.length,crossDoc:true});
+        }
+      }
+    }
+    // The reader's own identity verdicts ride in last, as real SYN events (core/
+    // asterisk.js: 'merge' — same figure; 'split' — asserted distinct). They are
+    // folded into every rebuild so a judgment made once survives every later
+    // read/toss/mute, and they are tagged `user:true` so the projection gives them
+    // precedence over whatever the text's own discriminators would otherwise decide.
+    for(const j of this._identityJudgments)m.events.push({op:'SYN',kind:j.kind,from:j.from,to:j.to,user:true,label:j.label||null,sentIdx:null,seq:m.events.length});
     this.master=m;
     const shim={events:m.events,snapshot:()=>m.events,get length(){return m.events.length;}};
     // THE WALK'S DOC HANDLE — the merged corpus in the pinned shape the composition walk
@@ -854,8 +911,38 @@ class Component extends DCLogic {
     let _tokCache=null;
     this._logDoc={log:shim,units:m.sentences,sentences:m.sentences,
       get tokensBySentence(){return _tokCache||(_tokCache=m.sentences.map(_tok));}};
-    this.graph=this.E.projectGraph(shim,{cursor:Math.max(0,m.sentences.length-1),rules:this.E.DEFAULT_PROJECTION_RULES});
+    const PG=(this._PG&&this._PG.projectGraph)?this._PG:this.E;
+    this.graph=PG.projectGraph(shim,{cursor:Math.max(0,m.sentences.length-1),rules:PG.DEFAULT_PROJECTION_RULES});
     this.incident=new Map();for(const e of this.graph.edges){for(const id of [e.from,e.to])this.incident.set(id,(this.incident.get(id)||0)+(e.weight||0));}
+    if(this._graphDock)this._renderGraphDock();   // keep the docked panel live as sources change
+  }
+  // The open identity questions the current graph is holding (core/asterisk.js
+  // sameAs — each a same_as? asterisk neither merged nor split), ranked the same
+  // way identityFrontier does: balanced, well-attested pairs first, since those are
+  // the ones a source is most likely to settle. Falls back to arrival order if the
+  // live projector (this._PG) isn't loaded, so the panel degrades, never breaks.
+  identityQuestions(){
+    const g=this.graph;
+    if(!g||!g.sameAs||!g.sameAs.length)return [];
+    const sightings=id=>g.entities.get(id)?.sightings||1;
+    return g.sameAs.map(c=>{
+      const aN=sightings(c.a),bN=sightings(c.b);
+      const score=Math.min(aN,bN)/(1+Math.abs(aN-bN));
+      const label=c.label||c.norm||this.labelOf(c.a);
+      return {a:c.a,b:c.b,label,score,aLabel:this.labelOf(c.a),bLabel:this.labelOf(c.b)};
+    }).sort((x,y)=>y.score-x.score);
+  }
+  // The user's own verdict on an open identity question — heaviest-weighted signal
+  // the projection reads (core/project.js): 'same' subsumes the asterisk into one
+  // Figure the same way any firm merge does; 'different' forks it into a confirmed
+  // split that no later discriminator convergence can re-open. Recorded as a real
+  // event (rebuild() folds it in), not a UI-only flag, so it survives every future
+  // read/toss/mute and shows up in the log the way any other identity finding does.
+  recordIdentityJudgment(a,b,same,label){
+    if(a==null||b==null||a===b)return;
+    this._identityJudgments=[...this._identityJudgments,{from:a,to:b,kind:same?'merge':'split',label:label||null}];
+    this.rebuild(this.state.pages);
+    this.setState(s=>({rev:(s.rev||0)+1}));
   }
   async readURL(url,via,parent,opts){
     if(!this.E)return false;
@@ -1922,6 +2009,116 @@ class Component extends DCLogic {
     if(this._drSurface&&this._drSurface.destroy){try{this._drSurface.destroy();}catch(e){}this._drSurface=null;}
     if(this._drDock){this._drDock.remove();this._drDock=null;}
   }
+  // ── GRAPH PANEL — the read's own structure, toggle-able and persistent (not a
+  // one-shot /svg chat reply): docked the same way THE SURFACE is (plain DOM
+  // outside the DC tree, sized over the right panel, so it survives every
+  // re-render). It doubles as where an open identity question (core/asterisk.js
+  // same_as? — a name seen in more than one place with nothing establishing
+  // whether it is one figure or two) gets resolved: Same/Different write the
+  // reader's own verdict straight back into the log (recordIdentityJudgment),
+  // the heaviest-weighted signal the identity projection reads. A chat message
+  // ("these aren't the same") reaches the exact same call — see _identityChat.
+  async onOpenGraph(){
+    if(this._graphDock){this._graphDock.style.display='';this._positionGraphDock();this._renderGraphDock();return;}
+    if(!this.state.rightShow)this.setState({rightShow:true});
+    const dock=document.createElement('div');
+    dock.style.cssText='position:fixed;z-index:20;background:var(--card,#fff);border-left:1px solid var(--line,#e5e7eb);overflow:auto;';
+    document.body.appendChild(dock);
+    this._graphDock=dock;
+    this._positionGraphDock();
+    this._graphDockReposition=()=>this._positionGraphDock();
+    window.addEventListener('resize',this._graphDockReposition,{passive:true});
+    if(typeof ResizeObserver!=='undefined'){this._graphDockRO=new ResizeObserver(this._graphDockReposition);const panel=document.getElementById('eo-panel-scroll');if(panel)this._graphDockRO.observe(panel);this._graphDockRO.observe(document.body);}
+    await this._renderGraphDock();
+  }
+  _positionGraphDock(){
+    const dock=this._graphDock;if(!dock)return;
+    const panel=document.getElementById('eo-panel-scroll');
+    const r=(panel&&panel.offsetParent!==null)?panel.getBoundingClientRect():null;
+    if(r&&r.width>60){dock.style.top=r.top+'px';dock.style.left=r.left+'px';dock.style.right='auto';dock.style.width=r.width+'px';dock.style.height=r.height+'px';}
+    else{const pw=Math.min(this.state.panelW||380,Math.round((window.innerWidth||420)*0.94));dock.style.top='0';dock.style.right='0';dock.style.left='auto';dock.style.width=pw+'px';dock.style.height='100%';}
+  }
+  closeGraphPanel(){
+    if(this._graphDockReposition){window.removeEventListener('resize',this._graphDockReposition);this._graphDockReposition=null;}
+    if(this._graphDockRO){try{this._graphDockRO.disconnect();}catch(e){}this._graphDockRO=null;}
+    if(this._graphDock){this._graphDock.remove();this._graphDock=null;}
+  }
+  // Repaints the docked panel from the live graph: the open identity questions
+  // first, then the figure itself (the limner organ — the same primitive /svg
+  // draws with). Safe to call repeatedly — clears and redraws, never appends.
+  async _renderGraphDock(){
+    const dock=this._graphDock;if(!dock)return;
+    dock.innerHTML='';
+    const head=document.createElement('div');
+    head.style.cssText='display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line,#e5e7eb);position:sticky;top:0;background:var(--card,#fff);z-index:1;';
+    const title=document.createElement('span');title.textContent='Graph';
+    title.style.cssText='font-size:12px;font-weight:600;color:var(--ink2,#555);';
+    const close=document.createElement('button');close.textContent='›';close.title='Hide panel';
+    close.style.cssText='margin-left:auto;width:24px;height:24px;border:none;background:transparent;color:var(--ink3,#999);border-radius:6px;cursor:pointer;font-size:14px;line-height:1;';
+    close.onclick=()=>this.closeGraphPanel();
+    head.appendChild(title);head.appendChild(close);
+    dock.appendChild(head);
+    const body=document.createElement('div');body.style.cssText='padding:11px 13px;';
+    dock.appendChild(body);
+
+    const g=this.graph;
+    if(!g||!g.entities||!g.entities.size){
+      const p=document.createElement('div');p.textContent='No graph yet — read a URL or import a document first.';
+      p.style.cssText='font-size:12.5px;color:var(--ink3,#999);';
+      body.appendChild(p);return;
+    }
+
+    // Identity questions — each an open same_as? asterisk. Same/Different write
+    // straight back to the log; conflicting text evidence never outranks them.
+    const qs=this.identityQuestions();
+    if(qs.length){
+      const sec=document.createElement('div');sec.style.cssText='margin-bottom:14px;';
+      const h=document.createElement('div');h.textContent='Same figure? ('+qs.length+')';
+      h.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3,#999);margin-bottom:6px;';
+      sec.appendChild(h);
+      for(const q of qs.slice(0,20)){
+        const row=document.createElement('div');
+        row.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line2,#eee);';
+        const lab=document.createElement('div');lab.style.cssText='flex:1;min-width:0;font-size:12.5px;color:var(--ink,#111);';
+        lab.textContent=(q.aLabel||q.label)+'  ≟  '+(q.bLabel||q.label);
+        const same=document.createElement('button');same.textContent='Same';
+        same.title='Confirm these are one figure';
+        same.style.cssText='font-size:11.5px;font-weight:600;color:var(--acc,#2563eb);background:var(--accbg,#eef2ff);border:1px solid var(--accline,#c7d2fe);border-radius:7px;padding:4px 9px;cursor:pointer;';
+        same.onclick=()=>this.recordIdentityJudgment(q.a,q.b,true,q.label);
+        const diff=document.createElement('button');diff.textContent='Different';
+        diff.title='These are not the same entity';
+        diff.style.cssText='font-size:11.5px;font-weight:600;color:var(--ink2,#555);background:var(--app,#f7f7f8);border:1px solid var(--line2,#e5e7eb);border-radius:7px;padding:4px 9px;cursor:pointer;';
+        diff.onclick=()=>this.recordIdentityJudgment(q.a,q.b,false,q.label);
+        row.appendChild(lab);row.appendChild(same);row.appendChild(diff);
+        sec.appendChild(row);
+      }
+      body.appendChild(sec);
+    }
+
+    // The figure itself.
+    try{
+      const L=this._LIMN||(this._LIMN=await import(new URL('src/organs/out/limner/index.js',document.baseURI).href));
+      const entities=new Map();
+      for(const [eid,e] of g.entities){let lab;try{lab=this.labelOf(eid);}catch(_){}entities.set(eid,{...e,label:lab||e.label||eid});}
+      const {svg,spec}=await L.limn({graph:{...g,entities},kind:'graph'});
+      if(spec.nodes.length){
+        const cap=document.createElement('div');cap.textContent=spec.nodes.length+' figures, '+spec.edges.length+' bonds';
+        cap.style.cssText='font-size:11px;color:var(--ink3,#999);margin-bottom:6px;';
+        body.appendChild(cap);
+        const fig=document.createElement('div');
+        fig.innerHTML=svg.replace('<svg ','<svg style="width:100%;height:auto;max-width:100%;display:block" ');
+        body.appendChild(fig);
+      }else{
+        const p=document.createElement('div');p.textContent='No figures admitted yet — read more.';
+        p.style.cssText='font-size:12.5px;color:var(--ink3,#999);';
+        body.appendChild(p);
+      }
+    }catch(e){
+      const p=document.createElement('div');p.textContent='Couldn’t draw the graph: '+((e&&e.message)||e);
+      p.style.cssText='font-size:12px;color:var(--ink3,#999);';
+      body.appendChild(p);
+    }
+  }
   // ── DOCUMENTS (src/doc/) — EO change tracking: a written document as a fold of
   // an append-only edit log, every edit grounding-checked against the Record. A
   // Google-Docs-style page docked full-screen; the reader is the only host. ──
@@ -2921,6 +3118,39 @@ class Component extends DCLogic {
     }catch(e){finish({text:'Couldn’t draw that: '+(e&&e.message||e)});}
   }
 
+  // IDENTITY — a plain-language verdict on an open "same figure?" question
+  // (core/asterisk.js same_as?: a name seen in more than one place with nothing
+  // establishing whether it is one figure or two). "these aren't the same
+  // entity" / "same person" / "different people" resolves the TOP-ranked open
+  // question (identityQuestions()) exactly the way the Graph panel's Same/
+  // Different buttons do — recordIdentityJudgment, the heaviest-weighted signal
+  // the identity projection reads (it pre-empts whatever the text's own
+  // discriminators would otherwise decide). The utterance is preserved in the
+  // chat transcript like any other turn. No model call; inert when nothing is
+  // open, so it never swallows an ordinary chat message.
+  async _identityChat(raw){
+    const q=this.norm(raw);
+    const negRe=/\b(?:aren'?t|isn'?t|is\s+not|are\s+not|weren'?t|wasn'?t)\b[^.?!]{0,24}\bsame\b|\b(?:different|distinct|not\s+the\s+same)\s+(?:people|persons?|entit(?:y|ies)|figures?)\b/i;
+    const posRe=/\bsame\s+(?:person|entity|figure|people)\b|\b(?:they'?re|these\s+are|that'?s|it'?s)\s+the\s+same\b/i;
+    const isNeg=negRe.test(q), isPos=!isNeg&&posRe.test(q);
+    if(!isNeg&&!isPos)return false;
+    const qs=this.identityQuestions();
+    if(!qs.length)return false;   // nothing open — fall through to the ordinary chat pipeline
+    const top=qs[0];
+    let id=this.state.activeChat;
+    this.setState(s=>{let chats=s.chats.slice();let idx=chats.findIndex(c=>c.id===id);
+      if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(q,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
+      const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(q,40);
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:q}]};
+      return {chats,activeChat:id,chatInput:''};});
+    this._scrollChat();
+    this.recordIdentityJudgment(top.a,top.b,isPos,top.label);
+    const verdict=isPos?'the same figure':'not the same — recorded as distinct';
+    const reply='Noted — “'+(top.aLabel||top.label)+'” and “'+(top.bLabel||top.label)+'” are '+verdict+'.';
+    this.setState(s=>({chats:s.chats.map(c=>c.id!==id?c:{...c,messages:[...c.messages,{role:'asst',text:reply}]})}),()=>this._scrollChat());
+    return true;
+  }
+
   // The Conversation Fold for a chat — a pure projection of its turns that carries
   // the enacted STANCE (compose|ground) forward AND the frame stack (the interior
   // holon's active path — src/core/conversation-fold.js, docs/frame-holon.md).
@@ -3009,6 +3239,9 @@ class Component extends DCLogic {
     // (_depthCfg, _deepResearch) and is re-derived fresh on every send.
     this._turnRead=this._read(q)||{research:false,register:'auto',depth:'shallow',strategy:'breadth'};
     if(/^\/svg\b/i.test(q))return this._limnChat(q);
+    // IDENTITY — "these aren't the same entity" / "same person" resolves an open
+    // asterisk (see _identityChat); inert (returns false) when nothing is open.
+    if(await this._identityChat(q))return;
     // MATH — a pure arithmetic question is computed by math.js, before the web/model routing
     // below can strip it to a "subject" and research it. The cheap sync pre-gate keeps a
     // non-math turn from ever loading the module; the module makes the strict final call.
@@ -7679,6 +7912,7 @@ class Component extends DCLogic {
       provMode:'hover',
       onOpenDeepResearch:()=>this.onOpenDeepResearch(),
       onOpenDoc:()=>this.onOpenDoc(),
+      onOpenGraph:()=>this.onOpenGraph(),
       surfaceTitle:this.state.drHasLog?'Open the live research surface \u2014 the report keeps populating as you research in chat':'Open the research surface \u2014 run grounded deep research in a live panel',
       surfaceStyle:'margin-left:auto;flex:0 0 auto;font-size:11px;font-weight:600;border:none;background:transparent;cursor:pointer;white-space:nowrap;padding:2px 0 2px 9px;'+(this.state.drHasLog?'color:var(--acc);':'color:var(--ink3);'),
       backend:this.state.backend||'webllm',

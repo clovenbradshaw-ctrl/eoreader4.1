@@ -79,6 +79,10 @@ const computeProjection = (log, frame) => {
   const voidsRaw  = [];
   const sameAsRaw = [];   // held cross-source identity candidates — a SIDE structure,
                           // never `parent` (asterisk.js; do not touch find()).
+  const splitRaw  = [];   // direct "these are not one" assertions (asterisk.js REC's
+                          // other outcome, entered as data instead of derived from a
+                          // discriminator conflict) — a reader's own verdict, which
+                          // outweighs any discriminator convergence the text supplies.
   const parent    = new Map();
   const retracted = new Set();
 
@@ -182,6 +186,13 @@ const computeProjection = (log, frame) => {
         // resolved later by discriminator convergence (the asterisk block below).
         else if (e.kind === 'same_as?')
           sameAsRaw.push({ from: e.from, to: e.to, seq: e.seq, label: e.label, sentIdx: e.sentIdx ?? null });
+        // A confirmed split: identity is asserted UNestablished-as-one, not merely
+        // undiscriminated. Held on the SIDE the same way same_as? is — it never
+        // touches `parent` directly, it is read by the asterisk block below, which
+        // lets it override (never merely compete with) whatever the discriminators
+        // would otherwise decide.
+        else if (e.kind === 'split')
+          splitRaw.push({ from: e.from, to: e.to, seq: e.seq, label: e.label, sentIdx: e.sentIdx ?? null, user: !!e.user });
         break;
       // NUL: non-transformation — the thing is held as-is, not turned into
       //   graph structure and not cleared. (Voiding would be a DEF to VOID.)
@@ -202,16 +213,42 @@ const computeProjection = (log, frame) => {
   // is byte-identical (golden parity).
   const sameAs = [], splits = [], idMerges = [];
   const specParent = new Map();
-  if (sameAsRaw.length) {
+  if (sameAsRaw.length || splitRaw.length) {
     const labelFor = (id) => entities.get(id)?.label ?? id;
     const discr    = discriminatorIndex(edges, find, labelFor);
     const minConv  = frame.rules.same_as_min_convergence ?? 1;
     const fvias    = frame.rules.same_as_functional_vias
                        ? new Set(frame.rules.same_as_functional_vias) : null;
+
+    // A direct split is keyed by FIRM root pair, not by the surface ids it named —
+    // so it matches a same_as? candidate however that candidate's ids happened to
+    // be spelled. It is consumed against the first matching candidate; anything
+    // left over is a split asserted with no open candidate at all (a caller — the
+    // user — flagging two figures the reading never proposed as one).
+    const pairKey = (a, b) => (a < b ? a + '␟' + b : b + '␟' + a);
+    const splitPairs = new Map();
+    for (const s of splitRaw) {
+      const ra = find(s.from), rb = find(s.to);
+      if (ra === rb) continue;   // contradicts a firm merge already in place — inert here
+      splitPairs.set(pairKey(ra, rb), s);
+    }
+
     // EVA every candidate on the firm clusters, then REC: apply the earned merges.
+    // A split for this pair pre-empts EVA entirely — it is not one more vote beside
+    // discriminator convergence, it is the heaviest-weighted signal the block reads
+    // (asterisk.js: "conflict dominates convergence"; a reader's own split dominates
+    // a text-derived conflict too, and short-circuits a text-derived convergence).
     const decided = sameAsRaw.map(c => {
       const ra = find(c.from), rb = find(c.to);
       if (ra === rb) return { c, verdict: 'subsumed' };          // a firm merge already united them
+      const key = pairKey(ra, rb);
+      const s = splitPairs.get(key);
+      if (s) {
+        splitPairs.delete(key);                                  // consumed by its candidate
+        return { c, verdict: 'split', shared: [],
+          conflicts: [{ via: 'user', a: [], b: [], conflict: 1, reason: 'asserted distinct' }],
+          user: !!s.user };
+      }
       const ev = evaluateSameAs(ra, rb,
         { discriminatorsOf: (r) => discr.get(r), minConvergence: minConv, functionalVias: fvias });
       return { c, ...ev };
@@ -225,10 +262,22 @@ const computeProjection = (log, frame) => {
         a, b, seq: d.c.seq, sentIdx: d.c.sentIdx,
         norm: normLabel(d.c.label ?? a), label: d.c.label ?? null,
         shared: d.shared, conflicts: d.conflicts,
+        ...(d.user ? { user: true } : {}),
       });
       if (d.verdict === 'promote')    idMerges.push(rec);
       else if (d.verdict === 'split') splits.push(rec);
       else { sameAs.push(rec); union(specParent, a, b); }        // OPEN — fold for speculative display
+    }
+    // Splits asserted with no matching candidate — same record shape, auditable the
+    // same way, no candidate to consume.
+    for (const s of splitPairs.values()) {
+      const a = find(s.from), b = find(s.to);
+      splits.push(Object.freeze({
+        a, b, seq: s.seq, sentIdx: s.sentIdx,
+        norm: normLabel(s.label ?? a), label: s.label ?? null,
+        shared: [], conflicts: [{ via: 'user', a: [], b: [], conflict: 1, reason: 'asserted distinct' }],
+        ...(s.user ? { user: true } : {}),
+      }));
     }
   }
 

@@ -249,6 +249,87 @@ test('heldIdentity:true emits a same_as? candidate instead of a merge — the as
   assert.equal(g.voids.filter(v => v.kind === 'same_as?').length, 2, 'identity held as a void');
 });
 
+// ── The user's own verdict — heaviest-weighted, dominates the discriminators ─
+
+test('a user split resolves an open same_as? candidate, bypassing discriminator EVA entirely', () => {
+  // Convergent discriminators would otherwise PROMOTE this pair to a merge —
+  // the split must win anyway; the user's own "not the same" outweighs the text.
+  const g = twoTurners({ disc: [
+    ['A␟tom-turner', 'ceo', 'memphis-logistics', 'Memphis Logistics'],
+    ['B␟tom-turner', 'ceo', 'memphis-logistics', 'Memphis Logistics'],
+  ] });
+  // Sanity: without the split this pair converges.
+  assert.equal(g.idMerges.length, 1);
+
+  const log = createLog();
+  log.append({ op: 'INS', id: 'A␟tom-turner', label: 'Tom Turner' });
+  log.append({ op: 'INS', id: 'B␟tom-turner', label: 'Tom Turner' });
+  log.append({ op: 'INS', id: 'memphis-logistics', label: 'Memphis Logistics' });
+  log.append({ op: 'CON', src: 'A␟tom-turner', tgt: 'memphis-logistics', via: 'ceo', sentIdx: 0 });
+  log.append({ op: 'CON', src: 'B␟tom-turner', tgt: 'memphis-logistics', via: 'ceo', sentIdx: 0 });
+  log.append({ op: 'SYN', kind: 'same_as?', from: 'A␟tom-turner', to: 'B␟tom-turner', label: 'Tom Turner' });
+  log.append({ op: 'SYN', kind: 'split', from: 'A␟tom-turner', to: 'B␟tom-turner', user: true });
+  const resolved = projectGraph(log);
+
+  assert.equal(resolved.idMerges.length, 0, 'the convergence never fires — split pre-empts EVA');
+  assert.equal(resolved.sameAs.length, 0, 'no longer open');
+  assert.equal(resolved.splits.length, 1);
+  assert.equal(resolved.splits[0].user, true);
+  assert.notEqual(resolved.representative('A␟tom-turner'), resolved.representative('B␟tom-turner'));
+  assert.notEqual(resolved.representative('A␟tom-turner', { speculative: true }),
+                  resolved.representative('B␟tom-turner', { speculative: true }),
+    'a confirmed split is not folded speculatively either');
+  assert.equal(resolved.voids.filter(v => v.kind === 'same_as?').length, 0,
+    'the identity void is discharged — the question is answered, not merely dropped');
+});
+
+test('a user split with no open candidate still records, auditable, without a prior same_as?', () => {
+  const log = createLog();
+  log.append({ op: 'INS', id: 'A␟x', label: 'X' });
+  log.append({ op: 'INS', id: 'B␟x', label: 'X' });
+  log.append({ op: 'SYN', kind: 'split', from: 'A␟x', to: 'B␟x', user: true });
+  const g = projectGraph(log);
+  assert.equal(g.splits.length, 1);
+  assert.equal(g.splits[0].user, true);
+  assert.equal(g.sameAs.length, 0);
+});
+
+test('a split naming ids already firmly merged elsewhere is inert — cannot silently un-union', () => {
+  const log = createLog();
+  log.append({ op: 'INS', id: 'A␟x', label: 'X' });
+  log.append({ op: 'INS', id: 'B␟x', label: 'X' });
+  log.append({ op: 'SYN', kind: 'merge', from: 'A␟x', to: 'B␟x' });
+  log.append({ op: 'SYN', kind: 'split', from: 'A␟x', to: 'B␟x', user: true });
+  const g = projectGraph(log);
+  assert.equal(g.representative('A␟x'), g.representative('B␟x'), 'the firm merge stands');
+  assert.equal(g.splits.length, 0, 'nothing to record — a real un-merge needs a SEG retract of the merge');
+});
+
+test('a user merge resolves an open same_as? candidate, dominating a discriminator conflict', () => {
+  // A functional discriminator clash would otherwise force a SPLIT — the user's
+  // own "same person" must win anyway.
+  const g = twoTurners({ disc: [
+    ['A␟tom-turner', 'wife', 'mary', 'Mary'],
+    ['B␟tom-turner', 'wife', 'susan', 'Susan'],
+  ] });
+  assert.equal(g.splits.length, 1, 'sanity: without the user, the clash forks a split');
+
+  const log = createLog();
+  log.append({ op: 'INS', id: 'A␟tom-turner', label: 'Tom Turner' });
+  log.append({ op: 'INS', id: 'B␟tom-turner', label: 'Tom Turner' });
+  log.append({ op: 'INS', id: 'mary', label: 'Mary' });
+  log.append({ op: 'INS', id: 'susan', label: 'Susan' });
+  log.append({ op: 'CON', src: 'A␟tom-turner', tgt: 'mary', via: 'wife', sentIdx: 0 });
+  log.append({ op: 'CON', src: 'B␟tom-turner', tgt: 'susan', via: 'wife', sentIdx: 0 });
+  log.append({ op: 'SYN', kind: 'same_as?', from: 'A␟tom-turner', to: 'B␟tom-turner', label: 'Tom Turner' });
+  log.append({ op: 'SYN', kind: 'merge', from: 'A␟tom-turner', to: 'B␟tom-turner', user: true });
+  const resolved = projectGraph(log);
+
+  assert.equal(resolved.splits.length, 0, 'the conflict never fires — the user merge subsumes the candidate first');
+  assert.equal(resolved.sameAs.length, 0);
+  assert.equal(resolved.representative('A␟tom-turner'), resolved.representative('B␟tom-turner'));
+});
+
 test('normLabel mirrors the perceiver idFor normalization', () => {
   // lowercase, spaces→'-', strip to [a-z0-9-] — exactly idFor, on the trimmed labels
   // admission actually produces.
