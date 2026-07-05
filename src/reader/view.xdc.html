@@ -250,7 +250,7 @@
           </sc-for>
         </sc-if>
         <div style="display:flex;align-items:center;gap:6px;padding:8px 4px 4px;">
-          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);">Recorded reads</span>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);">Sources</span>
           <sc-if value="{{ hasSources }}" hint-placeholder-val="{{ false }}">
             <button onclick="{{ onOpenSites }}" title="Browse every source as a profile page" style="{{ sitesDirBtnStyle }}" style-hover="background:var(--accbg);color:var(--acc);border-color:var(--accline)"><span style="font-size:11px;line-height:1;">▦</span>All sites</button>
           </sc-if>
@@ -285,6 +285,20 @@
           </div>
         </sc-for>
         <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">Nothing recorded yet. Read a URL, import a book, or start a chat above.</div></sc-if>
+        <sc-if value="{{ hasWrittenDocs }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:6px;padding:15px 4px 4px;">
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);">Documents</span>
+          </div>
+          <sc-for list="{{ writtenDocs }}" as="d" hint-placeholder-count="1">
+            <div onclick="{{ d.onOpen }}" style="{{ d.rowStyle }}" style-hover="background:#f7f8fa">
+              <div style="{{ d.dot }}">{{ d.glyph }}</div>
+              <div style="min-width:0;flex:1;cursor:pointer;">
+                <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ d.label }}</div>
+                <div style="font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">{{ d.sub }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </sc-if>
       </div>
     </aside>
     </sc-if>

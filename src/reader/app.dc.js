@@ -1951,6 +1951,19 @@ class Component extends DCLogic {
   // it rides the same tab + back/forward machinery as pages and sites.
   _docsMap(){ return this._docs||(this._docs=new Map()); }
   _docTitle(id){ const d=this._docsMap().get(id); return (d&&d.title)||'Document'; }
+  // The written documents, for the left panel's Documents section — each opens its tab.
+  _writtenDocRows(){
+    return [...this._docsMap().values()].map(d=>{
+      const active=this.state.docView===d.id;
+      return {
+        id:d.id, label:this.truncLabel(d.title||'Untitled document',30),
+        sub:active?'open · in this tab':'document · written from the Record', glyph:'✎',
+        onOpen:()=>this.openDoc(d.id),
+        dot:'width:22px;height:22px;flex:0 0 auto;border-radius:6px;background:var(--accbg);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:12px;',
+        rowStyle:'display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;cursor:pointer;margin:1px 0;'+(active?'background:var(--accbg);':''),
+      };
+    });
+  }
   onOpenDoc(){ return this.openDoc(null); }   // the "New document" affordance
   async openDoc(id){
     const docs=this._docsMap();
@@ -1959,6 +1972,15 @@ class Component extends DCLogic {
       const seed=this._docSeed();
       docs.set(id,{id,title:seed.title,log:null,seed});
     }
+    this._ensureTabs();
+    // Focus the document's own tab if it is already open; else open it in a NEW
+    // tab (a document is its own workspace, not a navigation off the current page).
+    const existing=(this._tabs||[]).find(t=>{const loc=(t.hist||[])[t.hpos];return loc&&loc.t==='doc'&&loc.id===id;});
+    if(existing){this._activateTab(existing.id);return;}
+    this._saveLive();
+    const tid=this._tabId();
+    this._tabs.push({id:tid,kind:'new',hist:[],hpos:-1,viewMode:this.state.viewMode||'native',chatId:null});
+    this._activeTab=tid;this._hist=[];this._hpos=-1;this._pageUrl=null;
     this._pushLoc({t:'doc',id});
     const patch={docView:id,siteView:null,sitesDir:false,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
     if(this.phone())patch.pane='doc';
@@ -7388,6 +7410,7 @@ class Component extends DCLogic {
         {v:'echo',label:'Echo · offline, no model'}].map(o=>{const sel=(this.state.backend||'webllm')===o.v;return {v:o.v,label:o.label,sel,onPick:()=>this.setBackend(o.v),
         style:'font-size:12px;font-weight:600;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'var(--line2)')+';background:'+(sel?'var(--accbg)':'var(--card)')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),
       sources:[],srcCount:0,srcEmpty:true,imports:this._importRows(),hasImports:(this.state.imports||[]).length>0,onSrcImport:()=>this.onImportClick(),
+      writtenDocs:this._writtenDocRows(),hasWrittenDocs:this._docsMap().size>0,
       // Transcription option — a second whisper witness so audio/video readings can be audited.
       audioAudit:!!this.state.audioAudit,onToggleAudioAudit:()=>this.setState(s=>({audioAudit:!s.audioAudit})),
       audioAuditStyle:'display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;border-radius:7px;padding:5px 9px;cursor:pointer;border:1px solid '+(this.state.audioAudit?'var(--accline)':'var(--line2)')+';background:'+(this.state.audioAudit?'var(--accbg)':'var(--app)')+';color:'+(this.state.audioAudit?'var(--acc)':'var(--ink3)')+';',
