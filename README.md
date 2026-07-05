@@ -97,6 +97,7 @@ inspection.
 | `audit` | the append-only audit log (a projection of the fold) | nothing |
 | `reader` | the **shell build source** (`app.dc.js`, `view.xdc.html`) · `eo-gen` · the geometric reader bundle · file import · `eo/` cells & centroids | the engine |
 | `research` | **deep research as a grounded projection over an append-only log** (`docs/deep-research-log.md`): events · `projectReport` · driver · live view · the mountable surface (docked in the app's right panel) | `archive`, `surfer`, `turn`, `core` |
+| `doc` | **EO change tracking**: a written document as a fold of an append-only edit log (events · `projectDoc`); every edit grounding-checked against the Record (bind, or kept as void — marked) and reviewed as tracked changes in a Google-Docs-style suggesting surface (`mountDocSurface`) | nothing (the reader supplies the record) |
 | `archive` | archive.org pinning: dated snapshots, content hashes, span anchors (`#:~:text=`) | `ingest` |
 | `credence` | belief / credence detection (carried for the eval battery — see the pointer) | `core` |
 
