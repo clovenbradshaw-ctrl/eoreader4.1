@@ -23,10 +23,10 @@ export const projectDoc = (log) => {
     if (ch.kind === 'insert') {
       const at = ch.afterId ? indexOfBlock(ch.afterId) + 1 : blocks.length;
       const i = at > 0 ? at : blocks.length;
-      blocks.splice(i, 0, { id: ch.blockId, text: ch.text, grounding, author: ch.author });
+      blocks.splice(i, 0, { id: ch.blockId, text: ch.text, html: ch.html || '', type: ch.type || 'p', grounding, author: ch.author });
     } else if (ch.kind === 'replace') {
       const b = blocks.find((x) => x.id === ch.targetId);
-      if (b) { b.text = ch.text; b.grounding = grounding; }
+      if (b) { b.text = ch.text; b.html = ch.html || ''; b.type = ch.type || b.type || 'p'; b.grounding = grounding; }
     } else if (ch.kind === 'delete') {
       const i = indexOfBlock(ch.targetId);
       if (i >= 0) blocks.splice(i, 1);
@@ -38,11 +38,11 @@ export const projectDoc = (log) => {
       case DKIND.CREATE:
         id = e.docId; title = e.title; author = e.author; break;
       case DKIND.BLOCK:
-        blocks.push({ id: e.blockId, text: e.text, grounding: e.grounding || { kind: 'void' }, author: e.author }); break;
+        blocks.push({ id: e.blockId, text: e.text, html: e.html || '', type: e.type || 'p', grounding: e.grounding || { kind: 'void' }, author: e.author }); break;
       case DKIND.PROPOSE:
         changeMap.set(e.changeId, {
           id: e.changeId, kind: e.op, targetId: e.targetId, afterId: e.afterId, blockId: e.blockId,
-          text: e.text, before: e.before, grounding: e.grounding || { grounded: false },
+          text: e.text, html: e.html || '', type: e.type || 'p', before: e.before, grounding: e.grounding || { grounded: false },
           author: e.author, when: e.when, status: 'pending',
         });
         order.push(e.changeId);

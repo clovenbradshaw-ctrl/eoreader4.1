@@ -19,26 +19,39 @@ const blockMark = (g) => g && g.kind === 'source'
   ? `<sup class="doc-pm doc-pm-src" data-span="${esc((g.span && g.span.id) || '')}" title="Grounded to a recorded read${g.srcId ? ' · ' + esc(g.srcId) : ''}${g.host ? ' · ' + esc(g.host) : ''} — click to see the passage">⚓</sup>`
   : `<sup class="doc-pm doc-pm-void" title="The writer's own words — grounded to the void, not to a recorded span">○</sup>`;
 
+// The HTML tag a block type renders as. Lists render as paragraphs with a
+// CSS-drawn marker (so the block model stays flat — one editable element per
+// line — while reading like a real list).
+const TAG = { p: 'p', h1: 'h1', h2: 'h2', h3: 'h3', quote: 'blockquote', ul: 'p', ol: 'p' };
+// A block's body: its sanitized inline rich HTML when it has formatting, else the
+// escaped plain text. (The surface sanitizes on commit, so stored html is trusted.)
+const body = (b) => b.html ? b.html : esc(b.text);
+const typeCls = (t) => ' doc-b-' + (t || 'p');
+
 // One committed block, optionally shown with the replace/delete suggestion that
 // targets it (suggesting mode only).
 const committedBlock = (b, { mode, replace, del }) => {
-  const editable = mode === 'editing' ? ' contenteditable="true" spellcheck="false"' : '';
-  const delBtn = mode === 'editing'
-    ? `<button class="doc-del" data-del="${esc(b.id)}" title="Delete this line">✕</button>` : '';
+  const tag = TAG[b.type] || 'p';
+  const cls = 'doc-block' + typeCls(b.type);
   if (mode === 'suggesting' && del) {
-    return `<p class="doc-block doc-sugg-del" data-block="${esc(b.id)}"><span class="doc-strike">${esc(b.text)}</span>${blockMark(b.grounding)}</p>`;
+    return `<${tag} class="${cls} doc-sugg-del" data-block="${esc(b.id)}"><span class="doc-strike">${body(b)}</span>${blockMark(b.grounding)}</${tag}>`;
   }
   if (mode === 'suggesting' && replace) {
     const tone = replace.grounding && replace.grounding.grounded ? 'src' : 'void';
-    return `<p class="doc-block" data-block="${esc(b.id)}"><span class="doc-strike">${esc(b.text)}</span> <span class="doc-ins doc-ins-${tone}">${esc(replace.text)}</span></p>`;
+    return `<${tag} class="${cls}" data-block="${esc(b.id)}"><span class="doc-strike">${body(b)}</span> <span class="doc-ins doc-ins-${tone}">${esc(replace.text)}</span></${tag}>`;
   }
-  return `<p class="doc-block"${editable} data-block="${esc(b.id)}"><span class="doc-text">${esc(b.text)}</span>${blockMark(b.grounding)}${delBtn}</p>`;
+  // No inline controls inside the editable element — a nested contenteditable=false
+  // node breaks text selection and execCommand. Deletion is: empty the line, blur.
+  const editable = mode === 'editing' ? ' contenteditable="true" spellcheck="false"' : '';
+  const mark = mode === 'editing' ? '' : blockMark(b.grounding);
+  return `<${tag} class="${cls}"${editable} data-block="${esc(b.id)}" data-type="${esc(b.type || 'p')}">${body(b)}${mark}</${tag}>`;
 };
 
 // A pending insert shown at its anchor as a ghost line (suggesting mode).
 const insertGhost = (ch) => {
   const tone = ch.grounding && ch.grounding.grounded ? 'src' : 'void';
-  return `<p class="doc-block doc-ghost" data-block="ghost:${esc(ch.id)}"><span class="doc-ins doc-ins-${tone}">${esc(ch.text)}</span></p>`;
+  const tag = TAG[ch.type] || 'p';
+  return `<${tag} class="doc-block${typeCls(ch.type)} doc-ghost" data-block="ghost:${esc(ch.id)}"><span class="doc-ins doc-ins-${tone}">${ch.html || esc(ch.text)}</span></${tag}>`;
 };
 
 // The margin card for one pending change — author, what it grounds to, ✓/✗.
@@ -120,11 +133,37 @@ export const DOC_CSS = `
 .doc-x:hover{background:#f7f8fa;color:#1b1f24}
 .doc-scroll{flex:1;min-height:0;overflow-y:auto;padding:22px 18px 60px}
 .doc-canvas{position:relative;max-width:1040px;margin:0 auto;display:flex;gap:26px;align-items:flex-start}
-.doc-paper{flex:1;min-width:0;max-width:720px;background:#fff;border:1px solid #e6e8ec;border-radius:3px;box-shadow:0 1px 3px rgba(20,24,30,.10),0 10px 30px rgba(20,24,30,.06);padding:56px 68px 80px;min-height:520px}
+.doc-paper{flex:1;min-width:0;max-width:720px;background:#fff;border:1px solid #e6e8ec;border-radius:3px;box-shadow:0 1px 3px rgba(20,24,30,.10),0 10px 30px rgba(20,24,30,.06);padding:56px 68px 80px;min-height:520px;counter-reset:docol}
 .doc-paper[data-mode="editing"] .doc-block{outline:none}
 .doc-paper[data-mode="editing"] .doc-block:hover{background:#fafbfc}
 .doc-block{position:relative;margin:0 0 14px;font-size:15.5px;line-height:1.85;color:#1b1f24;border-radius:3px;padding:1px 2px}
-.doc-block .doc-text{}
+.doc-block:focus{outline:none}
+/* block types */
+.doc-b-h1{font-size:27px;font-weight:800;line-height:1.25;letter-spacing:-.01em;margin:8px 0 10px}
+.doc-b-h2{font-size:21px;font-weight:800;line-height:1.3;margin:6px 0 8px}
+.doc-b-h3{font-size:17px;font-weight:700;line-height:1.35;margin:4px 0 6px}
+.doc-b-quote{border-left:3px solid #d8ccf7;padding:2px 0 2px 15px;color:#5a626d;font-style:italic}
+.doc-b-ul{padding-left:26px}
+.doc-b-ul::before{content:'•';position:absolute;left:8px;color:#5a626d}
+.doc-b-ol{padding-left:30px;counter-increment:docol}
+.doc-b-ol::before{content:counter(docol) '.';position:absolute;left:3px;color:#5a626d;font-variant-numeric:tabular-nums}
+/* inline rich formatting */
+.doc-block b,.doc-block strong{font-weight:700}
+.doc-block i,.doc-block em{font-style:italic}
+.doc-block u{text-decoration:underline}
+.doc-block s,.doc-block strike,.doc-block del{text-decoration:line-through}
+.doc-block a{color:#2563eb;text-decoration:underline;cursor:text}
+/* formatting toolbar (Google-Docs / Gmail set) */
+.doc-toolbar{flex:0 0 auto;display:flex;align-items:center;gap:2px;padding:5px 12px;background:#fff;border-bottom:1px solid #e6e8ec;flex-wrap:wrap;overflow-x:auto}
+.doc-tb-sel{height:28px;border:1px solid #dde0e5;border-radius:6px;background:#fff;font:inherit;font-size:12px;color:#3c4149;padding:0 6px;cursor:pointer;margin-right:3px}
+.doc-tb-btn{min-width:28px;height:28px;border:none;background:transparent;border-radius:6px;color:#3c4149;font-size:13.5px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0 6px}
+.doc-tb-btn:hover{background:#eef0f3}
+.doc-tb-btn.on{background:#e9e2fb;color:#5b34d6}
+.doc-tb-btn b{font-weight:800}.doc-tb-btn i{font-style:italic}.doc-tb-btn u{text-decoration:underline}.doc-tb-btn s{text-decoration:line-through}
+.doc-tb-sep{width:1px;height:18px;background:#e6e8ec;margin:0 5px;flex:0 0 auto}
+.doc-tb-color{position:relative}
+.doc-tb-swatch{width:13px;height:13px;border-radius:3px;border:1px solid rgba(0,0,0,.15)}
+.doc-tb-hint{margin-left:auto;font-size:10.5px;color:#9aa1ab;white-space:nowrap;padding-right:4px}
 .doc-pm{font-size:9px;margin-left:5px;vertical-align:3px;cursor:pointer;user-select:none}
 .doc-pm-src{color:#15803d}
 .doc-pm-void{color:#9aa1ab;cursor:default}
