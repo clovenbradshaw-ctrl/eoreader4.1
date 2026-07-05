@@ -11,6 +11,7 @@ export { parseRelations, headVerb } from './relations.js';
 export { fuzzCeiling, editWithin, fuzzyMatches } from './fuzzy.js';
 export { induceBoundaries }        from './boundaries.js';
 export { segmentClauses, SEED_CLAUSE_BOUNDARY } from './clauses.js';
+export { buildClauses, clauseIndexBySentence, clauseForVerb } from './clause-layer.js';
 export { isChrome, isDegenerate }  from './chrome.js';
 export { frameSpan, isBanner }     from './frame.js';
 export { extractMetadata, splitFields } from './metadata.js';
