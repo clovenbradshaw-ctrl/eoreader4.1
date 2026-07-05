@@ -120,6 +120,19 @@ export const liveView = (log, cursor = null) => {
     return { text: s.question, state: done ? 'done' : reading ? 'reading' : 'queued' };
   });
 
+  // The terms actually under research — the load-bearing DEF terms each frame is
+  // reading against, unioned across the frame tree (root subject first, so the
+  // headline terms lead), with the active frame's current terms flagged so the
+  // panel can show what it is chasing right now. This is the "what is it looking
+  // for" the run never used to name out loud.
+  const activeTerms = new Set((activeFrame?.terms || []).map((t) => String(t).toLowerCase()));
+  const terms = []; const seenTerm = new Set();
+  for (const f of r.frames) for (const t of (f.terms || [])) {
+    const k = String(t).toLowerCase();
+    if (!k || seenTerm.has(k)) continue; seenTerm.add(k);
+    terms.push({ text: t, active: activeTerms.has(k) });
+  }
+
   // the source being read now (the newest pin), and what's been found so far
   const lastPin = r.pins.length ? r.pins[r.pins.length - 1] : null;
   const reading = (lastPin && badge !== 'settled') ? { title: pinName(lastPin), host: pinHost(lastPin), note: 'pulling quotes…' } : null;
@@ -138,7 +151,7 @@ export const liveView = (log, cursor = null) => {
     cursor: at,
     framePanel, grid, coverage: coverageSummary(r), coverageNote: coverageNote(r), path, recMoments,
     // prototype fields
-    query, settle, subs, reading, findings, statusText, phase: badge === 'settled' ? 'done' : 'live',
+    query, settle, subs, terms: terms.slice(0, 16), reading, findings, statusText, phase: badge === 'settled' ? 'done' : 'live',
     questions: r.questions.map(({ ask, answer }) => ({
       id: ask.id, trigger: ask.trigger, text: ask.text, options: ask.options,
       answered: !!answer, reply: answer?.reply ?? null,

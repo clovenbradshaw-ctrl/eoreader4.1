@@ -1885,7 +1885,10 @@ class Component extends DCLogic {
     catch(e){alert('The research module failed to load: '+((e&&e.message)||e));return;}
     if(!this.state.rightShow)this.setState({rightShow:true});   // the panel must be open to dock into
     const dock=document.createElement('div');
-    dock.style.cssText='position:fixed;z-index:60;background:#f5f6f8;border-left:1px solid var(--line,#e5e7eb);box-shadow:-6px 0 18px rgba(0,0,0,.08);overflow:hidden;';
+    // No floating-overlay chrome — it sits exactly over the right panel's column
+    // and reads as that panel (same card background, the panel's own border), not
+    // a shadowed drawer hovering above the app.
+    dock.style.cssText='position:fixed;z-index:20;background:var(--card,#fff);border-left:1px solid var(--line,#e5e7eb);overflow:hidden;';
     document.body.appendChild(dock);
     this._drDock=dock;
     this._positionDrDock();
@@ -1908,7 +1911,10 @@ class Component extends DCLogic {
     const panel=document.getElementById('eo-panel-scroll');
     const r=(panel&&panel.offsetParent!==null)?panel.getBoundingClientRect():null;
     if(r&&r.width>60){dock.style.top=r.top+'px';dock.style.left=r.left+'px';dock.style.right='auto';dock.style.width=r.width+'px';dock.style.height=r.height+'px';}
-    else{dock.style.top='0';dock.style.right='0';dock.style.left='auto';dock.style.width='min(960px,96vw)';dock.style.height='100%';}
+    // Fallback: the right panel isn't laid out (phone / hidden) — a panel-width
+    // column on the right edge, matching the entity panel's width, never a wide
+    // 960px overlay that swamps the app.
+    else{const pw=Math.min(this.state.panelW||380,Math.round((window.innerWidth||420)*0.94));dock.style.top='0';dock.style.right='0';dock.style.left='auto';dock.style.width=pw+'px';dock.style.height='100%';}
   }
   closeDeepResearch(){
     if(this._drDockReposition){window.removeEventListener('resize',this._drDockReposition);this._drDockReposition=null;}
