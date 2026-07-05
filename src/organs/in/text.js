@@ -3,6 +3,7 @@
 // in an adapter that turns its modality into text; the spine stays the same.
 
 import { parseText }    from '../../perceiver/parse/index.js';
+import { buildClauses } from '../../perceiver/parse/index.js';
 import { projectGraph } from '../../core/index.js';
 import { areDisjoint }  from '../../core/index.js';
 import { attachReading } from '../../ingest/index.js';
@@ -62,6 +63,32 @@ export const ingestText = async (file, opts = {}) => {
       vecByOrgan.set(key, compute);
     }
     return vecByOrgan.get(key);
+  };
+
+  // THE CLAUSE LAYER (perceiver/parse/clause-layer.js) — the embedding grain SURF was
+  // designed for. `doc.clauses` is the flat clause sequence with sentence-index
+  // provenance (a compound sentence becomes ≥2 clauses, each remembering its sentIdx);
+  // `doc.clauseEmbeddings` mirrors sentenceEmbeddings but over clause text, so the
+  // meaning paths (retrieval, the deep frame axis, the atmosphere) can measure the
+  // intra-sentence turn a pooled sentence vector averaged away. Cached PER ORGAN for
+  // the same reason (hash- and MiniLM-space vectors are not interchangeable). A
+  // document of simple SVO sentences yields one clause per sentence, so those paths
+  // read exactly what they read before — the layer only adds resolution to compounds.
+  doc.clauses = buildClauses(doc.sentences);
+  const clauseVecByOrgan = new Map();
+  doc.clauseEmbeddings = async (embedder, onProgress) => {
+    const key = embedder?.id || 'default';
+    if (!clauseVecByOrgan.has(key)) {
+      const texts = doc.clauses.map(c => c.text);
+      const total = texts.length;
+      const compute = typeof onProgress === 'function'
+        ? (() => { let done = 0; onProgress({ phase: 'embed', done: 0, total });
+            return Promise.all(texts.map(t => Promise.resolve(embedder.embed(t))
+              .then(v => { onProgress({ phase: 'embed', done: ++done, total }); return v; }))); })()
+        : Promise.all(texts.map(t => embedder.embed(t)));
+      clauseVecByOrgan.set(key, compute);
+    }
+    return clauseVecByOrgan.get(key);
   };
 
   // The predictive read the moment of ingest OWNS: a lazy, memoised `doc.reading()` that
