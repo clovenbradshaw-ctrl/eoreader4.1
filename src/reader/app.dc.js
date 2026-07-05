@@ -2631,11 +2631,22 @@ class Component extends DCLogic {
     let ans=null;
     try{ ans=await M.answerMath(s); }catch(e){ ans=null; }
     if(!ans||!ans.text)return false;   // not a math query, or it didn't evaluate to a finite number
+    // The auditable computation record: the same math.js expression folded step by
+    // step (sqrt(16)=4, then 4×3=12), so the figure carries its working, not just a
+    // bare number. Kept only when its result matches the answer shown — else dropped,
+    // never allowed to disagree with the figure it explains.
+    let rec=null;
+    try{
+      const expr=typeof M.extractExpression==='function'?M.extractExpression(s):null;
+      if(expr&&typeof M.traceExpression==='function') rec=M.traceExpression(expr);
+      const ansNum=(ans.text.split('=').pop()||'').trim();
+      if(!rec||rec.resultText!==ansNum) rec=null;
+    }catch(e){ rec=null; }
     let id=this.state.activeChat;
     this.setState(st=>{let chats=st.chats.slice();let idx=chats.findIndex(c=>c.id===id);
       if(idx<0){id=this.chatId();chats=[{id,title:this.truncLabel(s,40),sources:[],messages:[],ts:Date.now()},...chats];idx=0;}
       const c=chats[idx];const title=c.messages.length?c.title:this.truncLabel(s,40);
-      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:s},{role:'asst',pending:false,text:ans.text,modelNote:'Calculated directly — no model, no web.'}]};
+      chats[idx]={...c,title,messages:[...c.messages,{role:'user',text:s},{role:'asst',pending:false,text:ans.text,mathRecord:rec,modelNote:'Calculated directly — no model, no web.'}]};
       return {chats,activeChat:id,chatInput:''};});
     this._scrollChat();
     return true;
@@ -4301,6 +4312,12 @@ class Component extends DCLogic {
       // keeps the first go (m.firstDraft). The "Revised after a second look" note becomes a toggle
       // that opens the original draft beneath the shown piece — the reader sees what changed.
       const revKey=cur.id+':'+mi+':rev', revOn=!!gOpen[revKey];
+      const mathKey=cur.id+':'+mi+':math', mathOn=!!gOpen[mathKey];
+      // The auditable computation record for a math turn (answer/math.js traceExpression):
+      // engine, expression, the step-by-step fold, operators and operands. Pre-styled here.
+      const mathRec=m.mathRecord||null;
+      const mathRowStyle='font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;color:var(--ink);padding:3px 0;';
+      const mathSteps=mathRec?mathRec.steps.map(st=>({text:st.text,style:mathRowStyle})):[];
       const hasRevision=!isUser&&!m.pending&&!!m.firstDraft&&String(m.firstDraft)!==String(m.text);
       // The RESEARCH TRAIL — the live, step-by-step record of the curiosity walk this turn ran
       // (searched · read · followed a surprising lead · set a strayer aside · done). While the
@@ -4427,6 +4444,19 @@ class Component extends DCLogic {
         relatedMoreStyle:'font-size:10.5px;font-weight:600;color:var(--acc);background:transparent;border:none;cursor:pointer;padding:2px 4px;',
         // The plain note yields to the interactive affordance when there IS a before/after to show.
         hasNote:!!m.modelNote&&!hasRevision,note:(m.modelNote||''),
+        // The computation record — a math figure carries its working, opened on demand.
+        hasMathRecord:!!mathRec,mathRecordOpen:mathOn,onToggleMathRecord:()=>this.toggleGround(mathKey),
+        mathRecordCaret:mathOn?'▾':'▸',
+        mathEngine:mathRec?mathRec.engine:'',mathExpr:mathRec?mathRec.expr:'',mathResultText:mathRec?mathRec.resultText:'',
+        mathOperatorsLabel:mathRec?mathRec.operators.join(' · '):'',
+        mathOperandsLabel:mathRec?mathRec.operands.map(o=>o.text).join(' · '):'',
+        mathSteps,mathHasSteps:mathSteps.length>0,
+        mathToggleStyle:'display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:3px 10px;margin-top:6px;cursor:pointer;',
+        mathPanelStyle:'max-width:80%;margin-top:6px;border:1px solid var(--accline);border-radius:12px;padding:11px 13px;background:var(--accbg);',
+        mathHeadStyle:'display:flex;align-items:center;gap:7px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--acc);margin-bottom:8px;',
+        mathExprStyle:'font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;color:var(--ink);margin-bottom:8px;',
+        mathStepsWrapStyle:'border-top:1px solid var(--accline);padding-top:7px;',
+        mathMetaStyle:'font-size:11px;color:var(--ink3);margin-top:8px;line-height:1.5;',
         hasRevision,revisionOpen:revOn,onToggleRevision:()=>this.toggleGround(revKey),
         revisionLabel:(m.modelNote||'Revised after a second look'),revisionCaret:revOn?'▾':'▸',
         revisionBefore:String(m.firstDraft||''),
@@ -5660,6 +5690,20 @@ class Component extends DCLogic {
   // ── one representative sentence (verbatim) for an entity we can't yet
   // define — the closest thing in the record, kept as a quote with its source
   // rather than dressed up as a definition. ────────────────────────────
+  // The sentence in its immediate context — the neighbours that sit on either
+  // side of it in the same source — so a cited span is read where it lies
+  // (preceding · span · following), not lifted out as a bare quote. Clamped to
+  // the source (never bleeds across a page boundary — the flat sentence array is
+  // document-ordered, so a change of sentenceSource is a page edge) and
+  // word-clipped so the window stays a short, readable frame around the span.
+  _spanContext(i){
+    const S=this.master.sentences,U=this.master.sentenceSource,u=U[i];
+    const clipL=(s,n)=>{ if(s.length<=n) return s; const c=s.slice(s.length-n),sp=c.indexOf(' '); return '… '+(sp>0?c.slice(sp+1):c); };
+    const clipR=(s,n)=>{ if(s.length<=n) return s; const c=s.slice(0,n),sp=c.lastIndexOf(' '); return (sp>0?c.slice(0,sp):c)+' …'; };
+    const before=(i>0&&U[i-1]===u)?clipL(this.stripRefs(this.norm(S[i-1])),150)+' ':'';
+    const after=(i<S.length-1&&U[i+1]===u)?' '+clipR(this.stripRefs(this.norm(S[i+1])),150):'';
+    return {before,after,hasCtx:!!(before||after)};
+  }
   repQuote(id){
     const lab=this.labelOf(id);if(!lab)return null;const ll=lab.toLowerCase();
     const idx=this.mentionsOf(id);if(!idx.length)return null;
@@ -5670,9 +5714,9 @@ class Component extends DCLogic {
       v+=Math.min(1.4,s.length/160);if(s.length>200)v-=0.8;return v;};
     const ranked=idx.map(i=>({i,s:this.norm(this.master.sentences[i])})).filter(o=>o.s&&o.s.length>24&&o.s.length<300&&this._proseOk(o.s)).map(o=>(o.v=score(o.s),o)).sort((a,b)=>b.v-a.v);
     if(!ranked.length)return null;
-    const i=ranked[0].i,u=this.master.sentenceSource[i],p=this.pageOf(u);
+    const i=ranked[0].i,u=this.master.sentenceSource[i],p=this.pageOf(u),cx=this._spanContext(i);
     const fmtDate=ts=>{try{return new Date(ts).toLocaleDateString([],{month:'short',day:'numeric'});}catch(e){return '';}};
-    return {text:ranked[0].s,srcId:this.srcId(u),host:this.short(u),when:p?fmtDate(p.ts):'',hasWhen:!!(p&&p.ts),
+    return {text:ranked[0].s,before:cx.before,after:cx.after,hasCtx:cx.hasCtx,srcId:this.srcId(u),host:this.short(u),when:p?fmtDate(p.ts):'',hasWhen:!!(p&&p.ts),
       jumpUrl:this.tfURL(u,this.master.sentences[i]),onOpen:()=>this.openSource(u),onGo:()=>this._scrollToText(ranked[0].s)};
   }
   // ── citation chips: small numbered markers that sit by a summary and, on
@@ -6121,11 +6165,12 @@ class Component extends DCLogic {
     const REGV={eva:{verb:'reports',fg:'#1d4ed8',bg:'#e8eefc',gl:'\u25A0'},def:{verb:'asserts',fg:'#b45309',bg:'#fbf0db',gl:'\u25C6'},held:{verb:'names',fg:'#6b7280',bg:'#eef0f3',gl:'\u25CB'}};
     const active=this.state.pinSrc||this.state.hoverSrc;
     const fmtDate=ts=>{try{return new Date(ts).toLocaleDateString([],{month:'short',day:'numeric'});}catch(e){return '';}};
-    const rows=subjIdx.map(i=>{const b=this.bandOf(i),u=this.master.sentenceSource[i],p=this.pageOf(u),R=REGV[b]||REGV.held,ch=this.chip(u,active===u);const who=this._sayer(this.master.sentences[i],this.labelOf(id));
+    const rows=subjIdx.map(i=>{const b=this.bandOf(i),u=this.master.sentenceSource[i],p=this.pageOf(u),R=REGV[b]||REGV.held,ch=this.chip(u,active===u);const who=this._sayer(this.master.sentences[i],this.labelOf(id));const cx=this._spanContext(i);
       return {sortw:b==='eva'?0:(b==='def'?1:2),verb:R.verb,glyph:R.gl,who:who||'',hasWho:!!who,
         whoStyle:'display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--ink);background:#fff;border:1px solid var(--line2);border-radius:5px;padding:2px 7px;flex:0 0 auto;',
         regStyle:'display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:'+R.fg+';background:'+R.bg+';border-radius:5px;padding:2px 8px;flex:0 0 auto;',
         srcId:this.srcId(u),host:this.short(u),when:p?fmtDate(p.ts):'',hasWhen:!!(p&&p.ts),
+        before:cx.before,after:cx.after,hasCtx:cx.hasCtx,
         txt:this.stripRefs(this.norm(this.master.sentences[i])),jumpUrl:this.tfURL(u,this.master.sentences[i]),
         onOpen:()=>this.openSource(u),onEnter:()=>this.setHover(u),onLeave:()=>this.setHover(null),chip:ch,
         rowStyle:'padding:10px 13px;border-top:1px solid var(--line);'+((active&&active!==u)?'opacity:.24;transition:opacity .14s;':'opacity:1;transition:opacity .14s;')};});
@@ -7481,10 +7526,11 @@ class Component extends DCLogic {
     // Each register a distinct marker: reports (documented), asserts (intent/claim),
     // names (in passing). Glyph + color + label, kept visibly apart.
     const REGV={eva:{verb:'reports',fg:'#1d4ed8',bg:'#e8eefc',gl:'\u25A0'},def:{verb:'asserts',fg:'#b45309',bg:'#fbf0db',gl:'\u25C6'},held:{verb:'names',fg:'#6b7280',bg:'#eef0f3',gl:'\u25CB'}};
-    const fpRows=subjIdx.map(i=>{const b=this.bandOf(i),u=this.master.sentenceSource[i],p=this.pageOf(u),R=REGV[b]||REGV.held,ch=this.chip(u,active===u);
+    const fpRows=subjIdx.map(i=>{const b=this.bandOf(i),u=this.master.sentenceSource[i],p=this.pageOf(u),R=REGV[b]||REGV.held,ch=this.chip(u,active===u);const cx=this._spanContext(i);
       return {sortw:b==='eva'?0:(b==='def'?1:2),verb:R.verb,glyph:R.gl,
         regStyle:'display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:'+R.fg+';background:'+R.bg+';border-radius:5px;padding:2px 8px;flex:0 0 auto;',
         srcId:this.srcId(u),host:this.short(u),when:p?fmtDate(p.ts):'',hasWhen:!!(p&&p.ts),
+        before:cx.before,after:cx.after,hasCtx:cx.hasCtx,
         txt:this.stripRefs(this.norm(this.master.sentences[i])),jumpUrl:this.tfURL(u,this.master.sentences[i]),
         onOpen:()=>this.openSource(u),onEnter:()=>this.setHover(u),onLeave:()=>this.setHover(null),chip:ch,
         rowStyle:'padding:10px 13px;border-top:1px solid var(--line);'+((active&&active!==u)?'opacity:.24;transition:opacity .14s;':'opacity:1;transition:opacity .14s;')};});

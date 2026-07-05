@@ -44,7 +44,11 @@
     [data-prov="lines"] .eo-prov-assert{border-bottom:1px dotted rgba(208,165,74,.75);}
     [data-prov="lines"] .eo-prov-assert:hover{background:rgba(208,165,74,.14);}
     :root{ --app:#f5f6f8;--card:#fff;--line:#e6e8ec;--line2:#dde0e5;--ink:#1b1f24;--ink2:#5a626d;--ink3:#9aa1ab;
-      --acc:#5b34d6;--accbg:#f1edfc;--accline:#d8ccf7;--web:#2563eb;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+      --acc:#5b34d6;--accbg:#f1edfc;--accline:#d8ccf7;--web:#2563eb;
+      /* provenance palette (shared with the redesign prototypes): green = grounded to a recorded
+         source, amber = flagged / set aside off-topic, accent = the model's own / computed */
+      --grn:#15803d;--grnbg:rgba(21,128,61,.10);--amb:#b45309;--ambbg:#fef3e2;--ambline:#f4d9ad;
+      --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
   </style>
 </helmet>
 
@@ -224,10 +228,10 @@
     <sc-if value="{{ leftShow }}" hint-placeholder-val="{{ true }}">
     <aside style="border-right:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;min-width:0;order:{{ leftOrder }};">
       <div style="padding:11px 13px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:3;">
-        <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;font-weight:600;color:var(--ink2);">Sources</span><span style="font-size:11px;color:var(--ink3);">{{ srcCount }}</span>
+        <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;font-weight:600;color:var(--ink2);">Record</span><span style="font-size:11px;color:var(--ink3);">{{ srcCount }}</span><span title="Nothing enters an answer or a document unrecorded — every read is here, auditable." style="font-size:8.5px;font-weight:700;letter-spacing:.04em;color:var(--grn);background:var(--grnbg);border-radius:5px;padding:1px 6px;">AUDITABLE</span>
           <button onclick="{{ toggleLeft }}" title="Hide panel" style="margin-left:auto;width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">‹</button>
         </div>
-        <div style="font-size:11.5px;color:var(--ink3);margin-top:6px;line-height:1.5;">Every source you’ve read. Click one to open its profile — or “Read” to open the page.</div>
+        <div style="font-size:11.5px;color:var(--ink3);margin-top:6px;line-height:1.5;">Every source you’ve read, recorded and auditable — nothing enters an answer unrecorded. Click one to open its profile, or “Read” to open the page.</div>
       </div>
       <div style="padding:8px 9px;">
         <button onclick="{{ onNewChat }}" title="Start a net-new chat — tag sources or everything you've read from inside it" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="background:var(--card)"><span style="font-size:14px;line-height:1;">✦</span>New chat</button>
@@ -246,7 +250,7 @@
           </sc-for>
         </sc-if>
         <div style="display:flex;align-items:center;gap:6px;padding:8px 4px 4px;">
-          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);">Sources</span>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);">Recorded reads</span>
           <sc-if value="{{ hasSources }}" hint-placeholder-val="{{ false }}">
             <button onclick="{{ onOpenSites }}" title="Browse every source as a profile page" style="{{ sitesDirBtnStyle }}" style-hover="background:var(--accbg);color:var(--acc);border-color:var(--accline)"><span style="font-size:11px;line-height:1;">▦</span>All sites</button>
           </sc-if>
@@ -280,7 +284,7 @@
             <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
           </div>
         </sc-for>
-        <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">No sources yet. Read a URL, import a book, or start a chat above.</div></sc-if>
+        <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">Nothing recorded yet. Read a URL, import a book, or start a chat above.</div></sc-if>
       </div>
     </aside>
     </sc-if>
@@ -443,6 +447,19 @@
                     </sc-if>
                   </sc-if>
                   <sc-if value="{{ m.hasNote }}" hint-placeholder-val="{{ false }}"><div style="{{ m.noteStyle }}">{{ m.note }}</div></sc-if>
+                  <sc-if value="{{ m.hasMathRecord }}" hint-placeholder-val="{{ false }}">
+                    <button onclick="{{ m.onToggleMathRecord }}" title="How this figure was computed — every operation, auditable" style="{{ m.mathToggleStyle }}"><span style="font-style:italic;font-weight:800;">ƒ</span>Computation record<span style="font-size:9px;">{{ m.mathRecordCaret }}</span></button>
+                    <sc-if value="{{ m.mathRecordOpen }}" hint-placeholder-val="{{ false }}">
+                      <div style="{{ m.mathPanelStyle }}">
+                        <div style="{{ m.mathHeadStyle }}"><span style="font-style:italic;">ƒ</span>Computed by {{ m.mathEngine }} · no model, no web</div>
+                        <div style="{{ m.mathExprStyle }}">{{ m.mathExpr }} = <strong>{{ m.mathResultText }}</strong></div>
+                        <sc-if value="{{ m.mathHasSteps }}" hint-placeholder-val="{{ true }}">
+                          <div style="{{ m.mathStepsWrapStyle }}"><sc-for list="{{ m.mathSteps }}" as="st" hint-placeholder-count="2"><div style="{{ st.style }}">{{ st.text }}</div></sc-for></div>
+                        </sc-if>
+                        <div style="{{ m.mathMetaStyle }}">operations: {{ m.mathOperatorsLabel }} · operands: {{ m.mathOperandsLabel }}</div>
+                      </div>
+                    </sc-if>
+                  </sc-if>
                 </div>
               </sc-for>
             </div>
@@ -666,7 +683,7 @@
                         <sc-if value="{{ r.hasWhen }}" hint-placeholder-val="{{ true }}"><span style="font-size:10.5px;color:var(--ink3);">read {{ r.when }}</span></sc-if>
                         <a href="{{ r.jumpUrl }}" target="_blank" title="Jump to the sentence in the source" style="margin-left:auto;font-size:11px;font-weight:600;color:var(--acc);flex:0 0 auto;">go to line →</a>
                       </div>
-                      <div style="font-size:13px;color:var(--ink);line-height:1.5;">“{{ r.txt }}”</div>
+                      <div style="font-size:13px;color:var(--ink3);line-height:1.62;">{{ r.before }}<span style="color:var(--ink);background:var(--grnbg);box-shadow:inset 2px 0 0 var(--grn);border-radius:2px;padding:1px 3px;">{{ r.txt }}</span>{{ r.after }}</div>
                     </div>
                   </sc-for>
                   <sc-if value="{{ fp.hasMore }}" hint-placeholder-val="{{ false }}">
@@ -1237,6 +1254,19 @@
                   </sc-if>
                 </sc-if>
                 <sc-if value="{{ m.hasNote }}" hint-placeholder-val="{{ false }}"><div style="{{ m.noteStyle }}">{{ m.note }}</div></sc-if>
+                <sc-if value="{{ m.hasMathRecord }}" hint-placeholder-val="{{ false }}">
+                  <button onclick="{{ m.onToggleMathRecord }}" title="How this figure was computed — every operation, auditable" style="{{ m.mathToggleStyle }}"><span style="font-style:italic;font-weight:800;">ƒ</span>Computation record<span style="font-size:9px;">{{ m.mathRecordCaret }}</span></button>
+                  <sc-if value="{{ m.mathRecordOpen }}" hint-placeholder-val="{{ false }}">
+                    <div style="{{ m.mathPanelStyle }}">
+                      <div style="{{ m.mathHeadStyle }}"><span style="font-style:italic;">ƒ</span>Computed by {{ m.mathEngine }} · no model, no web</div>
+                      <div style="{{ m.mathExprStyle }}">{{ m.mathExpr }} = <strong>{{ m.mathResultText }}</strong></div>
+                      <sc-if value="{{ m.mathHasSteps }}" hint-placeholder-val="{{ true }}">
+                        <div style="{{ m.mathStepsWrapStyle }}"><sc-for list="{{ m.mathSteps }}" as="st" hint-placeholder-count="2"><div style="{{ st.style }}">{{ st.text }}</div></sc-for></div>
+                      </sc-if>
+                      <div style="{{ m.mathMetaStyle }}">operations: {{ m.mathOperatorsLabel }} · operands: {{ m.mathOperandsLabel }}</div>
+                    </div>
+                  </sc-if>
+                </sc-if>
               </div>
             </sc-for>
           </div>
@@ -1331,7 +1361,7 @@
           <sc-if value="{{ panelProfile.isQuote }}" hint-placeholder-val="{{ false }}">
             <div style="margin-top:11px;border:1px solid var(--line2);border-left:3px solid var(--accline);border-radius:10px;padding:11px 13px;background:#fafbfc;">
               <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:6px;">No definition yet · representative passage</div>
-              <div style="font-size:13px;color:var(--ink);line-height:1.55;">“{{ panelProfile.rep.text }}”</div>
+              <div style="font-size:13px;color:var(--ink3);line-height:1.6;">{{ panelProfile.rep.before }}<span style="color:var(--ink);background:var(--grnbg);box-shadow:inset 2px 0 0 var(--grn);border-radius:2px;padding:1px 3px;">{{ panelProfile.rep.text }}</span>{{ panelProfile.rep.after }}</div>
               <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px;">
                 <span onclick="{{ panelProfile.rep.onOpen }}" title="Open the source" style="font-size:10.5px;font-weight:700;color:var(--acc);cursor:pointer;">— {{ panelProfile.rep.srcId }} · {{ panelProfile.rep.host }}</span>
                 <sc-if value="{{ panelProfile.rep.hasWhen }}" hint-placeholder-val="{{ true }}"><span style="font-size:10px;color:var(--ink3);">read {{ panelProfile.rep.when }}</span></sc-if>
@@ -1498,7 +1528,7 @@
                       <span onclick="{{ r.onOpen }}" title="Open the source" style="{{ r.chip.style }}"><span style="{{ r.chip.dot }}"></span>{{ r.srcId }}</span>
                       <sc-if value="{{ r.hasWhen }}" hint-placeholder-val="{{ true }}"><span style="font-size:10px;color:var(--ink3);">read {{ r.when }}</span></sc-if>
                     </div>
-                    <div style="font-size:12.5px;color:var(--ink);line-height:1.5;">“{{ r.txt }}”</div>
+                    <div style="font-size:12.5px;color:var(--ink3);line-height:1.6;">{{ r.before }}<span style="color:var(--ink);background:var(--grnbg);box-shadow:inset 2px 0 0 var(--grn);border-radius:2px;padding:1px 3px;">{{ r.txt }}</span>{{ r.after }}</div>
                     <a href="{{ r.jumpUrl }}" target="_blank" title="Jump to the sentence in the source" style="display:inline-block;font-size:10.5px;font-weight:600;color:var(--acc);margin-top:5px;">go to line →</a>
                   </div>
                 </sc-for>

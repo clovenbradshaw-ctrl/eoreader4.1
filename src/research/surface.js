@@ -102,6 +102,14 @@ const SURFACE_CSS = `
 .drs-cell.on{border-style:solid;background:#eff6ff;border-color:#bfdbfe;color:#1a1c20}
 .drs-cell.cor{background:#dcfce7;border-color:#86efac}
 .drs-cell.con{background:#fef3c7;border-color:#fcd34d}
+.drs-cov{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.drs-cov-cell{border:1px solid #e6e8ec;border-radius:9px;padding:8px 9px;background:#fff}
+.drs-cov-cell.grn{background:rgba(21,128,61,.10)}
+.drs-cov-cell.amb{background:#fef3e2;border-color:#f4d9ad}
+.drs-cov-cell.acc{background:#f1edfc}
+.drs-cov-v{font-size:17px;font-weight:800;line-height:1}
+.drs-cov-l{font-size:9.5px;color:#9aa1ab;margin-top:4px;line-height:1.2}
+.drs-covnote{margin-top:8px;line-height:1.5}
 .drs-feed{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#5b6572;max-height:180px;overflow-y:auto;margin:0;padding-left:18px}
 .drs-feed li{margin:2px 0}
 .drs-ask{border:1px solid #c7d2fe;background:#eef2ff;border-radius:10px;padding:11px 13px;margin:9px 0}
@@ -215,8 +223,9 @@ export const mountResearchSurface = (el, opts = {}) => {
           <div class="drs-frame-terms"></div>
           <div class="drs-strainbar"><div style="width:0%"></div></div>
           <div class="drs-hint">how settled the picture is · <span class="drs-badgechip"></span></div>
-          <label>What's been covered</label>
-          <div class="drs-grid9"></div>
+          <label>Coverage so far</label>
+          <div class="drs-cov"></div>
+          <div class="drs-covnote drs-hint"></div>
         </div>
         <div class="drs-panel">
           <label style="margin-top:0">What it's reading</label>
@@ -303,8 +312,10 @@ export const mountResearchSurface = (el, opts = {}) => {
     const chip = $('.drs-badgechip');
     chip.textContent = v.badge;
     chip.style.background = { settled: '#dcfce7', converging: '#dcfce7', contested: '#fef3c7', thrash: '#fee2e2', open: '#e0e7ff' }[v.badge] || '#e0e7ff';
-    $('.drs-grid9').innerHTML = v.grid.map((c) =>
-      `<div class="drs-cell ${c.state === 'empty' ? '' : c.state === 'corroborated' ? 'on cor' : c.state === 'contested' ? 'on con' : 'on'}" title="${esc(c.label)}"><b>${c.op}</b> ${c.count || '—'}</div>`).join('');
+    const covColor = { ink: '#1b1f24', ink2: '#5a626d', ink3: '#9aa1ab', grn: '#15803d', amb: '#b45309', acc: '#5b34d6' };
+    $('.drs-cov').innerHTML = v.coverage.map((c) =>
+      `<div class="drs-cov-cell ${c.tone === 'grn' ? 'grn' : c.tone === 'amb' ? 'amb' : c.tone === 'acc' ? 'acc' : ''}"><div class="drs-cov-v" style="color:${covColor[c.tone] || '#1b1f24'}">${esc(String(c.value))}</div><div class="drs-cov-l">${esc(c.label)}</div></div>`).join('');
+    $('.drs-covnote').textContent = v.coverageNote;
     const last = log[log.length - 1];
     if (last) {
       const li = document.createElement('li');

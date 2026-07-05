@@ -9,7 +9,7 @@
 // because the report IS the log made visible.
 
 import { spanAnchor } from '../archive/pin.js';
-import { describeEvent } from './live.js';
+import { describeEvent, coverageSummary, coverageNote } from './live.js';
 import { OPERATORS } from '../core/operators.js';
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -43,7 +43,7 @@ export const renderReportFragment = (report, { title = null } = {}) => {
   h.push(`<span>${r.pins.length} pinned source${r.pins.length === 1 ? '' : 's'}</span>`);
   h.push(`<span>${r.propositions.length} grounded proposition${r.propositions.length === 1 ? '' : 's'}</span>`);
   h.push(`<span>${r.recs.length} reframing${r.recs.length === 1 ? '' : 's'}</span>`);
-  if (r.verify.sections) h.push(`<span>VERIFY: ${r.verify.bound}/${r.verify.sentences} sentences bind, ${r.verify.glue} glue, ${r.verify.dropped} dropped</span>`);
+  if (r.verify.sections) h.push(`<span>${r.verify.bound} of ${r.verify.sentences} sentence${r.verify.sentences === 1 ? '' : 's'} bound to a passage · ${r.verify.glue} connective${r.verify.dropped ? ` · ${r.verify.dropped} dropped` : ''}</span>`);
   h.push(`</div></header>`);
 
   // Sections — the frame tree, evidence in significance order. The FIRST root
@@ -106,15 +106,20 @@ export const renderReportFragment = (report, { title = null } = {}) => {
     h.push(`</section>`);
   }
 
-  // The coverage grid — the cube's Act face, empty cells triaged, residue named.
-  h.push(`<section class="dr-coverage"><h2>Coverage — the cube</h2><div class="dr-grid">`);
-  for (const op of Object.keys(OPERATORS)) {
-    const n = r.coverage.actFace[op] || 0;
-    h.push(`<div class="dr-cell ${n ? 'dr-cell-full' : 'dr-cell-empty'}" title="${esc(OPERATORS[op].label)}"><b>${op}</b><span>${n || '—'}</span></div>`);
+  // Coverage — the operator-code grid rewritten in plain language: claims found,
+  // how many bind to a real quote, the model's connective glue, what was set
+  // aside, sources read, and the share of the answer bound to the record. Same
+  // fold the cube reads, said the way a person asks after a run.
+  h.push(`<section class="dr-coverage"><h2>Coverage</h2><div class="dr-cov">`);
+  for (const c of coverageSummary(r)) {
+    h.push(`<div class="dr-cov-cell dr-cov-${c.tone}"><b>${esc(String(c.value))}</b><span>${esc(c.label)}</span></div>`);
   }
   h.push(`</div>`);
+  h.push(`<p class="dr-covnote">${esc(coverageNote(r))}</p>`);
+  // The cube's empty cells and residue stay as honest QA — what the run did not
+  // reach — but they no longer front the coverage read.
   if (r.coverage.emptyCells.length) {
-    h.push(`<p class="dr-gaps">Empty cells: ${r.coverage.emptyCells.map((c) => `<b>${c.op}</b> (${esc(c.triage)})`).join(' · ')}. Each is a triaged absence or a gap to research — not a smoothing-over.</p>`);
+    h.push(`<p class="dr-gaps">Unreached facets of the cube: ${r.coverage.emptyCells.map((c) => `<b>${c.op}</b> (${esc(c.triage)})`).join(' · ')} — each a triaged absence or a gap to research, not a smoothing-over.</p>`);
   }
   if (r.coverage.residue.length) {
     h.push(`<p class="dr-residue">Residue — off the Object diagonal, the frame is incomplete: ${r.coverage.residue.map((x) => `${esc(x.propId)} (${esc(x.reason)})`).join('; ')}.</p>`);
@@ -173,6 +178,19 @@ export const REPORT_CSS = `
 .dr-cell{border:1px solid #e5e7eb;border-radius:7px;text-align:center;padding:6px 2px;font-size:11px;display:flex;flex-direction:column;gap:2px}
 .dr-cell-full{background:#eff6ff;border-color:#bfdbfe}
 .dr-cell-empty{color:#9aa2ad;border-style:dashed}
+.dr-cov{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;font-family:ui-monospace,Menlo,monospace}
+.dr-cov-cell{border:1px solid #e5e7eb;border-radius:9px;padding:9px 11px;background:#fff;display:flex;flex-direction:column;gap:4px}
+.dr-cov-cell b{font-size:19px;font-weight:800;line-height:1}
+.dr-cov-cell span{font-size:10.5px;color:#9aa2ad;line-height:1.2}
+.dr-cov-grn{background:#dcfce7;border-color:#bbf7d0}
+.dr-cov-grn b{color:#166534}
+.dr-cov-amb{background:#fff7ed;border-color:#fed7aa}
+.dr-cov-amb b{color:#b45309}
+.dr-cov-acc{background:#eef2ff;border-color:#c7d2fe}
+.dr-cov-acc b{color:#4338ca}
+.dr-cov-ink2 b{color:#5a626d}
+.dr-cov-ink3 b{color:#9aa1ab}
+.dr-covnote{font-size:12.5px;color:#5b6572;margin:9px 0 0;line-height:1.5}
 .dr-gaps,.dr-residue{font-size:12.5px;color:#5b6572}
 .dr-residue{color:#991b1b}
 .dr-questions ul{list-style:none;padding:0}
@@ -184,7 +202,7 @@ export const REPORT_CSS = `
 .dr-trace summary{cursor:pointer;font-weight:600}
 .dr-trace ol{margin:8px 0 0;padding-left:26px}
 .dr-trace code{background:#f1f5f9;border-radius:4px;padding:0 5px;margin-right:5px}
-@media (max-width:640px){.dr-grid{grid-template-columns:repeat(3,1fr)}}
+@media (max-width:640px){.dr-grid{grid-template-columns:repeat(3,1fr)}.dr-cov{grid-template-columns:repeat(2,1fr)}}
 `;
 
 // The standalone artifact: one self-contained HTML file, evidence embedded, so

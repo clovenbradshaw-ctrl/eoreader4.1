@@ -13,6 +13,46 @@ import { projectReport } from './project.js';
 import { RKIND } from './events.js';
 import { OPERATORS } from '../core/operators.js';
 
+// The coverage read in PLAIN LANGUAGE — the operator-code grid (NUL/SEG/DEF/…)
+// rewritten as the shape a person actually asks after a research run: how many
+// claims were found, how many bind to a real quote, how much is the model's
+// connective glue, what was set aside as a measured absence, how many sources,
+// and the share of the answer bound to the record. Robust across stages: before
+// a model phrases the sections there is no glue yet, so every grounded claim
+// reads as bound; once phrased, the bound/glue split IS the honest VERIFY line.
+// Same numbers, no jargon — a projection of the same fold the grid reads.
+export const coverageSummary = (r) => {
+  const phrased = r.verify.sentences > 0;
+  const claims = phrased ? r.verify.sentences : r.propositions.length;
+  const grounded = phrased ? r.verify.bound : r.propositions.length;
+  const glue = r.verify.glue;
+  const aside = r.voids.length;
+  const sources = r.pins.length || r.reads.length;
+  const pct = claims ? Math.round((grounded / claims) * 100) : 0;
+  return [
+    { key: 'claims',   value: claims,       label: 'claims found',        tone: 'ink'  },
+    { key: 'grounded', value: grounded,     label: 'grounded to a quote', tone: 'grn'  },
+    { key: 'glue',     value: glue,         label: 'connective glue',     tone: 'ink2' },
+    { key: 'aside',    value: aside,        label: 'set aside',           tone: aside ? 'amb' : 'ink3' },
+    { key: 'sources',  value: sources,      label: 'sources read',        tone: 'ink'  },
+    { key: 'pct',      value: pct + '%',    label: 'bound to the record', tone: 'acc'  },
+  ];
+};
+
+// The one-line plain-language gloss under the coverage tiles — what the numbers
+// mean, so the grid never needs a legend of codes.
+export const coverageNote = (r) => {
+  const done = r.convergence.badge === 'settled' || r.convergence.badge === 'converging';
+  const aside = r.voids.length;
+  const asidePhrase = aside
+    ? ` ${aside} absence${aside === 1 ? ' was' : 's were'} recorded and set aside, never silently mixed in.`
+    : '';
+  return (done
+    ? 'Every claim that made the answer binds to a quote you can open. Connective glue is the model’s own words, marked as such.'
+    : 'Grounded claims bind to an exact quote you can open. Connective glue is the model’s own words, marked. Absences are set aside, never smoothed over.')
+    + asidePhrase;
+};
+
 export const liveView = (log, cursor = null) => {
   const r = projectReport(log, cursor);
   const at = r.cursor;
@@ -57,7 +97,7 @@ export const liveView = (log, cursor = null) => {
 
   return {
     cursor: at,
-    framePanel, grid, path, recMoments,
+    framePanel, grid, coverage: coverageSummary(r), coverageNote: coverageNote(r), path, recMoments,
     questions: r.questions.map(({ ask, answer }) => ({
       id: ask.id, trigger: ask.trigger, text: ask.text, options: ask.options,
       answered: !!answer, reply: answer?.reply ?? null,
