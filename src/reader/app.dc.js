@@ -26,11 +26,14 @@ class Component extends DCLogic {
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
     this.state={ ready:false, engineErr:null, pages:[], selId:null, siteView:null, sitesDir:false, docView:null, dataView:null, query:'', url:'', busy:false, feed:[],
       // Corpus search — the smartest-possible-grep surface (docs/corpus-search.md): a query
-      // typed here retrieves ranked passages from EVERY source read, embedder-free (lexical
-      // token overlap + fuzzy spelling), never touching a model. corpusResultsQuery names the
-      // query the current corpusResults actually answer, so a debounced in-flight search never
-      // renders a stale hit list under the newly-typed text.
+      // typed here retrieves ranked passages from EVERY source read. The lexical channel
+      // (token overlap + fuzzy spelling) is always on and needs no model. Meaning search
+      // (semanticOn) is opt-in — it warms the MiniLM embedder (a CDN download) and folds in
+      // a second channel that finds paraphrases with no shared words. corpusResultsQuery
+      // names the query the current corpusResults actually answer, so a debounced or
+      // still-embedding in-flight search never renders a stale hit list under newly-typed text.
       corpusQuery:'', corpusResults:null, corpusResultsQuery:'',
+      semanticOn:false, semStatus:'', semDone:0, semTotal:0,
       // In-flight imports — a file starts here THE MOMENT it's picked, so it shows in the
       // Sources panel instantly (with a live "what it's doing" status) instead of only
       // appearing once the slow extractor — whisper, pdf.js, Tesseract — has finished. Each:
@@ -515,6 +518,10 @@ class Component extends DCLogic {
     // page is folded (the curiosity walk's entity-count, feed research) throws. rebuild([]) is
     // the same call tossPage makes when the last source is removed, so it is known-safe empty.
     try{ this.rebuild([]); }catch(e){}
+    // Resume meaning search across a reload — it only re-warms the embedder and re-indexes
+    // (nothing to lose by waiting a tick), so this rides after the empty rebuild rather than
+    // blocking engine boot on a model download.
+    try{ if(localStorage.getItem('eo_semsearch')==='1') this.enableSemanticSearch().catch(()=>{}); }catch(e){}
     try{ this.SVO=await import(__res.eoSvo||'./svo-llm.js'); }catch(e){ this.SVO=null; }
     const llmAvail=!!(this.SVO && typeof window!=='undefined' && window.claude && typeof window.claude.complete==='function');
     this.setState({ready:true, llmAvail, llm:llmAvail});
@@ -862,6 +869,11 @@ class Component extends DCLogic {
       get tokensBySentence(){return _tokCache||(_tokCache=m.sentences.map(_tok));}};
     this.graph=this.E.projectGraph(shim,{cursor:Math.max(0,m.sentences.length-1),rules:this.E.DEFAULT_PROJECTION_RULES});
     this.incident=new Map();for(const e of this.graph.edges){for(const id of [e.from,e.to])this.incident.set(id,(this.incident.get(id)||0)+(e.weight||0));}
+    // A source was added/removed/muted — the sentence list just changed under the semantic
+    // index. Vectors are cached by TEXT (stable across the reshuffle), so this only ever
+    // has NEW sentences left to embed; restarting the loop finds them via the fresh scan
+    // at its top and supersedes any pass still running (the token bump).
+    if(this.state&&this.state.semanticOn&&this._semEmbedder)this._buildSemanticIndex();
   }
   async readURL(url,via,parent,opts){
     if(!this.E)return false;
@@ -6083,15 +6095,15 @@ class Component extends DCLogic {
     return {text:ranked[0].s,before:cx.before,after:cx.after,hasCtx:cx.hasCtx,srcId:this.srcId(u),host:this.short(u),when:p?fmtDate(p.ts):'',hasWhen:!!(p&&p.ts),
       jumpUrl:this.tfURL(u,this.master.sentences[i]),onOpen:()=>this.openSource(u),onGo:()=>this._scrollToText(ranked[0].s)};
   }
-  // ── corpus search: the smartest-possible-grep surface, no LLM in the loop ──────────
-  // A query here does not ask a model anything — it runs the engine's own lexical
-  // retrieval (src/retrieve/lexical.js: exact token overlap, widened at the edges by a
-  // fuzzy edit-distance match so a misspelling or a near-miss inflection still hits,
-  // never a phantom) against `_logDoc`, the single merged corpus rebuild() already
-  // maintains across every source read so far. One call surfaces the best-matching
-  // passages from all hundred documents at once — sub-millisecond, offline, auditable.
-  // Lazily loaded (module code, not a model) and cached — src/retrieve/lexical.js has
-  // no network dependency, so this never blocks on anything warming up.
+  // ── corpus search: the smartest-possible-grep surface ──────────────────────────────
+  // The lexical channel — src/retrieve/lexical.js: exact token overlap, widened at the
+  // edges by a fuzzy edit-distance match so a misspelling or near-miss inflection still
+  // hits, never a phantom — is ALWAYS on and asks no model anything. It runs against
+  // `_logDoc`, the single merged corpus rebuild() already maintains across every source
+  // read so far, so one call surfaces the best-matching passages from every document at
+  // once — sub-millisecond, offline, auditable. Lazily loaded (module code, not a model),
+  // and src/retrieve/lexical.js has no network dependency, so this never blocks on
+  // anything warming up. Meaning search (below) is a separate, opt-in second channel.
   async _ensureRetrieveMod(){
     if(!this._RT)this._RT=await import(new URL('src/retrieve/lexical.js',document.baseURI).href);
     return this._RT;
@@ -6110,9 +6122,25 @@ class Component extends DCLogic {
   }
   async _doCorpusSearch(query){
     if(!this.master||!this.master.sentences.length){this.setState({corpusResults:[],corpusResultsQuery:query});return;}
-    let hits=[];
-    try{ const {retrieveLexical}=await this._ensureRetrieveMod(); hits=retrieveLexical(this._logDoc,query,120); }catch(e){ hits=[]; }
+    let lexHits=[];
+    try{ const {retrieveLexical}=await this._ensureRetrieveMod(); lexHits=retrieveLexical(this._logDoc,query,120); }catch(e){ lexHits=[]; }
     if((this.state.corpusQuery||'').trim()!==query)return;   // the query moved on — drop this stale answer
+    const semScores=await this._semanticScores(query);       // Map<idx,cosine> — empty unless meaning search is on and warm
+    if((this.state.corpusQuery||'').trim()!==query)return;
+    const clamp01=x=>x<0?0:x>1?1:x;
+    const byIdx=new Map();
+    for(const r of lexHits)byIdx.set(r.idx,{lex:clamp01(r.score),sem:0});
+    if(semScores.size){
+      // The cosine pass already scored every embedded sentence — keep only its strongest
+      // hits so the merge isn't flooded with near-zero noise from an unrelated majority.
+      const topSem=[...semScores.entries()].sort((a,b)=>b[1]-a[1]).slice(0,120);
+      for(const [idx,s] of topSem){const c=byIdx.get(idx)||{lex:0,sem:0};c.sem=Math.max(c.sem,clamp01(s));byIdx.set(idx,c);}
+    }
+    // Noisy-OR concordance (src/retrieve/hybrid.js#fuseConcordance): agreement between the
+    // two channels compounds, a lone strong channel is preserved, a lone weak one stays weak.
+    const hits=[...byIdx.entries()]
+      .map(([idx,c])=>({idx,score:1-(1-c.lex)*(1-c.sem),kind:c.lex>0&&c.sem>0?'lex+sem':(c.lex>0?'lex':'sem')}))
+      .sort((a,b)=>b.score-a.score).slice(0,120);
     this.setState({corpusResults:hits,corpusResultsQuery:query});
   }
   // Rank → view rows. Caps any one source at a handful of hits so a long book a query
@@ -6133,8 +6161,90 @@ class Component extends DCLogic {
       const text=this.stripRefs(this.norm(this.master.sentences[r.idx]));
       return {key:'cs'+r.idx,pct:Math.round(Math.min(1,r.score)*100),text,before:cx.before,after:cx.after,hasCtx:cx.hasCtx,
         host:this.short(u),title:this.truncLabel((p&&p.title)||this.short(u),40),
+        // A pure-'sem' hit shares no vocabulary with the query at all — the only reason it's
+        // here is the meaning channel, so it's worth flagging (a bare snippet with none of the
+        // typed words would otherwise look like a mistake, not a paraphrase caught on purpose).
+        isSemOnly:r.kind==='sem',
         onOpen:()=>this._goToPassage(u,text)};
     });
+  }
+  // ── meaning search: opt-in, since it downloads a real embedding model ──────────────
+  // Off by default — search stays pure lexical + fuzzy, zero network, always. Turning
+  // this on warms the MiniLM sentence embedder (src/reader/eo/embed.js — a ~25-50MB
+  // download from a CDN, cached by the browser after the first load; NOT a generative
+  // model, it only maps a sentence to a point in meaning-space) and starts a BACKGROUND
+  // pass that embeds every sentence in the corpus once, batched across ticks so it never
+  // blocks typing or reading. Vectors are cached by sentence TEXT (stable across a
+  // rebuild(), which renumbers indices whenever a source is added, removed, or muted), so
+  // a source already indexed is never re-embedded. Search itself never waits on the index
+  // — it scores against whatever fraction is embedded so far and folds in more coverage
+  // as later batches land (an in-flight query is re-run after each batch).
+  async enableSemanticSearch(){
+    if(this.state.semanticOn)return;
+    try{localStorage.setItem('eo_semsearch','1');}catch(e){}
+    this._semVecByText=this._semVecByText||new Map();
+    this.setState({semanticOn:true,semStatus:'warming…',semDone:0,semTotal:0});
+    let embedder;
+    try{
+      embedder=await this._getEmbedder();
+      if(!embedder.isWarm()){
+        await embedder.warm(p=>{const pct=Math.round((p&&p.progress)||0);this.setState({semStatus:'downloading the meaning model… '+pct+'%'});});
+      }
+    }catch(e){
+      this.setState({semanticOn:false,semStatus:''});
+      this.feedLine('warn','Could not warm the meaning model — staying lexical-only.');
+      return;
+    }
+    this._semEmbedder=embedder;
+    this.setState({semStatus:'indexing…'});
+    this._buildSemanticIndex();
+  }
+  disableSemanticSearch(){
+    try{localStorage.setItem('eo_semsearch','0');}catch(e){}
+    this._semBuildToken=(this._semBuildToken||0)+1;   // supersede any in-flight indexing pass
+    this.setState({semanticOn:false,semStatus:''});
+  }
+  // The background loop: a small batch of un-embedded sentences per tick, yielding to the
+  // event loop between batches so a long corpus never freezes the UI. A fresh call (a new
+  // source read, or a re-arm after enableSemanticSearch) bumps the token, which makes any
+  // OLDER loop still mid-batch exit at its next checkpoint rather than race the new one.
+  async _buildSemanticIndex(){
+    const token=(this._semBuildToken=(this._semBuildToken||0)+1);
+    const embedder=this._semEmbedder; if(!embedder)return;
+    const sentences=(this.master&&this.master.sentences)||[];
+    const queue=sentences.filter(s=>s&&!this._semVecByText.has(s));
+    const already=sentences.length-queue.length;
+    this.setState({semTotal:sentences.length,semDone:already,semStatus:queue.length?'indexing…':'ready'});
+    const BATCH=8;
+    for(let qi=0;qi<queue.length;qi+=BATCH){
+      if(this._semBuildToken!==token)return;             // superseded — a newer pass took over
+      const batch=queue.slice(qi,qi+BATCH);
+      for(const s of batch){
+        if(this._semBuildToken!==token)return;
+        try{ this._semVecByText.set(s,await embedder.embed(s)); }
+        catch(e){ this._semVecByText.set(s,null); }
+      }
+      this.setState({semDone:Math.min(sentences.length,already+qi+batch.length)});
+      if((this.state.corpusQuery||'').trim())this._doCorpusSearch(this.state.corpusQuery.trim());
+      await new Promise(r=>setTimeout(r,0));
+    }
+    if(this._semBuildToken===token)this.setState({semStatus:'ready'});
+  }
+  // Cosine over whatever's embedded so far — MiniLM vectors are already L2-normalised
+  // (eo/embed.js: `normalize: true`), so a dot product IS the cosine. Returns an empty
+  // Map (a pure no-op) whenever meaning search is off or the embedder isn't warm yet, so
+  // callers never need their own on/off branch.
+  async _semanticScores(query){
+    const out=new Map();
+    if(!this.state.semanticOn||!this._semEmbedder||!this._semEmbedder.isWarm()||!this._semVecByText)return out;
+    let qVec; try{ qVec=await this._semEmbedder.embed(query); }catch(e){ return out; }
+    const sentences=(this.master&&this.master.sentences)||[];
+    for(let i=0;i<sentences.length;i++){
+      const v=this._semVecByText.get(sentences[i]); if(!v)continue;
+      let d=0;const n=Math.min(qVec.length,v.length);for(let k=0;k<n;k++)d+=qVec[k]*v[k];
+      out.set(i,d);
+    }
+    return out;
   }
   // ── citation chips: small numbered markers that sit by a summary and, on
   // hover, reveal the exact source sentence + who + when the fold drew on. ─
@@ -7756,6 +7866,18 @@ class Component extends DCLogic {
       onCorpusClear:()=>this.runCorpusSearch(''),corpusActive:!!(this.state.corpusQuery||'').trim(),
       browseMode:!(this.state.corpusQuery||'').trim(),
       corpusResults:this._corpusResultRows(),corpusCount:0,hasCorpusResults:false,corpusEmpty:false,
+      // Meaning search toggle — off by default (see enableSemanticSearch). The button
+      // itself carries the live status once on: warming the model, indexing progress, or
+      // steady "ready", so the cost of turning it on is never a silent, unexplained wait.
+      semanticOn:!!this.state.semanticOn,
+      onToggleSemantic:()=>this.state.semanticOn?this.disableSemanticSearch():this.enableSemanticSearch(),
+      semTitle:this.state.semanticOn?'Meaning search is on — passages with no shared words can still match. Click to turn off.':'Turn on meaning search — finds paraphrases with no shared words. Downloads a small embedding model (not an LLM) once.',
+      semBtnLabel:this.state.semanticOn?'Meaning search · on':'Meaning search',
+      semBtnStyle:'display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;border-radius:6px;padding:4px 8px;cursor:pointer;letter-spacing:.02em;'+(this.state.semanticOn?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink3);background:transparent;border:1px solid var(--line2);'),
+      semShowProgress:!!(this.state.semanticOn&&this.state.semStatus&&this.state.semStatus!=='ready'),
+      semProgressLabel:(this.state.semStatus==='indexing…'&&this.state.semTotal>0)
+        ?(Math.round(100*(this.state.semDone||0)/this.state.semTotal)+'% indexed ('+(this.state.semDone||0)+'/'+this.state.semTotal+')')
+        :(this.state.semStatus||''),
       // Transcription option — a second whisper witness so audio/video readings can be audited.
       audioAudit:!!this.state.audioAudit,onToggleAudioAudit:()=>this.setState(s=>({audioAudit:!s.audioAudit})),
       audioAuditStyle:'display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;border-radius:7px;padding:5px 9px;cursor:pointer;border:1px solid '+(this.state.audioAudit?'var(--accline)':'var(--line2)')+';background:'+(this.state.audioAudit?'var(--accbg)':'var(--app)')+';color:'+(this.state.audioAudit?'var(--acc)':'var(--ink3)')+';',
