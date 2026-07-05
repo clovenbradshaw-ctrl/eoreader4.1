@@ -2095,6 +2095,15 @@ class Component extends DCLogic {
       body.appendChild(sec);
     }
 
+    // Manual merge/split — the reader's own hand, not only the pairs the reading
+    // auto-flagged. Pick any two figures (differently-spelled names, a single
+    // document, whatever the auto-detection missed) and merge or split them; the
+    // same recordIdentityJudgment call the buttons above use, so it carries the
+    // same weight and rides the same physics (core/project.js) either way.
+    const mergeSec=document.createElement('div');mergeSec.style.cssText='margin-bottom:14px;';
+    body.appendChild(mergeSec);
+    this._renderMergeSection(mergeSec);
+
     // The figure itself.
     try{
       const L=this._LIMN||(this._LIMN=await import(new URL('src/organs/out/limner/index.js',document.baseURI).href));
@@ -2118,6 +2127,60 @@ class Component extends DCLogic {
       p.style.cssText='font-size:12px;color:var(--ink3,#999);';
       body.appendChild(p);
     }
+  }
+  // Manual merge/split picker — a plain click-to-select list of every figure in
+  // the graph, capped at two at a time. Repainted on its own (never touches the
+  // limner figure or re-fetches it) so picking a figure is instant. Selecting a
+  // third drops the oldest, so the picker never needs an explicit "clear" step
+  // to start a new pair — the explicit Clear button covers changing your mind
+  // mid-pick without merging or splitting anything.
+  _renderMergeSection(container){
+    if(!container)return;
+    container.innerHTML='';
+    const g=this.graph; if(!g||!g.entities)return;
+    const sel=this._mergeSel||(this._mergeSel=[]);
+    const h=document.createElement('div');h.textContent='Merge or split figures';
+    h.style.cssText='font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3,#999);margin-bottom:6px;';
+    container.appendChild(h);
+    const hint=document.createElement('div');
+    hint.textContent=sel.length?('Selected: '+sel.map(id=>this.labelOf(id)||id).join('  ≟  ')):'Pick any two figures below to merge them into one, or mark them distinct.';
+    hint.style.cssText='font-size:11.5px;color:var(--ink3,#999);margin-bottom:6px;';
+    container.appendChild(hint);
+    if(sel.length===2){
+      const row=document.createElement('div');row.style.cssText='display:flex;gap:8px;margin-bottom:8px;';
+      const same=document.createElement('button');same.textContent='Same figure';
+      same.style.cssText='font-size:11.5px;font-weight:600;color:var(--acc,#2563eb);background:var(--accbg,#eef2ff);border:1px solid var(--accline,#c7d2fe);border-radius:7px;padding:5px 10px;cursor:pointer;';
+      // Clear the selection BEFORE recording: recordIdentityJudgment rebuilds and
+      // repaints this very panel synchronously (before returning here), so the
+      // repaint must already see the cleared pick — clearing after would leave
+      // the stale two-up selection showing on top of the now-resolved pair.
+      same.onclick=()=>{const [a,b]=sel;this._mergeSel=[];this.recordIdentityJudgment(a,b,true,this.labelOf(a));};
+      const diff=document.createElement('button');diff.textContent='Different';
+      diff.style.cssText='font-size:11.5px;font-weight:600;color:var(--ink2,#555);background:var(--app,#f7f7f8);border:1px solid var(--line2,#e5e7eb);border-radius:7px;padding:5px 10px;cursor:pointer;';
+      diff.onclick=()=>{const [a,b]=sel;this._mergeSel=[];this.recordIdentityJudgment(a,b,false,this.labelOf(a));};
+      const clear=document.createElement('button');clear.textContent='Clear';
+      clear.style.cssText='font-size:11.5px;font-weight:600;color:var(--ink3,#999);background:transparent;border:1px solid var(--line2,#e5e7eb);border-radius:7px;padding:5px 10px;cursor:pointer;';
+      clear.onclick=()=>{this._mergeSel=[];this._renderMergeSection(container);};
+      row.appendChild(same);row.appendChild(diff);row.appendChild(clear);
+      container.appendChild(row);
+    }
+    const list=document.createElement('div');list.style.cssText='max-height:180px;overflow-y:auto;border:1px solid var(--line2,#eee);border-radius:8px;';
+    const entries=[...g.entities.entries()].sort((a,b)=>(b[1].sightings||0)-(a[1].sightings||0)).slice(0,300);
+    for(const [id] of entries){
+      const row=document.createElement('div');
+      const active=sel.includes(id);
+      row.textContent=this.labelOf(id)||id;
+      row.style.cssText='padding:6px 9px;font-size:12px;cursor:pointer;border-bottom:1px solid var(--line2,#f0f0f0);'+(active?'background:var(--accbg,#eef2ff);color:var(--acc,#2563eb);':'color:var(--ink,#111);');
+      row.onclick=()=>{
+        const cur=this._mergeSel||(this._mergeSel=[]);
+        const i=cur.indexOf(id);
+        if(i>=0)cur.splice(i,1);
+        else{if(cur.length>=2)cur.shift();cur.push(id);}
+        this._renderMergeSection(container);
+      };
+      list.appendChild(row);
+    }
+    container.appendChild(list);
   }
   // ── DOCUMENTS (src/doc/) — EO change tracking: a written document as a fold of
   // an append-only edit log, every edit grounding-checked against the Record. A
