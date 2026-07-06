@@ -3598,7 +3598,15 @@ class Component extends DCLogic {
           if(!text||text.length>this.MAX_PASSAGE||!this._proseOk(text.toLowerCase()))continue;
           seen.add(sent);
           spans.push({text:this._clipPassage(text),u:this.master.sentenceSource[sent],i:sent,score:1});}
-        if(spans.length>=2)return {promptSpans:spans,evidence:spans.map(s=>({text:s.text,u:s.u,i:s.i,score:1,origins:1})),relevant:true,forks:[],chain:true};
+        // THE CHAIN'S ON-QUESTION FLOOR — a chain connects two of Q's referents, but Q was built by a
+        // loose label match, so two NAMESAKES ("Ravens" the bird and "Ravens" the football team) can be
+        // joined by a path whose witnesses carry only the shared word and nothing the question is really
+        // about. The set path already guards this with an IDF relevance weight (_rankPropositions); chain
+        // mode bypassed it and returned first. Require the chain's own witnesses to carry ≥2 distinct
+        // query content-words before it stands — the football chain touches only "ravens", so it fails
+        // here and falls through to the set selection (and the answer-grain support gate) instead.
+        if(spans.length>=2&&this._chainCoversQuestion(spans.map(s=>s.text),qwords))
+          return {promptSpans:spans,evidence:spans.map(s=>({text:s.text,u:s.u,i:s.i,score:1,origins:1})),relevant:true,forks:[],chain:true};
       }
     }
     // (2) select the propositions ABOUT a referent; group paraphrases by (endpoints | relation).
@@ -3624,6 +3632,20 @@ class Component extends DCLogic {
     }
     if(!groups.size)return null;
     return this._rankPropositions([...groups.values()],Q,{budget,qwords});
+  }
+  // _chainCoversQuestion(texts,qwords,min) → does a candidate chain's witness sentences collectively
+  // carry the question's DISCRIMINATING words — not just the one referent two namesakes share? Pure and
+  // deterministic (no graph read), so it is unit-testable on its own. A query with fewer than `min`
+  // distinct content-words can't demand the coverage (nothing to discriminate on) → passes, so a genuine
+  // two-referent chain is never over-gated. Substring-tolerant the same way _rankPropositions' relevance
+  // is ("crow" matches "crows"), so a morphological variant still counts.
+  _chainCoversQuestion(texts,qwords,min=2){
+    const qs=[...new Set((qwords||[]).map(w=>String(w||'').toLowerCase()).filter(w=>w.length>2))];
+    if(qs.length<min)return true;
+    const toks=new Set(String((texts||[]).join(' ')).toLowerCase().match(/[a-z0-9'’-]+/g)||[]);
+    let hit=0;
+    for(const w of qs)if(toks.has(w)||(w.length>3&&[...toks].some(t=>t.includes(w)||(t.length>3&&w.includes(t)))))hit++;
+    return hit>=min;
   }
   // _chainBetween(Q,scope,{maxLen}) → the shortest MULTI-HOP path of propositions joining two of the
   // question's referents, as an ordered [{edge,from,to}], or null. Connectivity is measured on the same
@@ -6319,6 +6341,9 @@ class Component extends DCLogic {
     // to be about the SAME subject and not a namesake sharing only the topic word.
     const _stem=w=>w.replace(/ies$/,'y').replace(/(ches|shes|sses|xes)$/,m=>m.slice(0,-2)).replace(/s$/,'');
     const anchorWords=new Set(this._researchTerms(anchor).map(_stem));
+    // The comparison sides of the subject (empty/one group for a plain lookup) — the seed gate uses
+    // them so a page about only ONE side of an "X vs Y" ask can't freeze the leash on the wrong sense.
+    const anchorGroups=this._anchorGroups(anchor);
     const subjectFigures=new Set();
     const cfg=this._depthCfg();                 // shallow / deep / obsessive → the walk's reach
     // The frontier is a FIFO of leads; the seed (the Wikipedia entry point for the subject) leads.
@@ -6428,7 +6453,7 @@ class Component extends DCLogic {
             // unfrozen, and the next candidate gets its turn. Without this, one bad top search
             // hit became both a saved source AND the yardstick every later page was measured by.
             // A Gutenberg primary text is exempt: it was already matched to the work by title.
-            if(!(isUrl&&node.via==='gutenberg')&&!this._aboutAnchor(url,anchorWords,arrival)){
+            if(!(isUrl&&node.via==='gutenberg')&&!this._aboutAnchor(url,anchorWords,arrival,anchorGroups)){
               this.tossPage(url);step('warn','Set aside '+this.short(url)+' — not about “'+anchor+'”, so it can’t anchor the research');continue;}
             baseline=sal;for(const t of arrival.keys())topic.set(t,(topic.get(t)||0)+1);
             // The seed page's own intent-similarity calibrates the semantic floor (the meaning-space
@@ -6819,6 +6844,17 @@ class Component extends DCLogic {
     for(const [id,v] of figs){if(!A.has(id)&&v>anchorMass)rank++;}
     return {mass:anchorMass,born:total>0?anchorMass/total:0,rank,figures:figs.size};
   }
+  // The COMPARISON sides of a subject — "ravens vs crows" → [{raven},{crow}] — each side a Set of
+  // content-term stems. Only STRONG, unambiguous markers split (vs / versus / compared to|with); never
+  // "and"/"or", which a single entity's own name carries ("Bosnia and Herzegovina", the novel "War and
+  // Peace"). A subject with no such marker yields ONE group, so the seed gate is unchanged for it. The
+  // seed gate uses this so a page about only ONE side can't freeze the whole leash on the wrong sense.
+  _anchorGroups(anchor){
+    const _stem=w=>w.replace(/ies$/,'y').replace(/(ches|shes|sses|xes)$/,m=>m.slice(0,-2)).replace(/s$/,'');
+    return String(anchor||'').split(/\s+(?:vs\.?|versus|compared\s+(?:to|with))\s+/i)
+      .map(part=>new Set(this._researchTerms(part).map(_stem)))
+      .filter(g=>g.size);
+  }
   // THE SEED GATE — is this page actually ABOUT the anchor's subject? The first page a walk
   // keeps CALIBRATES the whole relevance leash (it sets the saliency baseline, freezes the
   // topic frame, and seeds the figure neighborhood), so it must never be taken on faith: a
@@ -6832,14 +6868,33 @@ class Component extends DCLogic {
   // bit part. The Dolphin article folds "dolphin" as figure #1; "Whale (film)" folds it as
   // a walk-on far down the cast. Term mass is only the degraded channel, for a fold that
   // produced no figures at all. No contentful anchor → nothing to judge against → pass.
-  _aboutAnchor(url,anchorStems,arrival){
+  _aboutAnchor(url,anchorStems,arrival,anchorGroups){
     if(!anchorStems||!anchorStems.size)return true;
-    const r=this._anchorFigureRank(url,anchorStems);
-    if(r)return r.mass>=2&&r.rank<=5;
     const stem=w=>w.replace(/ies$/,'y').replace(/(ches|shes|sses|xes)$/,m=>m.slice(0,-2)).replace(/s$/,'');
-    let anchorMass=0,maxMass=0;
-    for(const [t,m] of (arrival||new Map())){if(m>maxMass)maxMass=m;if(anchorStems.has(stem(t)))anchorMass+=m;}
-    return anchorMass>=3&&anchorMass>=0.15*maxMass;
+    const r=this._anchorFigureRank(url,anchorStems);
+    let pass;
+    if(r)pass=r.mass>=2&&r.rank<=5;
+    else{let anchorMass=0,maxMass=0;for(const [t,m] of (arrival||new Map())){if(m>maxMass)maxMass=m;if(anchorStems.has(stem(t)))anchorMass+=m;}pass=anchorMass>=3&&anchorMass>=0.15*maxMass;}
+    // COMPARISON COVERAGE — a query naming ≥2 distinct sides (X vs Y) must NOT let a page about only
+    // ONE side FREEZE the topic frame: that is exactly how "ravens vs crows" froze on football
+    // "Ravens" and calibrated the whole leash to that sense (the birds' own pages then read as drift).
+    // Require the seed to cover ≥2 sides — a side is covered when the page folds a figure matching one
+    // of its stems, or carries real term mass on it. A single-side subject (≤1 group) is untouched, so
+    // this only ever makes the SEED stricter for a genuine comparison, never a plain lookup. If no page
+    // ever covers ≥2 sides the frame simply never freezes and the walk reports honestly, rather than
+    // freezing on a namesake — better a truthful "couldn't gather" than a confident wrong-sense answer.
+    if(pass&&anchorGroups&&anchorGroups.length>=2){
+      let covered=0;
+      for(const g of anchorGroups){
+        if(!g||!g.size)continue;
+        const gr=this._anchorFigureRank(url,g);
+        let on=gr?(gr.mass>=1):false;
+        if(!on&&arrival){let mass=0;for(const [t,m] of arrival)if(g.has(stem(t)))mass+=m;on=mass>=2;}
+        if(on)covered++;
+      }
+      if(covered<2)return false;
+    }
+    return pass;
   }
   // SALIENCY (the competency leash): cosine overlap of a page's terms with the fixed topic frame.
   _saliency(topic,arrival){

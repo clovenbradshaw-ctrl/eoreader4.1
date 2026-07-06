@@ -30,7 +30,7 @@ const methodOf = (src, name) => {
 
 // A fake folded world: labelled entities + directed edges with per-edge source sentences.
 const worldHarness = (src, world) => {
-  const body = ['groundPropositions', '_rankPropositions', '_independentOrigins', '_nearDup', 'eotRel', 'junkRel', '_repOf', '_groundCue', '_chainBetween', '_bfsPath']
+  const body = ['groundPropositions', '_rankPropositions', '_independentOrigins', '_nearDup', 'eotRel', 'junkRel', '_repOf', '_groundCue', '_chainBetween', '_bfsPath', '_chainCoversQuestion']
     .map((m) => methodOf(src, m)).join('\n');
   const Cls = new Function(`return class H {
     norm(s){ return String(s||'').replace(/\\s+/g,' ').trim(); }
