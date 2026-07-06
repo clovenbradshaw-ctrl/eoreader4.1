@@ -83,8 +83,8 @@ const main = async () => {
       const ME = {
         LIBRARIAN_CUE: 'Answer as a librarian.',
         shapeForScope: () => '',
-        buildGroundedMessages: ({ question, shape }) => [
-          { role: 'system', content: 'GROUNDED. ' + (shape || '') },
+        buildGroundedMessages: ({ question, shape, steer }) => [
+          { role: 'system', content: 'GROUNDED. ' + [shape, steer].filter(Boolean).join(' ') },
           { role: 'user', content: question },
         ],
         buildChatMessages: ({ question }) => [{ role: 'user', content: question }],
@@ -127,7 +127,7 @@ const main = async () => {
     check(t1.steps.some(s => s.startsWith('lead|My read of this turn:')), 'turn 1: the metacognition speech is a verbatim trail beat');
     check(t1.steps.some(s => /Re-reading 1 matching passage — on Gregor/.test(s)), 'turn 1: the ground beat names the figures, not a bare count', t1.steps.join(' · '));
     check(JSON.stringify(t1.audit) === JSON.stringify(['discourse-read', 'answer-prompt', 'answer-raw']), 'turn 1: audit carries discourse-read → answer-prompt → answer-raw', t1.audit.join(','));
-    check(/conversation read \(steering only/i.test(t1.prompt) && /factual answer from the document/.test(t1.prompt), 'turn 1: the read steers the answer prompt');
+    check(/your brief for what the user wants/i.test(t1.prompt) && /factual answer from the document/.test(t1.prompt), 'turn 1: the read steers the answer prompt');
     check(t1.walks === 0, 'turn 1: no research walk ran');
     check(!!t1.text, 'turn 1: the turn settled with an answer');
 
@@ -201,7 +201,7 @@ const main = async () => {
       document.createElement = (tag) => { const el = orig(tag); if (tag === 'a') { el.click = () => { captured = { href: el.href, name: el.download }; }; } return el; };
       app.exportChatAudit(c.id);
       document.createElement = orig;
-      return fetch(captured.href).then(r => r.json()).then(j => ({ name: captured.name, turns: j.turns.length, stages: j.turns.flatMap(t => t.audit.map(a => a.stage)), hasPrompt: j.turns.some(t => t.audit.some(a => /steering only/i.test(a.prompt || ''))), hasRaw: j.turns.some(t => t.audit.some(a => (a.output || '').includes('The answer, from the reading'))) }));
+      return fetch(captured.href).then(r => r.json()).then(j => ({ name: captured.name, turns: j.turns.length, stages: j.turns.flatMap(t => t.audit.map(a => a.stage)), hasPrompt: j.turns.some(t => t.audit.some(a => /your brief for what the user wants/i.test(a.prompt || ''))), hasRaw: j.turns.some(t => t.audit.some(a => (a.output || '').includes('The answer, from the reading'))) }));
     });
     check(exp.turns === 4 && exp.name.startsWith('eo-audit-'), 'export: one JSON, all four turns', exp.name);
     check(exp.stages.includes('discourse-read') && exp.hasPrompt && exp.hasRaw, 'export: verbatim prompts and raw outputs ride along', exp.stages.join(','));

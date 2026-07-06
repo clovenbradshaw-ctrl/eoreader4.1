@@ -1196,12 +1196,21 @@ class Component extends DCLogic {
   // Help With Academic Research", chased "doi" then "proxy"). We detect it by stripping the
   // research-verb + continuation filler and the function words; if NOTHING contentful is left, the
   // message names no topic and the subject must come from the chat instead.
-  _isMetaResearch(t){
-    if(!this._metaWords)this._metaWords=new Set(('research researching researched researches do does doing done go going gone let lets ' +
+  // The meta/continuation-command vocabulary — words that carry a "do more of what we're doing"
+  // request but name no subject of their own. Built once, lazily; exposed via an accessor so
+  // _researchSeed can reach it before _isMetaResearch has run this turn.
+  _metaWordSet(){
+    return this._metaWords||(this._metaWords=new Set(('research researching researched researches do does doing done go going gone let lets ' +
       'more most again deeper deep keep keeps keeping continue continuing continued further furthermore additional ' +
       'extra please look looking dig digging investigate investigating explore exploring find finding read reading ' +
       'tell give show expand elaborate detail details info information context background topic subject thing things ' +
       'stuff something anything everything up into about around over same another other new newer next then now ' +
+      // COMPLETION / CONTINUATION commands — "finish", "finish it", "wrap it up", "keep going", "go on",
+      // "i want you to do more research to answer this". Taken literally the walk chased the word "finish"
+      // (read "Finish - Wikipedia", "Surface finishing") instead of continuing the subject; here they name
+      // no fresh topic, so the subject comes from the chat (the dolphins thread) as every other meta ask does.
+      'finish finished finishing complete completed completing wrap wrapping proceed onward onwards ahead ' +
+      'answer answers answering answered respond response reply want wants wanting wanted wanna need needs needing needed ' +
       'me my mine us our ours your yours yourself them their it its ' +
       // DEICTIC doc-class nouns — "this book", "the author", "more about this page". Used as a bare
       // reference to whatever is open, they name no fresh subject of their own; when one is the ONLY
@@ -1211,11 +1220,32 @@ class Component extends DCLogic {
       'book books page pages article articles story stories author authors writer writers chapter chapters ' +
       'text texts document documents documentation paper papers essay essays post posts piece pieces novel novels ' +
       'poem poems passage passages section sections work works writing writings site sites website websites url urls ' +
-      'link links source sources doc docs entry entries report reports paragraph paragraphs').split(/\s+/));
+      'link links source sources doc docs entry entries report reports paragraph paragraphs').split(/\s+/)));
+  }
+  _isMetaResearch(t){
+    const meta=this._metaWordSet();
     const words=String(t||'').toLowerCase().match(/[a-z][a-z']+/g)||[];
     if(!words.length)return true;
-    const content=words.filter(w=>!this._metaWords.has(w)&&!this.STOP.has(w));
+    // Drop meta/continuation words, stopwords, AND tokens that are no usable subject on their own —
+    // a bare typo ("wnt" for "want"), an initialism, anything with no vowel or under three letters.
+    // "i wnt you to do more research to answer this" then has NOTHING contentful left → meta → the
+    // subject comes from the chat instead of the walk chasing the literal misspelled sentence.
+    const content=words.filter(w=>!meta.has(w)&&!this.STOP.has(w)&&w.length>=3&&/[aeiouy]/.test(w));
     return content.length===0;}
+  // An explicit request to CARRY THE RESEARCH FURTHER on the current thread — a research/dig/explore
+  // verb (or "go deeper" / "dive deeper") together with a continuation marker (more, deeper, again,
+  // keep, finish, else, the rest). This is the twin of _researchIntent for FOLLOW-UPS: _researchIntent
+  // catches a fresh "research X", this catches "do more research", "go deeper on it", "finish
+  // researching the thing about dolphins" — turns that must go to the web AND deepen THIS subject
+  // rather than answer offline from the reading already loaded. A bare "research whales" (a switch,
+  // no continuation marker) is left to _researchIntent so it keeps its own new subject.
+  _asksToResearchMore(q){
+    const s=String(q||'').toLowerCase();
+    if(!s)return false;
+    const wantsResearch=/\b(?:research|researching|investigat\w*|look(?:ing)?\s+(?:into|it\s+up|up)|dig(?:ging)?|find\s+out|read(?:ing)?\s+up|explore|exploring|study|studying|go\s+deeper|dive\s+deeper|deep\s+dive|delve)\b/.test(s);
+    const continuation=/\b(?:more|most|deeper|further|furthermore|additional|extra|again|keep|continue|finish|finished|finishing|expand|elaborate|else|beyond|harder|properly|fully|the\s+rest)\b/.test(s);
+    return wantsResearch&&continuation;
+  }
   // Is this turn a CORRECTION / CONTRADICTION of the standing answer — the user telling us the
   // reading is wrong or out of date ("he is no longer a council member", "no, she's the CEO now",
   // "that's outdated", "actually he's the mayor now")? When such a turn rides over a reading that
@@ -1355,6 +1385,28 @@ class Component extends DCLogic {
       const subject=this._chatSubject(cur);
       if(subject){const cue=this._researchTerms(q).slice(0,4).join(' ');
         return {topic:this.norm((subject+(cue?(' '+cue):'')).trim()),anchor:subject,derived:true,focus:findWork};}
+    }
+    // A RESEARCH CONTINUATION ("go deeper on the social difference", "finish researching the thing
+    // about dolphins", "do more research to answer this") carries a continuation marker, so it is
+    // deepening THIS thread, not naming a new one. Anchor it to the chat's SUBJECT (the dolphins the
+    // chat is grounded in) plus this turn's own distinctive FACET terms — so "go deeper on their
+    // communication" becomes "Dolphin communication", not the bare anaphor, and a plain "finish" /
+    // "do more research" becomes just the subject. Without this the walk chased the literal command
+    // words ("finish" → "Surface finishing - Wikipedia"). A genuine switch ("research whales") carries
+    // no continuation marker → falls through to _researchIntent, which keeps whales as its own subject.
+    if(!intent&&this._asksToResearchMore(q)){
+      const subject=this._chatSubject(cur);
+      if(subject){
+        const meta=this._metaWordSet();
+        const sing=w=>String(w).toLowerCase().replace(/ies$/,'y').replace(/s$/,'');
+        const subjWords=new Set((String(subject).toLowerCase().match(/[a-z'’]+/g)||[]).map(sing));
+        // Keep only the turn's DISTINCTIVE facet terms: a real word (a vowel, ≥3 letters — drops a
+        // typo like "wnt"), not a meta/continuation word, and not just the subject restated
+        // (singularised, so "dolphins" is recognised as the "Dolphin" subject and dropped).
+        const facet=this._researchTerms(q).filter(w=>{const lw=String(w).toLowerCase();
+          return lw.length>=3&&/[aeiouy]/.test(lw)&&!meta.has(lw)&&!subjWords.has(sing(lw));}).slice(0,4).join(' ');
+        return {topic:this.norm((subject+(facet?(' '+facet):'')).trim()),anchor:subject,derived:true,focus:findWork};
+      }
     }
     if(!this._isMetaResearch(candidate)){
       const topic=this.norm(candidate).replace(/[?.!]+$/,'').trim();
@@ -2813,11 +2865,23 @@ class Component extends DCLogic {
   async _discourseRead(id,q,cur,fold){
     try{
       const M=this._MROUTE||(this._MROUTE=await import(new URL('src/turn/meta-route.js',document.baseURI).href));
+      // The prior exchange the read is shown is a SUMMARY FOLD, not the transcript: the current turn
+      // (q) already rides verbatim in discoursePrompt, and the metacognition only needs the SHAPE of
+      // what came before to place this turn — not a long prior answer to re-read. So the user's own
+      // last words are kept nearly whole (they carry the intent), while the assistant's prior answer
+      // is clipped to a gist. Feeding the full prior essay was the load that made the read slow to the
+      // point of looking hung (a stall between "Reading the conversation" and the first token).
       const prevMsgs=((cur&&cur.messages)||[]).filter(m=>m.text&&!m.pending);
-      const exchange=prevMsgs.slice(-2).map(m=>((m.role==='user')?'user: ':'assistant: ')+this.truncLabel(this.norm(m.text),240)).join('\n');
+      const exchange=prevMsgs.slice(-2).map(m=>{const isUser=m.role==='user';
+        return (isUser?'user: ':'assistant: ')+this.truncLabel(this.norm(m.text),isUser?200:140);}).join('\n');
       const prompt=M.discoursePrompt(q,fold,{exchange,now:new Date()});
       this._setThink(id,'Reading the conversation — what is this turn really asking for…');
-      const guard=this._stallGuard(45000);
+      // Fail FAST to the fallback when the model is wedged (e.g. just after a user Stop, which can
+      // leave the in-browser decoder stalled for the first call of the next turn): a shorter guard
+      // means a hung read gives way to the string-routed path in ~25s instead of hanging ~45s, and
+      // the routing below no longer depends on this read landing (the research/"go deeper" gates are
+      // string-fallbacked). A working model streams tokens well inside this window and never trips it.
+      const guard=this._stallGuard(25000);
       let speech='',acc='';
       try{
         const model=await Promise.race([this.ensureChatModel(guard.feed),guard.race]);
@@ -2909,13 +2973,19 @@ class Component extends DCLogic {
       return {missing,covered:subs.filter(s=>missing.indexOf(s)<0)};
     }catch(e){return null;}
   }
-  // The discourse read, folded into the answer prompt as ONE steering line: what would satisfy
-  // the asker, and what the reading does NOT hold. Steering only — the talker is told not to
-  // quote it, and an absent/abstained read contributes nothing (empty string, prompt unchanged).
+  // The discourse read, folded into the answer prompt as a directive BRIEF — not a passive
+  // "steering line" the talker is free to ignore, but an instruction that names what the asker is
+  // actually after and tells the answer to aim at it. The old phrasing ("the conversation read,
+  // steering only — do not quote it") read as background and the small model dropped it: the read
+  // said the user wanted an overview of dolphins and the answer still recited whatever spans
+  // surfaced (climate change, dolphin meat). This makes the read STEER: what they want leads, the
+  // reading is foregrounded by how well it bears on that want, and a tangential reading is named as
+  // tangential rather than served as the answer. Still a note to the model — don't quote it — and an
+  // absent/abstained read contributes nothing (empty string, prompt unchanged).
   _steerLine(meta){
     if(!meta)return '';
     const bits=[];
-    if(meta.speech)bits.push('The conversation read (steering only — do not quote or mention it): '+meta.speech);
+    if(meta.speech)bits.push('What this turn is really for — read it as your brief for what the user wants, and let it decide what you foreground and how you shape the reply (a note to you, not the user; don’t quote it or say you were told it): '+meta.speech+' Aim the answer squarely at that. Lead with the part of what you read that actually speaks to what they’re after; where what you read only glances their question, say so plainly rather than serving the nearest passage as though it were the answer.');
     if(meta.anchorGap)bits.push('What you’ve read does not mention '+meta.anchorGap.missing.join(', ')+' — where the answer needs that, say so plainly and in the first person ("I didn’t find that in what I read", never "the reading doesn’t mention…") instead of filling it in from memory.');
     return bits.join(' ');
   }
@@ -2967,7 +3037,7 @@ class Component extends DCLogic {
     // no-brainer web turn. Gated before every coverage check: no reading covers tomorrow's
     // weather, and incidental term overlap with the sources must never keep this offline.
     if(this._isLiveFact(q))return true;
-    if(this._researchIntent(q)||this._isMetaResearch(q))return true;   // asked for research / "more"
+    if(this._researchIntent(q)||this._isMetaResearch(q)||this._asksToResearchMore(q))return true;   // asked for research / "more" / "go deeper"
     if(this._isSummaryQ(q))return false;                    // "summarize this" → from the doc you have
     // A bare pleasantry / acknowledgement names no subject — don't go research "thanks".
     if(/^(?:thanks?|thank you|thx|ty|ok|okay|k|cool|nice|great|awesome|got it|sounds good|sure|yep|yes|no|yeah|nope|lol|haha|hi|hey|hello|yo|sup|np|no problem|cheers|bye|goodbye|good (?:morning|night))[\s.!?]*$/i.test(q))return false;
@@ -3537,10 +3607,13 @@ class Component extends DCLogic {
       // A LONGFORM ask ("write me an essay") folds in the SELF-AWARE capability cue: a small
       // in-browser reader is not a long-form essayist, so it says so plainly and gives a short
       // grounded rundown instead of a slow, padded, part-invented essay.
-      const steer=this._steerLine(meta);
+      // The steer rides in its OWN slot now (buildGroundedMessages `steer`), not folded into the
+      // shape bundle — so the discourse read's brief lands as the last instruction before the answer
+      // clause and aims the whole reply, instead of being buried at the tail of the librarian cue.
+      const steer=grounded?this._steerLine(meta):'';
       const sectioned=(this._ME.shapeForScope&&this._ME.shapeForScope(q))||'';
       const longform=this._explicitLongform(q);
-      const shape=grounded?[this._ME.LIBRARIAN_CUE,sectioned,longform?this._ME.CAPABILITY_CUE:'',steer].filter(Boolean).join('\n\n'):'';
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,sectioned,longform?this._ME.CAPABILITY_CUE:''].filter(Boolean).join('\n\n'):'';
       if(grounded){
         const pastTurns=prev.filter(m=>m.role==='user').slice(-6).map(m=>this.norm(m.text)).filter(Boolean);
         messages=this._ME.buildGroundedMessages({
@@ -3551,7 +3624,7 @@ class Component extends DCLogic {
           question:q, spans:ground.spans||[], graph:ground.prop?this._groundCue(ground):this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),
           task:this._isSummaryQ(q)?'summary':'answer',
-          conversation:{pastTurns}, now:new Date(), shape,
+          conversation:{pastTurns}, now:new Date(), shape, steer,
         });
       }else{
         // Nothing read yet — fall back to the plain assistant frame (chat works without a doc).
@@ -4068,10 +4141,13 @@ class Component extends DCLogic {
       // grounded rundown rather than grinding out a slow, padded, part-invented essay.
       const sectioned=(this._ME.shapeForScope&&this._ME.shapeForScope(q))||'';
       const longform=this._explicitLongform(q);
-      const shape=grounded?[this._ME.LIBRARIAN_CUE,sectioned,longform?this._ME.CAPABILITY_CUE:'',this._steerLine(meta)].filter(Boolean).join('\n\n'):'';
+      // The steer rides in its own slot (buildGroundedMessages `steer`) so the read's brief leads the
+      // answer clause instead of trailing the librarian cue — the research/web path steers the same way.
+      const steer=grounded?this._steerLine(meta):'';
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,sectioned,longform?this._ME.CAPABILITY_CUE:''].filter(Boolean).join('\n\n'):'';
       if(grounded){
         messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:ground.prop?this._groundCue(ground):this.meaningGraph(sources),
-          orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape});
+          orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape,steer});
       }else{messages=this._ME.buildChatMessages({question:q,history:[],now:new Date()});}
       this._auditRec(id,'answer-prompt',{prompt:messages.map(mm=>'['+mm.role+']\n'+mm.content).join('\n\n---\n\n')});
       this._setThink(id,this._composeOpen(grounded,ground));
