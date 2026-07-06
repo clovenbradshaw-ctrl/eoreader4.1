@@ -21,7 +21,7 @@
 // gated by Probe A.
 
 // The Born measure.
-export { signedCosine, cubeAmplitudes, centeredAmplitudes, bornWeights, bornDistribution, sortedByWeight, topMass } from './born.js';
+export { signedCosine, cubeAmplitudes, centeredAmplitudes, bornWeights, bornDistribution, sortedByWeight, topMass, frameMassPartition } from './born.js';
 
 // The fold-voice and the face marginals.
 export { foldVoice, cubeFolds, marginalFolds } from './fold.js';
