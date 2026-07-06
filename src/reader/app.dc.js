@@ -2768,36 +2768,42 @@ class Component extends DCLogic {
     this.setState({panelSel:id,rightOpen:true,panelLens:null});
     try{this._highlightFirst(id);}catch(e){}this._scrollPanelTop();
   }
-  // ── The meaning graph, serialized as EOT triples for the talker ───────────
-  // What the reading MEANS, folded into typed relations: "A -> B : rel" for a
-  // relationship, "A : fact" for a property. This is the structure buildGroundedMessages
-  // reinstates (its `graph` slot) so the chat reasons over the meaning of what was read,
-  // not just the raw lines. Scoped to the chat's sources; ranges over all when empty.
-  meaningGraph(sources,{maxEntities=18,maxEdges=44,perEntity=4}={}){
+  // ── The fold, rendered as NEAR-PROSE for the talker ───────────────────────
+  // The talker answers in prose, so it should be handed the fold in prose too — not as
+  // "A -> B : rel" arrows it has to decode (and misreads as cause), and not as a printout it
+  // knows to be "propositions". Each central figure and what the reading joined it to is said
+  // as one plain telegraphic line ("Peter Greenaway abandons narrative, expands language — …"),
+  // so the folding itself gets most of the way to speech and the talker only makes it fluent.
+  // A defining property trails as a clause. Scoped to the chat's sources; ranges over all when
+  // empty. Empty string when there is no graph. (buildGroundedMessages frames it in one line and
+  // lets the high-value verbatim lines follow as its grounding.)
+  foldProse(sources,{maxSubjects=8,perSubject=4}={}){
     if(!this.graph)return '';
     const scope=(Array.isArray(sources)?sources:(sources?[sources]:[]));
     const inScope=id=>!scope.length||this.mentionsOf(id).some(i=>scope.includes(this.master.sentenceSource[i]));
     const ents=[...this.graph.entities.values()].filter(e=>this.showable(e.id)&&inScope(e.id));
     ents.sort((a,b)=>this.weightOf(b)-this.weightOf(a));
-    const top=ents.slice(0,maxEntities),topSet=new Set(top.map(e=>e.id));
-    const lines=[],seen=new Set();
+    const top=ents.slice(0,maxSubjects),topSet=new Set(top.map(e=>e.id));
+    const lines=[];
     for(const e of top){
-      if(lines.length>=maxEdges)break;
-      const a=this.labelOf(e.id);let n=0;
+      const a=this.labelOf(e.id);if(!a||this.isURLish(a))continue;
+      const frags=[],seen=new Set();
       for(const nb of this.neighbors(e.id)){
-        if(n>=perEntity||lines.length>=maxEdges)break;
-        if(scope.length&&!topSet.has(nb.id))continue;          // keep the graph within scope
-        const rel=(nb.vias&&nb.vias.find(v=>v&&v.length<24))||(nb.vias&&nb.vias[0]);if(!rel)continue;
-        const b=this.labelOf(nb.id),key=[a,b].sort().join('|')+'|'+rel;if(seen.has(key))continue;seen.add(key);
-        lines.push(a+' -> '+b+' : '+this.norm(rel));n++;
+        if(frags.length>=perSubject)break;
+        if(scope.length&&!topSet.has(nb.id))continue;          // keep within the surfaced figures
+        const b=this.labelOf(nb.id);if(!b||this.isURLish(b))continue;
+        const rel=(nb.vias&&nb.vias.find(v=>v&&v.length<24))||(nb.vias&&nb.vias[0]);
+        if(!rel||this.junkRel(rel))continue;
+        const r=this.norm(rel),key=r+'|'+b;if(seen.has(key))continue;seen.add(key);
+        frags.push(r+' '+b);
       }
-    }
-    // Properties — a defining predicate for the most central entities ("A : fact").
-    for(const e of top.slice(0,8)){
-      const def=this.bestDef(e.id,null);if(!def||!def.pred)continue;
-      const pred=this.norm(def.pred).replace(/[.;,]+$/,'');if(!pred)continue;
-      const key='prop|'+e.id;if(seen.has(key))continue;seen.add(key);
-      lines.push(this.labelOf(e.id)+' : '+pred);
+      // A defining predicate for the figure, trailing as a clause ("… — a filmmaker who …").
+      let pred='';try{const def=this.bestDef(e.id,null);if(def&&def.pred)pred=this.norm(def.pred).replace(/[.;,]+$/,'');}catch(_){}
+      if(!frags.length&&!pred)continue;
+      let line=a;
+      if(frags.length)line+=' '+frags.join(', ');
+      if(pred)line+=' — '+pred;
+      lines.push(line.replace(/\s+/g,' ').replace(/[.\s]*$/,'').trim()+'.');
     }
     return lines.join('\n');
   }
@@ -2897,13 +2903,15 @@ class Component extends DCLogic {
   // is the reader-chat surface, where being clear about the source is the whole point.
   chatOrientation(srcs){
     const titleOf=u=>this.truncLabel(((this.pageOf(u)||{}).title)||this.short(u),60);
-    const all=(this.master&&this.master.sentences)||[];
-    const count=srcs.length?all.filter((_,i)=>srcs.includes(this.master.sentenceSource[i])).length:all.length;
-    const props=count+' proposition'+(count!==1?'s':'')+' read';
-    if(!srcs.length){const n=(this.master&&this.master.pages.length)||0;return 'everything you have read'+(n?(' across '+n+' source'+(n!==1?'s':'')):'')+' · '+props;}
-    if(srcs.length===1)return titleOf(srcs[0])+' · '+props;
+    // NAME the source, don't COUNT it. The old "· N propositions read" suffix put the engine's
+    // own "propositions" jargon in front of the talker (its orientation) AND the discourse-read
+    // metacognition (whose brief becomes the steer) — and a small model parrots it back, calling
+    // the document "a collection of propositions". A reader just knows WHAT it read, not how many
+    // clauses; the count still shows in the UI feed, never in what the talker is handed.
+    if(!srcs.length){const n=(this.master&&this.master.pages.length)||0;return 'everything you have read'+(n?(' across '+n+' source'+(n!==1?'s':'')):'');}
+    if(srcs.length===1)return titleOf(srcs[0]);
     const names=srcs.slice(0,2).map(titleOf).join(', '),more=srcs.length-2;
-    return names+(more>0?(' and '+more+' more'):'')+' ('+srcs.length+' sources) · '+props;
+    return names+(more>0?(' and '+more+' more'):'')+' ('+srcs.length+' sources)';
   }
   // WEB AS BRAIN — should THIS turn go read the web (then answer grounded) instead of answering
   // straight from the 3B model? The default is yes whenever the model would otherwise be guessing:
@@ -3375,7 +3383,7 @@ class Component extends DCLogic {
     }catch(e){return {stance:null,focus:null,warm:[],stanceDesc:'an isolated assistant chat'};}
   }
   // The reading loaded into a chat, as a human label for the discourse read (chatOrientation:
-  // "«title» · N propositions read", or the everything-scope summary). The fold's `warm` only
+  // the source's «title», or the everything-scope summary). The fold's `warm` only
   // learns a source AFTER a turn cites it, so on turn one a book-scoped chat looks isolated; this
   // reads the chat's EXPLICIT scope instead, so the metacognition knows a document is in scope from
   // the first turn. Empty string for a genuinely isolated (net-new) chat → today's behavior. Guarded:
@@ -3701,10 +3709,10 @@ class Component extends DCLogic {
         const pastTurns=prev.filter(m=>m.role==='user').slice(-6).map(m=>this.norm(m.text)).filter(Boolean);
         messages=this._ME.buildGroundedMessages({
           // Proposition-grounded turns carry their meaning in the witness sentences (spans) already;
-          // the centrality graph block (which never saw the question) is retired for them — the graph
+          // the centrality fold (which never saw the question) is retired for them — the graph
           // slot now carries only a disagreement cue when the evidence forks, else nothing. The
-          // centrality block is kept solely as the fallback when grounding dropped to the keyword path.
-          question:q, spans:ground.spans||[], graph:ground.prop?this._groundCue(ground):this.meaningGraph(sources),
+          // near-prose fold is kept solely as the fallback when grounding dropped to the keyword path.
+          question:q, spans:ground.spans||[], graph:ground.prop?this._groundCue(ground):this.foldProse(sources),
           orientation:this.chatOrientation(sources),
           task:this._isSummaryQ(q)?'summary':'answer',
           conversation:{pastTurns}, now:new Date(), shape, steer,
@@ -4233,7 +4241,7 @@ class Component extends DCLogic {
       // reach. Longform → capability; otherwise → the sectioned shape (empty on a pointed lookup).
       const shape=grounded?[this._ME.LIBRARIAN_CUE,longform?this._ME.CAPABILITY_CUE:sectioned].filter(Boolean).join('\n\n'):'';
       if(grounded){
-        messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:ground.prop?this._groundCue(ground):this.meaningGraph(sources),
+        messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:ground.prop?this._groundCue(ground):this.foldProse(sources),
           orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape,steer});
       }else{messages=this._ME.buildChatMessages({question:q,history:[],now:new Date()});}
       this._auditRec(id,'answer-prompt',{prompt:messages.map(mm=>'['+mm.role+']\n'+mm.content).join('\n\n---\n\n')});

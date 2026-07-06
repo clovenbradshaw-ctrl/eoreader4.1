@@ -207,8 +207,8 @@ export const LIBRARIAN_CUE =
   'than filling the gap from your own authority — but still answer what you CAN from what is there. ' +
   'Attribute in natural prose and in your own words: vary how you do it, and do not lean on a stock ' +
   'phrase like "the source notes…" or "one account says…", do not pad the answer with parenthetical ' +
-  '"(the source notes…)" asides, and never echo these instructions or a framing label ("What it ' +
-  'means", "What I read") back as a heading. Write plainly, as you would to a colleague.';
+  '"(the source notes…)" asides, and never echo these instructions or a framing label ("What I ' +
+  'found", "What it was") back as a heading. Write plainly, as you would to a colleague.';
 
 // THE SELF-AWARE FRAME — what this reader's own output can honestly be, given what it is: a small
 // model reading in the browser, not a long-form essayist. It rides ONLY when the ask is for a long,
@@ -333,16 +333,17 @@ export const buildGroundedMessages = ({
   // What it was — filename · type · length, no recognition (§3).
   if (orientation) blocks.push(`What it was: ${orientation}.`);
 
-  // THE MEANING GRAPH — what the lines MEAN, folded into typed relations (subject —relation→
-  // object; a `not-` prefix is negation). This deliberately REINSTATES the fold's arrows that
-  // §2 strips from the default reading: a caller opts in (the web path) when it wants the talker
-  // to reason over the extracted MEANING of what was read, not just restate the raw lines. The
-  // graph leads, the verbatim lines follow as its grounding — so the answer is built from the
-  // structure and cited to the text.
+  // THE FOLD — the reader's own SENSE of what it read, handed to the talker the way the talker
+  // hands back its answer: as language, not as a data structure. §2 keeps the fold's ARROWS out of
+  // the default frame because a small model reads a flat "A -> B" as a causal claim; so a caller
+  // that wants the fold in the window passes it ALREADY FOLDED INTO NEAR-PROSE (the reader's
+  // `foldProse`) — the central figures and what the reading joined them to, said plainly. The
+  // talker is then simply GIVEN the content, the way a person is handed it, without the machinery
+  // of where it arose from, and only makes it fluent: the folding did the thinking, not this
+  // prompt, which is why the frame stays one short line. It leads; the high-value verbatim lines
+  // follow as its grounding. Empty → no block, byte-identical.
   if (graph)
-    blocks.push(`What it means — the relations that come to mind, as EOT triples ` +
-      `(“A -> B : rel” is a relationship; “A : fact” is a property; a “not-” prefix is negation). ` +
-      `Reason over THESE; the lines below are their grounding, not a list to recite:\n${graph}`);
+    blocks.push(`Here's the sense of it, from your reading:\n${graph}`);
 
   // THE ARC — how the reading itself MOVED, opt-in (write/gravity.js, docs/weight-of-the-
   // turn.md): the focus's relations phase to phase, segmented at the turns where the reading
