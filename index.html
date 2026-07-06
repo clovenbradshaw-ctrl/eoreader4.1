@@ -4616,6 +4616,40 @@ class Component extends DCLogic {
         ? 'Drawn from the overall shape of what you’ve read, not any one passage — the wording is the model’s own.'
         : 'The model’s own answer — nothing you’ve read bears on it, so it isn’t grounded in a source.'};
   }
+  // THE SUPPORT GATE — a 'matched'/'opening' badge CLAIMS the passages shown beside the answer are
+  // where it came from; verify that against the SETTLED PROSE before the green chip stands. groundSpans/
+  // groundSummary already classify every span of the answer as SOURCE (it traces to a passage) or VOID
+  // (the model's own words); supportVerdict (ground/spans.js) turns that tally into the badge decision.
+  // An answer that draws (almost) nothing from its passages — the ravens-vs-crows case, a bird answer
+  // over football "Ravens" passages — is the model's own words wearing a source's clothes: demote the
+  // badge and disclose it, rather than imply a citation that isn't there. This is the reader-side
+  // instance of the ground holon's ONE modality-neutral bind-check (the text organ reads the same
+  // verdict). Guarded end to end: the eo-gen bridge cold, no passages, or any fault → the badge stands
+  // unchanged, so this only ever makes a badge MORE honest, never regresses a good one.
+  _gateGround(gr,text){
+    try{
+      if(!gr||(gr.groundKind!=='matched'&&gr.groundKind!=='opening')||!gr.passages||!gr.passages.length)return gr;
+      const eg=(typeof window!=='undefined')&&window.eoGen;
+      if(!eg||!eg.groundSpans||!eg.groundSummary||!eg.supportVerdict)return gr;   // bridge not ready → no-op (safe)
+      // Split into the same hover-spans the render classifies (mirror _groundAnnotate): keep any
+      // leading markdown block marker OUT of the span, then split the body into sentences.
+      const spans=String(text||'').split('\n').flatMap(line=>{
+        const pm=line.match(/^(\s*(?:#{1,6}\s+|[-*]\s+|\d+\.\s+))([\s\S]*)$/);
+        const body=pm?pm[2]:line;
+        return body.trim()?body.split(/(?<=[.!?])\s+/):[];
+      });
+      if(!spans.length)return gr;
+      const verd=eg.supportVerdict(eg.groundSummary(eg.groundSpans(spans,{passages:gr.passages})));
+      if(verd.supported)return gr;
+      if(verd.kind==='void')
+        return {...gr,groundKind:'model',passages:[],sources:[],
+          disclosure:'Nothing you’ve read bears on this — the passages I gathered don’t actually cover it, so this is the model’s own answer, not grounded in a source.'};
+      // 'partial' — some of it traces, but too little to call it a citation: keep the passages
+      // visible, drop the firm "matched" claim so the chip reads as synthesis, not a direct lift.
+      return {...gr,groundKind:'opening',
+        disclosure:'Only part of this traces to the passages I found — the rest is the model drawing it together in its own words, so treat it as its synthesis, not a direct citation.'};
+    }catch(e){return gr;}
+  }
   // The meta-reasoning cue that rides the (freed) graph slot for a proposition-grounded turn — the one
   // place we tell the model HOW to reason over the readings rather than just handing them over. Empty
   // for a plain set; a CHAIN turn asks for step-by-step reasoning along the path; a FORKED turn asks the
@@ -5008,7 +5042,12 @@ class Component extends DCLogic {
   _steerLine(meta){
     if(!meta)return '';
     const bits=[];
-    if(meta.speech)bits.push('What this turn is really for — read it as your brief for what the user wants, and let it decide what you foreground and how you shape the reply (a note to you, not the user; don’t quote it or say you were told it): '+meta.speech+' Aim the answer squarely at that. Lead with the part of what you read that actually speaks to what they’re after; where what you read only glances their question, say so plainly rather than serving the nearest passage as though it were the answer.');
+    // Steer ONLY on a read that COHERED (measure.route settled). An ABSTAINED read — the paragraph
+    // pointed at nothing measurable (the ravens-vs-crows trace: route=abstained) — is low-confidence
+    // narration; folding it in as the brief just gets echoed back as the answer's opening line. When
+    // it abstained, drop the speech steer and let the plain librarian answer stand; anchorGap (a
+    // mechanical named-subject gap) is reliable and still rides below.
+    if(meta.speech&&!meta.abstained)bits.push('What this turn is really for — read it as your brief for what the user wants, and let it decide what you foreground and how you shape the reply (a note to you, not the user; don’t quote it or say you were told it): '+meta.speech+' Aim the answer squarely at that. Lead with the part of what you read that actually speaks to what they’re after; where what you read only glances their question, say so plainly rather than serving the nearest passage as though it were the answer.');
     if(meta.anchorGap)bits.push('What you’ve read does not mention '+meta.anchorGap.missing.join(', ')+' — where the answer needs that, say so plainly and in the first person ("I didn’t find that in what I read", never "the reading doesn’t mention…") instead of filling it in from memory.');
     return bits.join(' ');
   }
@@ -5636,7 +5675,11 @@ class Component extends DCLogic {
       const steer=grounded?this._steerLine(meta):'';
       const sectioned=(this._ME.shapeForScope&&this._ME.shapeForScope(q))||'';
       const longform=this._explicitLongform(q);
-      const shape=grounded?[this._ME.LIBRARIAN_CUE,sectioned,longform?this._ME.CAPABILITY_CUE:''].filter(Boolean).join('\n\n'):'';
+      // A LONGFORM ask takes the CAPABILITY cue INSTEAD of the sectioned shape, not alongside it: the
+      // two contradict (one says "lay it out in sections", the other "don't spin up a long piece — give
+      // a short grounded rundown"), and stacking both just hands a small model a mixed signal it pads to
+      // reach. Longform → capability; otherwise → the sectioned shape (empty on a pointed lookup).
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,longform?this._ME.CAPABILITY_CUE:sectioned].filter(Boolean).join('\n\n'):'';
       if(grounded){
         const pastTurns=prev.filter(m=>m.role==='user').slice(-6).map(m=>this.norm(m.text)).filter(Boolean);
         messages=this._ME.buildGroundedMessages({
@@ -5676,7 +5719,7 @@ class Component extends DCLogic {
       // Surface grounding for EVERY answer, honestly. Matched lines show as citations; a
       // summary that leaned on the source's opening shows those lines, disclosed as such;
       // an answer with no read footing says plainly it's the model's own (_groundReport).
-      const gr=this._groundReport(ground,grounded);
+      const gr=this._gateGround(this._groundReport(ground,grounded),text);
       // The turn wears the register it ACTUALLY used, and a grounded answer is read back
       // through the EOT reflection — every proposition judged against the graph (_reflect).
       finish({text:isolated?text:this._withOfficeNote(text,sources),entities:ground.entities,sources:gr.sources,passages:gr.passages,
@@ -6167,7 +6210,11 @@ class Component extends DCLogic {
       // The steer rides in its own slot (buildGroundedMessages `steer`) so the read's brief leads the
       // answer clause instead of trailing the librarian cue — the research/web path steers the same way.
       const steer=grounded?this._steerLine(meta):'';
-      const shape=grounded?[this._ME.LIBRARIAN_CUE,sectioned,longform?this._ME.CAPABILITY_CUE:''].filter(Boolean).join('\n\n'):'';
+      // A LONGFORM ask takes the CAPABILITY cue INSTEAD of the sectioned shape, not alongside it: the
+      // two contradict (one says "lay it out in sections", the other "don't spin up a long piece — give
+      // a short grounded rundown"), and stacking both just hands a small model a mixed signal it pads to
+      // reach. Longform → capability; otherwise → the sectioned shape (empty on a pointed lookup).
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,longform?this._ME.CAPABILITY_CUE:sectioned].filter(Boolean).join('\n\n'):'';
       if(grounded){
         messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:ground.prop?this._groundCue(ground):this.meaningGraph(sources),
           orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape,steer});
@@ -6186,7 +6233,7 @@ class Component extends DCLogic {
       this._auditRec(id,'answer-raw',{output:String(raw||'')});
       // normMd (not norm): keep the reply's line structure so lists/headings survive into _md.
       const text=this.normMd(raw)||(isolated?'':this.answerQuestion(q,sources).text)||'(no answer)';
-      const gr=this._groundReport(ground,grounded);
+      const gr=this._gateGround(this._groundReport(ground,grounded),text);
       // Badge the register the turn ACTUALLY used, and reflect a grounded answer against the graph.
       finish({text:isolated?text:this._withOfficeNote(text,sources),entities:ground.entities,sources:gr.sources,passages:gr.passages,
         groundKind:gr.groundKind,disclosure:gr.disclosure,related:isolated?[]:this.relatedDocs(q,sources),

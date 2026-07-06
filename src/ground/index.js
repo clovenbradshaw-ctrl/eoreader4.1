@@ -17,6 +17,10 @@ export { classifyProvenance } from './provenance.js';
 // "where") OR to the void (the model's own words). So "every span needs to be grounded" is
 // a projection, not a restriction: the reader always sees whether a span was read or said.
 export { groundSpans, groundSummary } from './spans.js';
+// supportVerdict is the answer-grain bind-check the grounding BADGE reads: it turns the span tally
+// into an honest "is this actually grounded, or the model's own words wearing a source's passages?"
+// decision (SUPPORT_FLOOR). Modality-neutral, so the chat answer path and the text organ share it.
+export { supportVerdict, SUPPORT_FLOOR } from './spans.js';
 // The reflection: parse the model's OUTPUT back into EOT, compare each proposition with
 // the document graph, and judge the groundedness of what the graph holds — counting the
 // diverse, independent origins that witness each claim (docs/creative-grounded-modes.md).

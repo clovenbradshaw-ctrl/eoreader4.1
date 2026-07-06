@@ -171,7 +171,8 @@ export const STRUCTURE_CUE =
   'Shape your answer like this: open with a direct two- or three-sentence answer to their ' +
   'question. Then lay out the distinct parts of the answer — when there are several, give each its ' +
   'own short heading written as "## Heading"; when they are a set of short points, write them as a ' +
-  'bulleted list with a **bold lead-in label** on each ("- **The periscope:** …"). Put the few ' +
+  'bulleted list with a **bold lead-in label** on each — a couple of words naming what that point ' +
+  'is about, then a colon and the point. Put the few ' +
   'load-bearing terms in **bold**. Be substantive: cover each distinct angle that bears on the ' +
   'question rather than stopping at the first one. If worthwhile threads remain that you did not ' +
   'cover, close with a short list under "Want me to go deeper on:". Keep it tight — no padding, and ' +

@@ -168,3 +168,38 @@ export const groundSummary = (verdicts) => {
     modelAsserts: assertion > 0,                      // the model puts forward real claims of its own
   });
 };
+
+// supportVerdict(summary, { floor, minClaims }) → { supported, kind, ratio, claims, source } — the
+// ANSWER-GRAIN bind-check verdict a grounding badge reads. A "grounded / matched" badge CLAIMS the
+// passages shown beside the answer are WHERE THE ANSWER CAME FROM; that claim is only honest when
+// enough of the settled prose actually traces to a source. groundSummary already tallies how many
+// spans stand on a source vs on the model — this turns that tally into the badge decision, once,
+// modality-neutrally, so the chat path and the text organ share ONE rule instead of each hand-rolling
+// a floor. (The failure this closes: an answer whose passages are a NAMESAKE of the subject — a bird
+// question answered over football "Ravens" passages — draws nothing from them, yet a keyword touch
+// still badged it "matched". Its spans are all void, so this reads 'void' and the caller demotes.)
+//
+// The denominator is the SUBSTANTIVE claims (source + the model's own assertions), NOT every span:
+// connective scaffolding asserts nothing a source would carry, so counting it would unfairly drag a
+// well-grounded-but-fluent answer under the floor. The kinds:
+//   'void'    → nothing substantive traces to a source — the passages are misleading; the answer is
+//               the model's own words. The badge must say so, never imply a cite that isn't there.
+//   'partial' → some traces, but under the floor — keep the passages visible yet drop the firm
+//               "matched" claim: the answer is the model's synthesis, not a direct lift.
+//   'sourced' → a real share stands on a source; a grounded badge is honest, left untouched.
+// A short answer (< minClaims substantive spans) is too small to demote on ratio alone — one grounded
+// claim keeps it — but the pure-void case (source === 0) still demotes at any length. Nothing to judge
+// (no substantive spans) is a no-op: supported, so an empty/degenerate answer never gets falsely demoted.
+export const SUPPORT_FLOOR = 0.25;
+export const supportVerdict = (summary, { floor = SUPPORT_FLOOR, minClaims = 3 } = {}) => {
+  const s = summary || {};
+  const source = s.source || 0;
+  const assertion = s.assertion || 0;
+  const claims = source + assertion;                 // the substantive spans; connectives don't count
+  const ratio = claims ? source / claims : 0;
+  if (claims === 0)      return { supported: true,  kind: 'sourced', ratio: 0, claims, source };
+  if (source === 0)      return { supported: false, kind: 'void',    ratio: 0, claims, source };
+  if (claims < minClaims) return { supported: true,  kind: 'sourced', ratio, claims, source };
+  if (ratio < floor)     return { supported: false, kind: 'partial', ratio, claims, source };
+  return { supported: true, kind: 'sourced', ratio, claims, source };
+};
