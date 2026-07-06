@@ -99,6 +99,37 @@ anchor, same path — unlike a router, which is stochastic turn by turn. The sur
 path is part of the deterministic substrate; the audit records it (`fold.surf`:
 anchor, peak, stops, focus, recs, rode), so it replays like the rest of the log.
 
+## Clause grain — the embedding resolution SURF was designed for
+
+SURF's three axes are embedder-free (γ-mass surprise, figure salience), so the
+default fold loses nothing to embedding granularity — it isn't embedding anything.
+But the moment a real meaning organ (MiniLM) is wired in, the *deep* frame axis and
+the retrieval that seeds the anchor read embeddings — and those embeddings used to be
+pooled one vector per whole **sentence**. A compound sentence carrying a quiet clause
+and a loud clause handed that pool a single averaged vector, so a mid-sentence
+semantic turn was averaged away: the exact chunk-granularity defect RAG debates, one
+layer down. `docs/phasepost.md` already named the target — *"Clause-level is the design
+target (the unit is the proposition)."*
+
+The **clause layer** (`src/perceiver/parse/clause-layer.js`) closes it. At ingest the
+document is flattened into clauses (`doc.clauses`, via the same `segmentClauses` the
+relation parser runs), each remembering the `sentIdx` it came from, and
+`doc.clauseEmbeddings` mirrors `doc.sentenceEmbeddings` at clause grain. Three paths
+now read that grain:
+
+| path | before | after |
+|---|---|---|
+| semantic retrieval (`retrieve/semantic.js`) | scores pooled sentences | scores clauses, keeps the best per sentence — **clause-precise match, sentence-precise citation** |
+| the deep frame axis (`enact/meaning.js`) | 1−cos over pooled sentences | 1−cos over clauses, folded to the sentence cursor by **max** (the loud clause wins) |
+| the atmosphere / the classifier query (`surfer/atmosphere.js`, `factcheck/correspond.js`) | pooled sentence | the clause carrying the relation |
+
+Provenance is preserved: a clause-grain match still grounds at a sentence-grain
+citation, so nothing downstream that indexes by sentence changes. And a document of
+simple SVO sentences is **byte-identical** — `segmentClauses` returns one clause per
+single-clause sentence, so those paths read exactly what they read before. The layer
+only ever *adds* resolution to compound sentences. This is the RAG-competitive edge:
+the intra-sentence match a chosen chunk size chases, without choosing a chunk size.
+
 ## Where it lives
 
 | concern | file |

@@ -239,6 +239,19 @@
         <button onclick="{{ onOpenDoc }}" title="Write a document grounded to the Record — every edit is a tracked change, checked against what you've read; ungrounded edits are flagged, never silently kept" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">✎</span>New document</button>
         <button onclick="{{ onOpenDeepResearch }}" title="Open the deep-research panel — ask a question, watch it read the web and pin every source, each claim grounded in a quote you can open" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">⌕</span>Deep research</button>
         <button onclick="{{ onOpenGraph }}" title="Toggle the read's own entity graph — and resolve any figure the reading can't yet tell apart from another" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">◈</span>Graph</button>
+        <!-- Corpus search — one box, nothing to configure. Ranked lexical retrieval
+             (token overlap + fuzzy spelling) over every source read so far runs
+             instantly; a meaning channel and a channel learned from your own past
+             clicks (see runCorpusSearch/recordSearchFeedback) fold in silently as
+             they become available — no toggle, no settings. -->
+        <div style="position:relative;margin-bottom:8px;">
+          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--ink3);pointer-events:none;">⌕</span>
+          <input value="{{ corpusQuery }}" oninput="{{ onCorpusQuery }}" placeholder="Search everything you've read…" title="Smart grep — ranked passages from every source" style="width:100%;box-sizing:border-box;font-size:12.5px;color:var(--ink);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:8px 28px;outline:none;">
+          <sc-if value="{{ corpusActive }}" hint-placeholder-val="{{ false }}">
+            <button onclick="{{ onCorpusClear }}" title="Clear search" style="position:absolute;right:4px;top:50%;transform:translateY(-50%);width:22px;height:22px;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">✕</button>
+          </sc-if>
+        </div>
+        <sc-if value="{{ browseMode }}" hint-placeholder-val="{{ true }}">
         <sc-if value="{{ hasChats }}" hint-placeholder-val="{{ false }}">
           <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);padding:6px 4px 4px;">Chats</div>
           <sc-for list="{{ chats }}" as="c" hint-placeholder-count="0">
@@ -300,6 +313,27 @@
               </div>
             </div>
           </sc-for>
+        </sc-if>
+        </sc-if>
+        <sc-if value="{{ corpusActive }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:6px;padding:10px 4px 4px;">
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);">Results</span>
+            <span style="font-size:10.5px;color:var(--ink3);">{{ corpusCount }}</span>
+          </div>
+          <sc-for list="{{ corpusResults }}" as="r" hint-placeholder-count="0">
+            <div onclick="{{ r.onOpen }}" style="display:flex;flex-direction:column;gap:4px;padding:9px 11px;border-radius:9px;margin-bottom:5px;cursor:pointer;border:1px solid var(--line2);" style-hover="background:#f7f8fa;border-color:var(--accline)">
+              <div style="font-size:11.5px;color:var(--ink2);line-height:1.45;">{{ r.before }}{{ r.text }}{{ r.after }}</div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;">
+                <span style="font-weight:700;color:var(--acc);flex:0 0 auto;">{{ r.pct }}%</span>
+                <span style="overflow:hidden;text-overflow:ellipsis;">{{ r.title }}</span><span>·</span><span style="flex:0 0 auto;">{{ r.host }}</span>
+                <sc-if value="{{ r.hasTag }}" hint-placeholder-val="{{ false }}">
+                  <span title="This passage shares no words with your search — it surfaced by meaning or from what you've clicked before" style="flex:0 0 auto;margin-left:auto;font-weight:700;color:var(--acc);background:var(--accbg);border-radius:5px;padding:1px 5px;">{{ r.tagLabel }}</span>
+                </sc-if>
+              </div>
+            </div>
+          </sc-for>
+          <sc-if value="{{ corpusPending }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">Searching…</div></sc-if>
+          <sc-if value="{{ corpusEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">No matches for “{{ corpusQuery }}” in what you've read.</div></sc-if>
         </sc-if>
       </div>
     </aside>

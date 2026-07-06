@@ -30,6 +30,14 @@ class Component extends DCLogic {
     // other identity event, just the heaviest kind (recordIdentityJudgment).
     this._identityJudgments=[];
     this.state={ ready:false, engineErr:null, pages:[], selId:null, siteView:null, sitesDir:false, docView:null, dataView:null, query:'', url:'', busy:false, feed:[],
+      // Corpus search — the smartest-possible-grep surface (docs/corpus-search.md): a query
+      // typed here retrieves ranked passages from EVERY source read, fusing three channels
+      // (lexical, meaning, remembered — see the "corpus search" methods) with nothing to
+      // configure. semanticOn flips true once the meaning channel has silently warmed
+      // itself on first search. corpusResultsQuery names the query the current
+      // corpusResults actually answer, so a debounced or still-indexing in-flight search
+      // never renders a stale hit list under newly-typed text.
+      corpusQuery:'', corpusResults:null, corpusResultsQuery:'', semanticOn:false,
       // In-flight imports — a file starts here THE MOMENT it's picked, so it shows in the
       // Sources panel instantly (with a live "what it's doing" status) instead of only
       // appearing once the slow extractor — whisper, pdf.js, Tesseract — has finished. Each:
@@ -915,6 +923,11 @@ class Component extends DCLogic {
     this.graph=PG.projectGraph(shim,{cursor:Math.max(0,m.sentences.length-1),rules:PG.DEFAULT_PROJECTION_RULES});
     this.incident=new Map();for(const e of this.graph.edges){for(const id of [e.from,e.to])this.incident.set(id,(this.incident.get(id)||0)+(e.weight||0));}
     if(this._graphDock)this._renderGraphDock();   // keep the docked panel live as sources change
+    // A source was added/removed/muted — the sentence list just changed under the semantic
+    // index. Vectors are cached by TEXT (stable across the reshuffle), so this only ever
+    // has NEW sentences left to embed; restarting the loop finds them via the fresh scan
+    // at its top and supersedes any pass still running (the token bump).
+    if(this.state&&this.state.semanticOn&&this._semEmbedder)this._buildSemanticIndex();
   }
   // The open identity questions the current graph is holding (core/asterisk.js
   // sameAs — each a same_as? asterisk neither merged nor split), ranked the same
@@ -6373,6 +6386,204 @@ class Component extends DCLogic {
     return {text:ranked[0].s,before:cx.before,after:cx.after,hasCtx:cx.hasCtx,srcId:this.srcId(u),host:this.short(u),when:p?fmtDate(p.ts):'',hasWhen:!!(p&&p.ts),
       jumpUrl:this.tfURL(u,this.master.sentences[i]),onOpen:()=>this.openSource(u),onGo:()=>this._scrollToText(ranked[0].s)};
   }
+  // ── corpus search: the smartest-possible-grep surface ──────────────────────────────
+  // One box, no settings. Three channels feed the same ranking, and everything but
+  // typing is automatic:
+  //   · LEXICAL — src/retrieve/lexical.js: exact token overlap, widened at the edges by
+  //     a fuzzy edit-distance match so a misspelling or near-miss inflection still hits,
+  //     never a phantom. Always on, asks no model anything, sub-millisecond.
+  //   · MEANING — a real sentence-embedding model (src/reader/eo/embed.js — small, not a
+  //     generative LLM), warmed automatically the first time you search and indexed over
+  //     every sentence in the background, so paraphrases with no shared words start
+  //     surfacing once it's ready. Never blocks: results show lexically in the meantime.
+  //   · REMEMBERED — which passage you actually opened for which past searches, learned
+  //     from your own clicks (see recordSearchFeedback) rather than any model, so a
+  //     search you've made before gets sharper even where lexical and meaning both miss.
+  // All three run against `_logDoc`/`master`, the single merged corpus rebuild() already
+  // maintains across every source read so far, so one query reaches every document at once.
+  async _ensureRetrieveMod(){
+    if(!this._RT)this._RT=await import(new URL('src/retrieve/lexical.js',document.baseURI).href);
+    return this._RT;
+  }
+  // Debounced entry point the search box calls on every keystroke: the box's own value
+  // updates immediately (so typing never stutters), the actual retrieval fires ~160ms
+  // after the user stops, and a stale response (the query moved on while a module import
+  // or a slow tick was in flight) is dropped rather than overwriting a newer query's
+  // results. The first real search of a session also fires the one-time, silent attempt
+  // to warm the meaning channel — never on app load, only once someone actually searches.
+  runCorpusSearch(q){
+    const query=String(q||'');
+    this.setState({corpusQuery:query});
+    clearTimeout(this._corpusDebounce);
+    if(!query.trim()){this.setState({corpusResults:null,corpusResultsQuery:''});return;}
+    if(!this._semAttempted){this._semAttempted=true;this._warmMeaningChannel();}
+    this._corpusDebounce=setTimeout(()=>this._doCorpusSearch(query.trim()),160);
+  }
+  async _doCorpusSearch(query){
+    if(!this.master||!this.master.sentences.length){this.setState({corpusResults:[],corpusResultsQuery:query});return;}
+    let lexHits=[];
+    try{ const {retrieveLexical}=await this._ensureRetrieveMod(); lexHits=retrieveLexical(this._logDoc,query,120); }catch(e){ lexHits=[]; }
+    if((this.state.corpusQuery||'').trim()!==query)return;   // the query moved on — drop this stale answer
+    const semScores=await this._semanticScores(query);       // Map<idx,cosine> — empty until the meaning channel is warm
+    if((this.state.corpusQuery||'').trim()!==query)return;
+    const fbScores=this._feedbackScores(query);               // Map<idx,score> — learned from past clicks
+    const clamp01=x=>x<0?0:x>1?1:x;
+    const byIdx=new Map();
+    for(const r of lexHits)byIdx.set(r.idx,{lex:clamp01(r.score),sem:0,fb:0});
+    if(semScores.size){
+      // The cosine pass already scored every embedded sentence — keep only its strongest
+      // hits so the merge isn't flooded with near-zero noise from an unrelated majority.
+      const topSem=[...semScores.entries()].sort((a,b)=>b[1]-a[1]).slice(0,120);
+      for(const [idx,s] of topSem){const c=byIdx.get(idx)||{lex:0,sem:0,fb:0};c.sem=Math.max(c.sem,clamp01(s));byIdx.set(idx,c);}
+    }
+    for(const [idx,s] of fbScores){const c=byIdx.get(idx)||{lex:0,sem:0,fb:0};c.fb=Math.max(c.fb,clamp01(s));byIdx.set(idx,c);}
+    // Noisy-OR concordance (src/retrieve/hybrid.js#fuseConcordance), chained over three
+    // channels: agreement compounds, a lone strong channel is preserved, a lone weak one
+    // stays weak.
+    const hits=[...byIdx.entries()]
+      .map(([idx,c])=>({idx,score:1-(1-c.lex)*(1-c.sem)*(1-c.fb),
+        tag:c.lex>0?null:(c.sem>0?'meaning':(c.fb>0?'remembered':null))}))
+      .sort((a,b)=>b.score-a.score).slice(0,120);
+    this.setState({corpusResults:hits,corpusResultsQuery:query});
+  }
+  // Rank → view rows. Caps any one source at a handful of hits so a long book a query
+  // touches often can't crowd a short source it also matches out of the list entirely —
+  // every activated source keeps a seat, the point of searching ACROSS a hundred documents
+  // rather than grepping one at a time.
+  _corpusResultRows(){
+    const q=(this.state.corpusQuery||'').trim();
+    if(!q||!this.master||this.state.corpusResultsQuery!==q)return [];
+    const perSrc=new Map(),out=[];
+    for(const r of (this.state.corpusResults||[])){
+      const u=this.master.sentenceSource[r.idx];
+      const n=perSrc.get(u)||0; if(n>=4)continue; perSrc.set(u,n+1);
+      out.push(r); if(out.length>=30)break;
+    }
+    return out.map(r=>{
+      const u=this.master.sentenceSource[r.idx],p=this.pageOf(u),cx=this._spanContext(r.idx);
+      const text=this.stripRefs(this.norm(this.master.sentences[r.idx]));
+      return {key:'cs'+r.idx,pct:Math.round(Math.min(1,r.score)*100),text,before:cx.before,after:cx.after,hasCtx:cx.hasCtx,
+        host:this.short(u),title:this.truncLabel((p&&p.title)||this.short(u),40),
+        // A hit with no lexical overlap at all needs its reason on the label — a bare
+        // snippet sharing none of the typed words would otherwise look like a mistake
+        // rather than a paraphrase (meaning) or a learned association (remembered).
+        hasTag:!!r.tag, tagLabel:r.tag==='meaning'?'≈ meaning':r.tag==='remembered'?'★ remembered':'',
+        onOpen:()=>{this.recordSearchFeedback(q,text);this._goToPassage(u,text);}};
+    });
+  }
+  // ── the meaning channel: automatic, silent, degrades to nothing on failure ─────────
+  // No toggle — the first real search of a session tries once (runCorpusSearch's
+  // _semAttempted guard) to warm a real sentence-embedding model (src/reader/eo/embed.js;
+  // small, NOT a generative LLM) and then indexes every sentence in the corpus in the
+  // background, batched across ticks so it never blocks typing or reading. If the model
+  // can't warm (offline, blocked CDN) this just quietly never contributes again this
+  // session — lexical + remembered keep working exactly as before, no error shown.
+  // Vectors are cached by sentence TEXT (stable across a rebuild(), which renumbers
+  // indices whenever a source is added, removed, or muted), so a source already indexed
+  // is never re-embedded, and an in-flight query is re-run after each batch so results
+  // sharpen as coverage grows instead of waiting for the whole corpus.
+  async _warmMeaningChannel(){
+    this._semVecByText=this._semVecByText||new Map();
+    let embedder;
+    try{
+      embedder=await this._getEmbedder();
+      if(!embedder.isWarm())await embedder.warm();
+    }catch(e){ return; }   // silent — the corpus stays searchable lexically either way
+    this._semEmbedder=embedder;
+    this.setState({semanticOn:true});
+    this._buildSemanticIndex();
+  }
+  // The background loop: a small batch of un-embedded sentences per tick, yielding to the
+  // event loop between batches so a long corpus never freezes the UI. A fresh call (a new
+  // source read) bumps the token, which makes any OLDER loop still mid-batch exit at its
+  // next checkpoint rather than race the new one.
+  async _buildSemanticIndex(){
+    const token=(this._semBuildToken=(this._semBuildToken||0)+1);
+    const embedder=this._semEmbedder; if(!embedder)return;
+    const sentences=(this.master&&this.master.sentences)||[];
+    const queue=sentences.filter(s=>s&&!this._semVecByText.has(s));
+    const BATCH=8;
+    for(let qi=0;qi<queue.length;qi+=BATCH){
+      if(this._semBuildToken!==token)return;             // superseded — a newer pass took over
+      const batch=queue.slice(qi,qi+BATCH);
+      for(const s of batch){
+        if(this._semBuildToken!==token)return;
+        try{ this._semVecByText.set(s,await embedder.embed(s)); }
+        catch(e){ this._semVecByText.set(s,null); }
+      }
+      if((this.state.corpusQuery||'').trim())this._doCorpusSearch(this.state.corpusQuery.trim());
+      await new Promise(r=>setTimeout(r,0));
+    }
+  }
+  // Cosine over whatever's embedded so far — MiniLM vectors are already L2-normalised
+  // (eo/embed.js: `normalize: true`), so a dot product IS the cosine. Returns an empty
+  // Map (a pure no-op) whenever the meaning channel isn't warm yet, so callers never
+  // need their own on/off branch.
+  async _semanticScores(query){
+    const out=new Map();
+    if(!this.state.semanticOn||!this._semEmbedder||!this._semEmbedder.isWarm()||!this._semVecByText)return out;
+    let qVec; try{ qVec=await this._semEmbedder.embed(query); }catch(e){ return out; }
+    const sentences=(this.master&&this.master.sentences)||[];
+    for(let i=0;i<sentences.length;i++){
+      const v=this._semVecByText.get(sentences[i]); if(!v)continue;
+      let d=0;const n=Math.min(qVec.length,v.length);for(let k=0;k<n;k++)d+=qVec[k]*v[k];
+      out.set(i,d);
+    }
+    return out;
+  }
+  // ── the remembered channel: learn from what people actually click, not a model ─────
+  // Every search result you open records which query TERMS led you to that exact
+  // passage (by text, stable across a rebuild()). A later search shares no vocabulary
+  // with the sentence at all — lexical AND meaning can both miss it — but if enough of
+  // its OWN terms overlap the terms that led here before, that history alone is evidence
+  // this passage answers this kind of question. Persisted (localStorage) so the corpus
+  // keeps getting sharper across sessions, not just within one. Bounded (500 sentences ×
+  // 24 terms, oldest evicted first) so it can never grow without limit.
+  _feedback(){
+    if(this._feedbackMap)return this._feedbackMap;
+    const m=new Map();
+    try{
+      const raw=JSON.parse(localStorage.getItem('eo_searchlearn')||'[]');
+      for(const [text,terms] of raw)if(text&&Array.isArray(terms))m.set(text,new Set(terms));
+    }catch(e){}
+    this._feedbackMap=m;
+    return m;
+  }
+  _saveFeedback(){
+    try{
+      const m=this._feedback();
+      const rows=[...m.entries()].slice(-500).map(([text,terms])=>[text,[...terms].slice(-24)]);
+      localStorage.setItem('eo_searchlearn',JSON.stringify(rows));
+    }catch(e){}
+  }
+  recordSearchFeedback(query,text){
+    const terms=String(query||'').toLowerCase().match(/[a-z0-9']+/g);
+    if(!terms||!terms.length||!text)return;
+    const m=this._feedback();
+    const rec=m.get(text)||new Set();
+    for(const t of terms)rec.add(t);
+    m.delete(text);m.set(text,rec);   // re-insert last — a Map's insertion order is the LRU the size cap trims by
+    this._saveFeedback();
+  }
+  // Jaccard-ish overlap between the CURRENT query's terms and the terms that previously
+  // led a click to this exact sentence — generalises a remembered click to a differently-
+  // worded repeat of roughly the same question, without needing an exact string match.
+  _feedbackScores(query){
+    const out=new Map();
+    const m=this._feedback();   // cached after the first call — cheap on every later keystroke
+    if(!m||!m.size)return out;
+    const qTerms=new Set(String(query||'').toLowerCase().match(/[a-z0-9']+/g)||[]);
+    if(!qTerms.size)return out;
+    const sentences=(this.master&&this.master.sentences)||[];
+    const scoreByText=new Map();
+    for(const [text,terms] of m){
+      let hit=0;for(const t of qTerms)if(terms.has(t))hit++;
+      if(hit)scoreByText.set(text,hit/qTerms.size);
+    }
+    if(!scoreByText.size)return out;
+    for(let i=0;i<sentences.length;i++){const s=scoreByText.get(sentences[i]);if(s)out.set(i,s);}
+    return out;
+  }
   // ── citation chips: small numbered markers that sit by a summary and, on
   // hover, reveal the exact source sentence + who + when the fold drew on. ─
   citeChips(idxList,opts){
@@ -7987,6 +8198,13 @@ class Component extends DCLogic {
         style:'font-size:12px;font-weight:600;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'var(--line2)')+';background:'+(sel?'var(--accbg)':'var(--card)')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),
       sources:[],srcCount:0,srcEmpty:true,imports:this._importRows(),hasImports:(this.state.imports||[]).length>0,onSrcImport:()=>this.onImportClick(),
       writtenDocs:this._writtenDocRows(),hasWrittenDocs:this._docsMap().size>0,
+      // Corpus search box — see runCorpusSearch/_corpusResultRows. browseMode gates the
+      // ordinary Chats/Sources/Documents lists off while a search is active, so the panel
+      // shows either what you've read or what a query found in it, never a jumble of both.
+      corpusQuery:this.state.corpusQuery||'',onCorpusQuery:e=>this.runCorpusSearch(e&&e.target?e.target.value:''),
+      onCorpusClear:()=>this.runCorpusSearch(''),corpusActive:!!(this.state.corpusQuery||'').trim(),
+      browseMode:!(this.state.corpusQuery||'').trim(),
+      corpusResults:this._corpusResultRows(),corpusCount:0,hasCorpusResults:false,corpusEmpty:false,
       // Transcription option — a second whisper witness so audio/video readings can be audited.
       audioAudit:!!this.state.audioAudit,onToggleAudioAudit:()=>this.setState(s=>({audioAudit:!s.audioAudit})),
       audioAuditStyle:'display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:600;border-radius:7px;padding:5px 9px;cursor:pointer;border:1px solid '+(this.state.audioAudit?'var(--accline)':'var(--line2)')+';background:'+(this.state.audioAudit?'var(--accbg)':'var(--app)')+';color:'+(this.state.audioAudit?'var(--acc)':'var(--ink3)')+';',
@@ -8236,6 +8454,9 @@ class Component extends DCLogic {
         rowStyle:'display:flex;align-items:center;gap:10px;padding:'+(depth?'7px 11px':'9px 11px')+';border-radius:9px;margin-bottom:3px;margin-left:'+(depth*15)+'px;cursor:pointer;border:1px solid '+(isA?'var(--accline)':'transparent')+';background:'+(isA?'var(--accbg)':'transparent')+';'+(depth?'border-left:2px solid '+c+'55;border-radius:0 9px 9px 0;':'')};});
     base.srcCount=this.master.pages.length;base.srcEmpty=this.master.pages.length===0&&(this.state.imports||[]).length===0;
     base.hasSources=this.master.pages.length>0;
+    base.corpusCount=base.corpusResults.length;base.hasCorpusResults=base.corpusResults.length>0;
+    base.corpusPending=base.corpusActive&&this.state.corpusResultsQuery!==(this.state.corpusQuery||'').trim();
+    base.corpusEmpty=base.corpusActive&&!base.corpusPending&&!base.hasCorpusResults;
     base.sitesDirBtnStyle='margin-left:auto;display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:700;border-radius:6px;padding:3px 8px;cursor:pointer;letter-spacing:.02em;'+(this.state.sitesDir?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink3);background:transparent;border:1px solid var(--line2);');
 
     // The "+" new-tab surface, once you already have sources read: a blank centre that offers

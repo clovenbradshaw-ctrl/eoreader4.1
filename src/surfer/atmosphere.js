@@ -36,7 +36,7 @@
 import { buildDensity, relEntropy, vonNeumann, eigenLenses } from '../core/index.js';
 import { deriveNull, cellAt, OPERATORS } from '../core/index.js';
 
-// ── projection: a unit's significance activation over the 27 cells ────────────
+// ── projection: a unit's significance activation over the 27 cells ──────────────
 //
 // The load-bearing basis (Track A): a unit's vector vₖ is NOT its raw MiniLM
 // embedding but its activation over the 27 cell centroids — its cosine against each.
@@ -70,7 +70,7 @@ export const projectUnit = (vec, basis) =>
 export const projectUnits = (vectors, basis) =>
   (vectors || []).map(v => projectUnit(v, basis));
 
-// ── σ_corpus: the prior interpretive geometry ─────────────────────────────────
+// ── σ_corpus: the prior interpretive geometry ──────────────────────────────
 //
 // The corpus prior density — built once from the centroids themselves. Each centroid's
 // own significance activation (its cosines against all 27, i.e. a Gram row) is a
@@ -86,7 +86,7 @@ export const corpusSigma = (basis) => {
   return sigma;
 };
 
-// ── centering: expose the deviation, not the common offset ────────────────────
+// ── centering: expose the deviation, not the common offset ────────────────
 //
 // MEASURED (scripts/measure-significance.mjs, on 19,764 labelled clauses): a cosine
 // projection onto the 27 cell centroids is dominated by a large common component —
@@ -118,7 +118,7 @@ const corpusSigmaCentered = (basis) => {
   return sigma;
 };
 
-// ── the tone: dominant Ground-grain (Atmosphere) cell of ρ ────────────────────
+// ── the tone: dominant Ground-grain (Atmosphere) cell of ρ ────────────────
 //
 // The Ground-grain output. The Atmosphere-terrain cells are the three keyed *_Atmosphere
 // (DEF/EVA/REC at Ground grain). The dominant one is the argmax of ρ's diagonal mass
@@ -170,7 +170,7 @@ const windowDepartures = (centered, sigma) => {
   return out;
 };
 
-// ── atmosphereFromActivations: the sync core (no embedder) ────────────────────
+// ── atmosphereFromActivations: the sync core (no embedder) ────────────────
 //
 // Given per-unit activations and an injected basis, do everything synchronously — so
 // the surfer can call it inside its (sync) surf without awaiting embeddings (the caller
@@ -219,7 +219,7 @@ export const atmosphereFromActivations = (activations, basisOrPrior, { alpha = 0
   });
 };
 
-// ── atmosphereOf: the async organ-facing interface ────────────────────────────
+// ── atmosphereOf: the async organ-facing interface ───────────────────────────
 //
 //   atmosphereOf(doc, { embedder, prior, alpha }) → { departure, tone, verdict, rode }
 //
@@ -232,9 +232,15 @@ export const atmosphereOf = async (doc, { embedder, prior, alpha = 0.05, activat
   if (!basis) return { departure: 0, tone: null, verdict: 'unmeasured', rode: 'atmosphere-kl' };
   let activations = pre;
   if (!activations) {
-    if (!embedder?.measuresMeaning || typeof doc?.sentenceEmbeddings !== 'function')
+    // CLAUSE GRAIN when the doc carries a clause layer: the atmosphere is a read of the
+    // activation DISTRIBUTION (KL departure + dominant tone), index-free, so scoring
+    // clauses rather than pooled sentences only sharpens it — a compound sentence's two
+    // tones become two samples instead of one blurred average. Falls back to the
+    // sentence vectors for a non-text organ (a melody has no clauses), byte-identical.
+    const clauseGrain = Array.isArray(doc?.clauses) && doc.clauses.length && typeof doc?.clauseEmbeddings === 'function';
+    if (!embedder?.measuresMeaning || (!clauseGrain && typeof doc?.sentenceEmbeddings !== 'function'))
       return { departure: 0, tone: null, verdict: 'unmeasured', rode: 'atmosphere-kl' };
-    const vectors = await doc.sentenceEmbeddings(embedder);
+    const vectors = clauseGrain ? await doc.clauseEmbeddings(embedder) : await doc.sentenceEmbeddings(embedder);
     activations = projectUnits(vectors, basis);
   }
   return atmosphereFromActivations(activations, basis, { alpha });
