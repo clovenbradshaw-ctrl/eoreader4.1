@@ -1,65 +1,105 @@
-// skeleton — SEG: the shape of the proper output, carved from the field
-// (docs/paragraph-at-a-time.md). Message 1: for longform to cohere across
-// messages the loop must know what the whole output should be. The skeleton is a
-// sequence of BEATS, one per developable region of the ground — derived, not an
-// imposed canon (shape.js forbids a canon: a shape chosen from outside the field
-// is "a void gate run backwards"). The request's length demand sets the CEILING;
-// the field's developable regions set the FLOOR. When the demand exceeds what the
-// field can develop, the honest skeleton is the smaller number and the shortfall
-// is recorded, so the walk states it rather than pads to the demand — the
-// "shapeless walk" answerable.js refuses (the falcons "5 paragraphs" over ~3 real
-// regions).
+// skeleton — SEG: the shape of the proper output, two levels (docs/paragraph-at-a-
+// time.md). Message 1: for longform to cohere across messages the loop must know
+// what the whole output should be — and that shape is SECTIONS, each an ordered run
+// of paragraph BEATS, not one heading per paragraph. A beat's `role` is `open` (the
+// first paragraph of its section, which carries the heading) or `continue` (a
+// paragraph that picks up WITHIN the section — no new heading, the prose flows on).
 //
-// A beat is document furniture, not a command: it carries a HEADING the render
-// writes beneath (goal-as-furniture, SEG) and a KIND — load-bearing or connective
-// — that sets how tightly the seed pins it (the per-beat SEG choice). Carved ONCE
-// at plan time, then copied forward across messages, never re-derived on resume
-// (stable, the way the essay's thesis is copied forward).
+// The structure has two sources, and the honest one is the second:
+//
+//  - `outline` — the EMERGENT structure discovered by processing a corpus: the
+//    significance loop surfaces the salient findings, and the surfer's frame-breaks
+//    (atmosphere/paradigm shifts) are the section boundaries. Sections of findings,
+//    handed in. This is the real path.
+//  - mechanical fallback — no outline: a SINGLE flowing section over the developable
+//    regions. We do NOT invent section breaks from a per-query retrieval (shape.js
+//    forbids a canon); without discovered structure the answer flows as one section.
+//
+// The length demand caps the TOTAL paragraph count and is honest-floored against the
+// findings the structure actually supplies (never padded to the demand). Carved
+// once, copied forward across messages, never re-derived on resume.
 
 import { developableRegions } from './answerable.js';
 
-// A region strong enough to pin with a tight topic-sentence seed is LOAD-BEARING;
-// a thinner one is CONNECTIVE and lets the render own the claim. The bar is above
-// the developable floor (answerable.js DEVELOPABLE_SCORE 0.4) — a beat has to be
-// clearly strong to be pinned tightly, or the tight seed over-commits a thin span.
+// A region strong enough to pin with a tight topic-sentence seed is LOAD-BEARING; a
+// thinner one is CONNECTIVE and lets the render own the claim. Above the developable
+// floor (answerable.js DEVELOPABLE_SCORE 0.4).
 const LOAD_BEARING_SCORE = 0.6;
 
-// A heading written from the region's topic — a few words, title-ish, no trailing
-// punctuation. Document furniture the model writes beneath; stripped from output.
+// A heading written from a topic — a few words, title-ish, no trailing punctuation.
 export const headingOf = (topic = '') => {
   const words = String(topic).replace(/\s+/g, ' ').trim().split(' ').filter(Boolean).slice(0, 6);
   const h = words.join(' ').replace(/[.,;:!?]+$/, '');
   return h ? h[0].toUpperCase() + h.slice(1) : 'The reading';
 };
 
-// Carve the skeleton: one beat per developable region, ordered by salience, capped
-// by the demand and floored by the field. Pure and deterministic on the ground.
-export const buildSkeleton = ({ ground = [], question = '', demand = null, max = 8 } = {}) => {
-  const cap = Number.isInteger(demand) && demand > 0 ? demand : null;
+// Normalise the two input shapes to a list of { heading, topic, findings:[{idx,topic}] }.
+const sectionsFrom = ({ outline, ground, question, cap, max }) => {
+  if (Array.isArray(outline) && outline.length) {
+    return outline
+      .map((s) => ({
+        heading: s.heading != null ? s.heading : (s.topic ? headingOf(s.topic) : null),
+        topic: s.topic || s.heading || '',
+        findings: (s.findings || s.beats || [])
+          .filter((f) => f && Number.isInteger(f.idx))
+          .map((f) => ({ idx: f.idx, topic: f.topic || f.text || '' })),
+      }))
+      .filter((s) => s.findings.length);
+  }
+  // Fallback — one flowing section over the developable regions, no invented breaks.
   const regions = developableRegions(ground, new Set(), { max: Math.max(cap || 0, max) });
-  const available = regions.length;
-  const planned = cap ? Math.min(cap, available) : available;
+  if (!regions.length) return [];
+  return [{
+    heading: null,                                   // a flowing section carries no heading
+    topic: question || regions[0].topic || '',
+    findings: regions.map((r) => ({ idx: r.idx, topic: r.topic })),
+  }];
+};
 
+export const buildSkeleton = ({ ground = [], question = '', demand = null, outline = null, max = 8 } = {}) => {
+  const cap = Number.isInteger(demand) && demand > 0 ? demand : null;
   const scoreByIdx = new Map((ground || []).map((s, i) => [s.idx ?? i, s.score || 0]));
-  const beats = regions.slice(0, planned).map((r, i) => Object.freeze({
-    id: `b${i}`,
-    order: i,
-    idx: r.idx,                       // the anchor span — the beat's grounding
-    topic: r.topic,
-    heading: headingOf(r.topic),
-    kind: (scoreByIdx.get(r.idx) || 0) >= LOAD_BEARING_SCORE ? 'load-bearing' : 'connective',
-    state: 'pending',
-  }));
+  const kindOf = (idx) => ((scoreByIdx.get(idx) || 0) >= LOAD_BEARING_SCORE ? 'load-bearing' : 'connective');
+
+  const secs = sectionsFrom({ outline, ground, question, cap, max });
+  const availableTotal = secs.reduce((n, s) => n + s.findings.length, 0);
+  const plannedTotal = cap ? Math.min(cap, availableTotal) : availableTotal;
+
+  // Flatten to ordered beats, capping the TOTAL paragraph count at the demand. The
+  // first finding of a section OPENS it (carries the heading); the rest CONTINUE.
+  const sections = [];
+  const beats = [];
+  let count = 0;
+  for (let si = 0; si < secs.length && count < plannedTotal; si++) {
+    const sec = secs[si];
+    const sectionId = `s${si}`;
+    const ids = [];
+    for (let fi = 0; fi < sec.findings.length && count < plannedTotal; fi++) {
+      const f = sec.findings[fi];
+      beats.push(Object.freeze({
+        id: `b${count}`,
+        order: count,
+        sectionId,
+        idx: f.idx,
+        topic: f.topic,
+        kind: kindOf(f.idx),
+        role: fi === 0 ? 'open' : 'continue',
+        heading: fi === 0 ? sec.heading : null,      // heading only on the section opener
+        state: 'pending',
+      }));
+      ids.push(`b${count}`);
+      count += 1;
+    }
+    if (ids.length) sections.push(Object.freeze({ id: sectionId, heading: sec.heading, topic: sec.topic, beats: Object.freeze(ids) }));
+  }
 
   return Object.freeze({
     question: String(question || ''),
     demand: cap,
-    planned,
-    // The honest-floor record: the demand asked for more than the field can
-    // develop, so the walk writes `planned` beats and can state the shortfall
-    // rather than pad to `demand`.
-    short: cap ? cap > available : false,
-    shortfall: cap ? Math.max(0, cap - available) : 0,
+    planned: plannedTotal,
+    short: cap ? cap > availableTotal : false,
+    shortfall: cap ? Math.max(0, cap - availableTotal) : 0,
+    sections: Object.freeze(sections),
     beats: Object.freeze(beats),
   });
 };

@@ -84,6 +84,7 @@ export const composeParagraphs = async ({
   ground = [],
   question = '',
   demand = null,          // the length demand ("5 paragraphs") — the skeleton's ceiling
+  outline = null,         // the emergent sections-of-findings from corpus processing
   model,
   genre = '',             // an optional cold-start genre declaration
   state = null,           // resumable state from a prior message
@@ -95,7 +96,7 @@ export const composeParagraphs = async ({
 
   // Carve the skeleton ONCE, or resume the one carried in state — copied forward,
   // never re-derived, so the shape is stable across messages.
-  const skeleton = state?.skeleton || buildSkeleton({ ground: pool, question, demand });
+  const skeleton = state?.skeleton || buildSkeleton({ ground: pool, question, demand, outline });
   const anchors = new Set(skeleton.beats.map(b => b.idx));
 
   const accepted = state?.accepted ? [...state.accepted] : [];
@@ -153,6 +154,8 @@ export const composeParagraphs = async ({
 
     accepted.push(Object.freeze({
       beat: beat.id,
+      sectionId: beat.sectionId,
+      role: beat.role,
       heading: beat.heading,
       topic: beat.topic,
       kind: beat.kind,

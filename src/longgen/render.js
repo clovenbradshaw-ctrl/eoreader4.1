@@ -81,9 +81,14 @@ export const renderContinuation = ({ beat = {}, slice = [], prior = '', coldStar
   // thread carry structurally (no "make it flow" instruction).
   if (prior) blocks.push(prior);
 
-  // The heading (goal-as-furniture, SEG) and the seed (goal-as-DEF), which end the
-  // prompt: the document trails off here for the model to continue.
-  blocks.push(`## ${beat.heading || 'The reading'}`);
+  // The heading (goal-as-furniture, SEG) rides ONLY when this beat OPENS a section
+  // AND the section carries a heading. A `continue` paragraph picks up within the
+  // section with no new heading, and a flowing (headingless) section has none —
+  // the goal then rides purely as the seed, never as furniture.
+  if (beat.role === 'open' && beat.heading) blocks.push(`## ${beat.heading}`);
+
+  // The seed (goal-as-DEF) ends the prompt: the document trails off here for the
+  // model to continue.
   const seed = seedFor({ beat, slice });
   if (seed) blocks.push(seed);
 

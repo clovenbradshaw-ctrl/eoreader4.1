@@ -27,14 +27,33 @@ const groundOf = () => ([
 
 // ── SEG: the skeleton is the shape, derived and honest-floored ────────────────
 
-test('buildSkeleton carves one beat per developable region, ordered by salience', () => {
+test('buildSkeleton with no outline is ONE flowing section — paragraphs, not headed stubs', () => {
   const sk = buildSkeleton({ ground: groundOf(), question: 'falcons', demand: 3 });
-  assert.equal(sk.planned, 3, 'the demand caps the beat count');
+  assert.equal(sk.planned, 3, 'the demand caps the total paragraph count');
   assert.equal(sk.beats.length, 3);
+  assert.equal(sk.sections.length, 1, 'no invented section breaks — one flowing section');
   assert.equal(sk.beats[0].idx, 0, 'the strongest region leads');
+  assert.equal(sk.beats[0].role, 'open', 'the first paragraph opens the section');
+  assert.equal(sk.beats[0].heading, null, 'a flowing section carries no per-paragraph heading');
+  assert.equal(sk.beats[1].role, 'continue', 'later paragraphs pick up within the section');
   assert.equal(sk.beats[0].kind, 'load-bearing', 'a strong region is pinned tightly');
-  assert.ok(sk.beats[0].heading.length > 0, 'every beat carries a heading (goal-as-furniture)');
   assert.equal(sk.short, false, 'the field can supply three of three');
+});
+
+test('buildSkeleton from an emergent outline is multi-section — heading only on the opener', () => {
+  const outline = [
+    { heading: 'Flight and speed', topic: 'flight', findings: [{ idx: 0 }, { idx: 5 }] },
+    { heading: 'Where they live', topic: 'habitat', findings: [{ idx: 1 }, { idx: 7 }] },
+  ];
+  const sk = buildSkeleton({ ground: groundOf(), question: 'falcons', outline });
+  assert.equal(sk.sections.length, 2);
+  assert.equal(sk.beats.length, 4, 'two paragraphs per section');
+  assert.equal(sk.beats[0].role, 'open');
+  assert.equal(sk.beats[0].heading, 'Flight and speed', 'the opener carries the section heading');
+  assert.equal(sk.beats[1].role, 'continue');
+  assert.equal(sk.beats[1].heading, null, 'a continuation paragraph gets no heading');
+  assert.equal(sk.beats[2].role, 'open', 'the next section opens a fresh heading');
+  assert.equal(sk.beats[2].sectionId, 's1');
 });
 
 test('buildSkeleton honours the floor: a demand past what the field develops is not padded', () => {
@@ -48,7 +67,7 @@ test('buildSkeleton honours the floor: a demand past what the field develops is 
 // ── render: condition the artifact, not the behavior ─────────────────────────
 
 test('renderContinuation is a continuation, not an instruction — no task frame leaks', () => {
-  const sk = buildSkeleton({ ground: groundOf(), demand: 3 });
+  const sk = buildSkeleton({ ground: groundOf(), outline: [{ heading: 'The stoop', topic: 'stoop', findings: [{ idx: 0 }, { idx: 5 }] }] });
   const slice = groundOf().slice(0, 3);
   const msgs = renderContinuation({ beat: sk.beats[0], slice, prior: '', coldStart: true });
 
@@ -58,7 +77,7 @@ test('renderContinuation is a continuation, not an instruction — no task frame
 
   // The facts ride above the line, under the excerpts header (the binder + echo read it).
   assert.ok(user.includes(EXCERPTS_HEADER), 'the source material is present as a Record block');
-  assert.ok(user.includes('## '), 'the beat rides as a heading (SEG furniture), not a command');
+  assert.ok(user.includes('## The stoop'), 'the section opener rides as a heading (SEG furniture), not a command');
 
   // None of the inorganic levers — the exact phrases the falcons prompt leaked.
   for (const banned of [
@@ -71,6 +90,17 @@ test('renderContinuation is a continuation, not an instruction — no task frame
   // The document trails off on the seed — the model continues from here.
   const seed = seedFor({ beat: sk.beats[0], slice });
   assert.ok(user.trimEnd().endsWith(seed), 'the prompt ends mid-document, on the seed');
+});
+
+test('a continuation paragraph renders no new heading — it picks up within the section', () => {
+  const sk = buildSkeleton({ ground: groundOf(), outline: [{ heading: 'The stoop', topic: 'stoop', findings: [{ idx: 0 }, { idx: 5 }] }] });
+  const slice = groundOf().slice(0, 3);
+  const openUser = renderContinuation({ beat: sk.beats[0], slice, prior: '', coldStart: true })[1].content;
+  const contUser = renderContinuation({ beat: sk.beats[1], slice, prior: 'The prior paragraph established the dive.', coldStart: false })[1].content;
+
+  assert.ok(openUser.includes('## The stoop'), 'the section opener carries the heading');
+  assert.ok(!contUser.includes('## '), 'the continuation paragraph adds no heading — it flows on from the prior');
+  assert.ok(contUser.includes('The prior paragraph established the dive.'), 'the prior paragraph is the left-context it picks up from');
 });
 
 test('renderContinuation inherits register from the prior paragraph, and only cold-starts a genre', () => {
@@ -137,6 +167,7 @@ test('progressAgainst folds accepted paragraphs onto the skeleton', () => {
   assert.equal(none.covered, 0);
   assert.equal(none.planned, 3);
   assert.equal(none.complete, false);
+  assert.equal(none.sections.length, 1, 'the flowing fallback is one section');
   assert.deepEqual([...none.pending].length, 3, 'every beat is an open debt at the start');
 
   const two = progressAgainst(sk, [{ beat: 'b0', sources: [0] }, { beat: 'b1', sources: [1] }]);
@@ -161,6 +192,23 @@ test('composeParagraphs writes one grounded paragraph per beat and completes the
   assert.ok(res.answer.length > 0, 'the assembled answer is non-empty');
   assert.equal(res.progress.complete, true, 'the shape is complete — 3 of 3');
   assert.equal(res.progress.covered, 3);
+});
+
+test('composeParagraphs over an emergent outline writes multi-paragraph sections', async () => {
+  const model = createModel('echo');
+  await model.load();
+
+  const outline = [
+    { heading: 'Flight and speed', topic: 'flight', findings: [{ idx: 0 }, { idx: 5 }] },
+    { heading: 'Where they live', topic: 'habitat', findings: [{ idx: 1 }, { idx: 7 }] },
+  ];
+  const res = await composeParagraphs({ ground: groundOf(), question: 'falcons', outline, model });
+
+  assert.equal(res.paragraphs.length, 4, 'four paragraphs across two sections');
+  assert.equal(res.progress.sections.length, 2, 'two sections in the progress workspace');
+  assert.deepEqual(res.paragraphs.map(p => p.role), ['open', 'continue', 'open', 'continue'],
+    'the first paragraph of each section opens it; the rest pick up within it');
+  assert.equal(res.progress.complete, true, 'every paragraph of every section covered');
 });
 
 test('composeParagraphs holds the floor: a demand past the field is not padded to length', async () => {

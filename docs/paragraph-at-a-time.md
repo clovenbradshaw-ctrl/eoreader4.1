@@ -155,16 +155,32 @@ handing the material, and there is nothing to forbid.
 "A sense of the goal of the next chunk" is not vague. It is two persisted
 objects, and they are what the falcons run never had.
 
-### Shape — derived from the field, copied forward, not a canon
+### Shape — two levels, emergent from the corpus, copied forward, not a canon
 
-The shape is the set of regions the proper output should cover, **read off the
-field** — the developable regions of the ground (`developableRegions`,
-`answerable.js`) — not a template chosen from outside and imposed. `shape.js` is
-emphatic about why: a canon of response shapes is *"a void gate run backwards …
-a balance the evidence cannot earn."* So the shape is *discovered* at plan time
-from what the ground can actually develop, then **copied forward across every
-message, never rewritten** — the way the essay's thesis is copied into every
-carry (`docs/longform-generation.md`).
+The shape has **two levels**: SECTIONS, each an ordered run of paragraph beats.
+A beat's role is `open` (the first paragraph of its section, which carries the
+heading) or `continue` (a paragraph that picks up *within* the section — no new
+heading, the prose flows on). Not every paragraph is its own section; a heading
+is furniture only at a section boundary, and inside a section the goal rides
+purely as the seed (DEF) and the continuity (CON).
+
+The structure has two sources, and the honest one is emergent. The **sections
+come from processing a corpus**, not from a per-query retrieval: the significance
+loop surfaces the salient **findings**, and the surfer's frame-breaks — where the
+`atmosphere` / paradigm shifts (`surfer/atmosphere.js`, `surfer/trajectory.js`) —
+are the natural section boundaries. Sections are the reading's own thematic
+segments; the paragraphs within a section are its findings. That outline is an
+input, produced upstream by corpus processing, handed to `buildSkeleton`.
+
+When no emergent outline is available, the fallback is a **single flowing
+section** over the developable regions (`developableRegions`, `answerable.js`) —
+paragraphs that pick up within one section, never headed stubs. We do **not**
+invent section breaks from a per-query retrieval; `shape.js` is emphatic that a
+canon of response shapes is *"a void gate run backwards … a balance the evidence
+cannot earn."* So multi-section structure is *discovered* by the corpus, and
+whichever shape is carved is **copied forward across every message, never
+rewritten** — the way the essay's thesis is copied into every carry
+(`docs/longform-generation.md`).
 
 The request's own length demand seeds the shape. *"5 paragraphs"* is a demand
 for a five-region shape; if the field offers only two developable regions, the

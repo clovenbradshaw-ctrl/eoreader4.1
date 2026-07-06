@@ -18,6 +18,20 @@ export const progressAgainst = (skeleton = null, accepted = []) => {
   }));
   const covered = beats.filter(b => b.state === 'covered').length;
   const landed = (accepted || []).some(p => p.closes);
+
+  // Section-grain progress: a section is complete when every paragraph in it is
+  // covered. The paragraph count is the fine grain; the section is the coarse one
+  // — both shown, so the workspace reads as sections-with-their-paragraphs.
+  const sections = (skeleton.sections || []).map((sec) => {
+    const secBeats = skeleton.beats.filter(b => b.sectionId === sec.id);
+    const cov = secBeats.filter(b => cited.has(b.idx)).length;
+    return Object.freeze({
+      id: sec.id, heading: sec.heading, topic: sec.topic,
+      planned: secBeats.length, covered: cov,
+      complete: secBeats.length > 0 && cov >= secBeats.length,
+    });
+  });
+
   return Object.freeze({
     planned: skeleton.planned,
     covered,
@@ -25,6 +39,8 @@ export const progressAgainst = (skeleton = null, accepted = []) => {
     // The workspace, not a bar: the topics still owed, named — a visible debt.
     pending: Object.freeze(beats.filter(b => b.state === 'pending').map(b => b.topic)),
     beats: Object.freeze(beats),
+    sections: Object.freeze(sections),
+    sectionsComplete: sections.filter(s => s.complete).length,
     landed,
     // The honest-floor read carried from the skeleton, so a caller can say "the
     // sources cover 3 of the 5 you asked for" rather than pad to five.
