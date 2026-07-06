@@ -302,20 +302,27 @@ test('buildGroundedMessages: now folds the moment in without disturbing the subj
   assert.match(dated[0].content, /27 June 2026/);                // the moment is appended
 });
 
-// ── The meaning graph in the prompt (the web path feeds the fold's relations) ──
-test('buildGroundedMessages: a graph block feeds the typed relations; absent → no block', () => {
+// ── The fold in the prompt (handed over as near-prose, not as a data structure) ──
+// The fold rides in one short line and is given to the talker the way it gives its answer
+// back — as language, without the machinery of where it came from. It must NOT name the
+// fold's format (no "EOT triples", no "A -> B : rel" legend), nor tell the talker to
+// "reason over" it: the folding did the thinking; the frame is only a plain hand-off.
+test('buildGroundedMessages: the fold block hands over the near-prose sense; absent → no block', () => {
   const spans = [{ idx: 0, text: 'Ryan Coogler is developing the revival.' }];
   const plain = buildGroundedMessages({ question: 'who is making it?', spans });
-  assert.doesNotMatch(plain[1].content, /What it means/, 'no graph block by default (subjective frame holds)');
+  assert.doesNotMatch(plain[1].content, /the sense of it, from your reading/, 'no fold block by default (subjective frame holds)');
 
-  const graph = 'revival -> Ryan Coogler : developed-by\nseries -> 20th Television : produced-for';   // EOT
+  // The fold arrives ALREADY near-prose (the reader's foldProse renders it upstream).
+  const graph = 'Ryan Coogler develops the revival — a filmmaker steering the reboot\nThe series answers to 20th Television';
   const withGraph = buildGroundedMessages({ question: 'who is making it?', spans, graph });
-  assert.match(withGraph[1].content, /What it means — the relations that come to mind/, 'the graph block is present');
-  assert.match(withGraph[1].content, /EOT triples/, 'the block names the EOT surface');
-  assert.match(withGraph[1].content, /revival -> Ryan Coogler : developed-by/, 'the EOT triples are fed verbatim');
-  assert.match(withGraph[1].content, /Reason over THESE/, 'the talker is told to reason over the graph');
-  // The verbatim lines still ride as grounding beneath the graph.
+  assert.match(withGraph[1].content, /Here's the sense of it, from your reading:/, 'the fold block is present');
+  assert.match(withGraph[1].content, /Ryan Coogler develops the revival/, 'the near-prose fold is fed as given');
+  // No machinery reaches the talker: it is not told its input is triples, nor to "reason over" it.
+  assert.doesNotMatch(withGraph[1].content, /EOT triples/, 'the fold is never named as a data surface');
+  assert.doesNotMatch(withGraph[1].content, /Reason over THESE/, 'the talker is not told to reason over a structure');
+  assert.doesNotMatch(withGraph[1].content, /What it means/, 'no framing label the talker would echo as a heading');
+  // The high-value verbatim lines still ride as grounding beneath the fold.
   assert.match(withGraph[1].content, new RegExp(EXCERPTS_HEADER));
-  assert.ok(withGraph[1].content.indexOf('What it means') < withGraph[1].content.indexOf(EXCERPTS_HEADER),
-    'the graph leads; the lines follow as its grounding');
+  assert.ok(withGraph[1].content.indexOf("Here's the sense of it") < withGraph[1].content.indexOf(EXCERPTS_HEADER),
+    'the fold leads; the verbatim lines follow as its grounding');
 });
