@@ -6843,7 +6843,7 @@ class Component extends DCLogic {
       // Grounding chips: the verbatim passages the answer leaned on (the richest, most
       // mechanical trail), then the source(s) and the entities it named. Each passage chip
       // opens its source; entity chips pivot the panel.
-      const passages=(m.passages||[]).map(p=>({label:this.truncLabel(this.norm(p.text),46),title:this.norm(p.text),onOpen:()=>this.goWeb(p.u)}));
+      const passages=(m.passages||[]).map(p=>({label:this.truncLabel(this.norm(p.text),46),title:this.norm(p.text),onOpen:()=>this._goToPassage(p.u,p.text)}));
       const sources=(m.sources||[]).map(u=>({label:titleForUrl(u),title:u,onOpen:()=>this.goWeb(u)}));
       const cites=passages.length?passages:sources;   // prefer passages; fall back to bare sources
       // Each entity carries the DOMAIN it was read from — the source provenance, shown as a muted
@@ -6893,8 +6893,12 @@ class Component extends DCLogic {
       // ~40–60 words is the span that carries a claim with its qualifier and reads as complete
       // (featured-snippet research); longer than the old 46-char chip, clamped in the view so it
       // stays tidy. Each ref also carries its source identity (favicon + domain) and a hasIcon flag.
+      // Clicking a reference goes to the exact SECTION of the source the passage is from —
+      // _goToPassage opens (or reuses) the source, then scrolls it to the verbatim line — not
+      // just the page. Same behaviour as the inline citation pills, so the grounded footer and
+      // the in-text superscripts land in the same spot.
       const refOf=(u,n,text)=>({n,label:titleForUrl(u),domain:this.short(u)||titleForUrl(u),
-        preview:this.truncLabel(this.norm(text),300),onOpen:()=>this.goWeb(u)});
+        preview:this.truncLabel(this.norm(text),300),onOpen:()=>this._goToPassage(u,text)});
       const bodyReg=liveReg||(rcites&&rcites.reg)||(ann&&ann.reg);
       let refs=[];
       if(bodyReg){
