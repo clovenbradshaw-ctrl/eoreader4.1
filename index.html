@@ -236,6 +236,11 @@
             <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:8px;">Memory</div>
             <button onclick="{{ onOpenMem }}" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:12px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:9px;cursor:pointer;" style-hover="background:var(--card)"><i class="ph" style="font-size:14px;">&#xE710;</i>Open memory log</button>
             <div style="font-size:11px;color:var(--ink3);line-height:1.45;margin-top:6px;">Every source read into memory — revisit any, or mute it from the record.</div>
+
+            <div style="height:1px;background:var(--line);margin:14px 0;"></div>
+            <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:8px;">Prompts</div>
+            <button onclick="{{ onOpenPromptFlow }}" title="Visualize the flow of every prompt the engine builds — read live off the source, so it changes when the code does" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:12px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:9px;cursor:pointer;" style-hover="background:var(--card)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:0 0 auto;"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>Open prompt flow</button>
+            <div style="font-size:11px;color:var(--ink3);line-height:1.45;margin-top:6px;">Every register, cue, and the live prompt assembly — built from the real source. Change a prompt in the code and this follows.</div>
           </div>
         </sc-if>
       </div>
@@ -1913,6 +1918,19 @@
     </div>
   </sc-if>
 
+  <sc-if value="{{ promptFlowOpen }}" hint-placeholder-val="{{ false }}">
+    <div onclick="{{ onClosePromptFlow }}" style="position:fixed;inset:0;background:rgba(20,24,30,.34);z-index:60;display:flex;align-items:center;justify-content:center;padding:32px;">
+      <div onclick="{{ promptFlowStop }}" style="width:1040px;max-width:100%;height:88vh;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 60px rgba(20,24,30,.3);overflow:hidden;animation:eopop .14s ease-out;">
+        <div style="padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex:0 0 auto;">
+          <div style="width:24px;height:24px;border-radius:7px;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:0 0 auto;">EO</div>
+          <div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:700;line-height:1.2;">Prompt flow</div><div style="font-size:11px;color:var(--ink3);margin-top:1px;">every prompt the engine builds — read live off the source</div></div>
+          <button onclick="{{ onClosePromptFlow }}" title="Close" style="width:28px;height:28px;border:none;background:transparent;color:var(--ink3);border-radius:7px;cursor:pointer;font-size:18px;line-height:1;flex:0 0 auto;" style-hover="background:#eef0f3;color:var(--ink)">×</button>
+        </div>
+        <iframe src="prompt-flow.html" title="Prompt flow" style="flex:1;min-height:0;width:100%;border:none;"></iframe>
+      </div>
+    </div>
+  </sc-if>
+
   <sc-if value="{{ hoverCardOn }}" hint-placeholder-val="{{ false }}">
     <div id="eo-hovercard" onmouseenter="{{ hoverCard.onEnter }}" onmouseleave="{{ hoverCard.onLeave }}" style="{{ hoverCard.wrap }}">
       <div style="display:flex;align-items:center;gap:9px;">
@@ -2089,7 +2107,7 @@ class Component extends DCLogic {
       // Default is 'native' — render the real page as HTML first; switch to the stripped
       // reader view only on request (the toggle persists 'reader' for those who prefer it).
       viewMode:(savedViewMode==='reader'?'reader':'native'),
-      accent:savedAccent||null, highlightStyle:savedHL||'marker', settingsOpen:false, templatesOpen:false,
+      accent:savedAccent||null, highlightStyle:savedHL||'marker', settingsOpen:false, templatesOpen:false, promptFlowOpen:false,
       hoverPivot:savedHoverPivot||'dwell', clickAction:savedClickAct||'ask', hoverDelay:Math.max(150,Math.min(2000,+savedHoverDelay||1100)),
       // THE COMPOSER CARRIES NO MODE STATE (design/chat-redesign/REVISIONS.md).
       // Register, depth, strategy and web reach are all EMERGENT — read off the
@@ -10304,6 +10322,7 @@ class Component extends DCLogic {
       settingsOpen:this.state.settingsOpen,onToggleSettings:()=>this.toggleSettings(),onCloseSettings:()=>this.closeSettings(),
       chorus:this._chorusView(),
       templatesOpen:this.state.templatesOpen,onOpenTemplates:()=>this.setState({templatesOpen:true,settingsOpen:false}),onCloseTemplates:()=>this.setState({templatesOpen:false}),templatesStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
+      promptFlowOpen:this.state.promptFlowOpen,onOpenPromptFlow:()=>this.setState({promptFlowOpen:true,settingsOpen:false}),onClosePromptFlow:()=>this.setState({promptFlowOpen:false}),promptFlowStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
       memOpen:this.state.memOpen,onOpenMem:()=>this.setState({memOpen:true,settingsOpen:false}),onCloseMem:()=>this.setState({memOpen:false}),memStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},onExportMem:()=>this.exportMemory(),mem:(this.state.memOpen?this.memoryLog():{rows:[],hasRows:false,statLine:'',empty:true}),
       memTab:this.state.memTab||'sources',memTabSources:(this.state.memTab||'sources')==='sources',memTabLog:this.state.memTab==='log',
       onMemSources:()=>this.setState({memTab:'sources'}),onMemLog:()=>this.setState({memTab:'log'}),

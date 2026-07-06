@@ -1,0 +1,798 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f6f8">
+  <title>eoreader4 · prompt flow</title>
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <!-- Self-contained theme, matching the reader shell's light palette (view.xdc.html :root)
+       so the panel is coherent inside the reader's white modal. Every var() carries its own
+       fallback if this block is ever stripped. Same convention as templates.html. -->
+  <style>
+    :root{ --bg:#fff; --bg2:#f5f6f8; --card:#fff; --fg:#1b1f24; --fg2:#5a626d; --fg3:#8a8f98;
+      --rule:#e6e8ec; --rule2:#d7dbe0; --accent:#5b34d6; --accbg:#f2eefc; --accline:#dccef7;
+      --grn:#16a34a; --grnbg:#eefaf2; --amber:#c9871f; --amberbg:#fbf4e6; }
+    body{ background:var(--bg2); color:var(--fg); }
+  </style>
+  <script>
+    // Single source of truth for the accent. The reader persists the user's chosen accent to
+    // localStorage['eo_accent'] (setAccent in the shell); this panel is same-origin, so it reads
+    // that one key rather than carrying its own copy — recolor in the reader and this follows.
+    try { var a = localStorage.getItem('eo_accent'); if (a) { document.documentElement.style.setProperty('--accent', a); } } catch (e) {}
+  </script>
+  <style>
+    *{ box-sizing:border-box; }
+    body{ margin:0; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+    .wrap{ max-width:1000px; margin:0 auto; padding:20px 22px 80px; }
+    a{ color:var(--accent); text-decoration:none; }
+    a:hover{ text-decoration:underline; }
+    code, .mono{ font-family:ui-monospace,Menlo,Consolas,"SF Mono",monospace; }
+
+    header.pf{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:4px; }
+    header.pf h1{ font-size:20px; margin:0; letter-spacing:-.01em; }
+    header.pf .sub{ color:var(--fg3); font-size:13px; }
+    header.pf .spacer{ flex:1; }
+    .note{ color:var(--fg2); font-size:13px; line-height:1.55; margin:8px 0 20px;
+      background:var(--card); border:1px solid var(--rule); border-radius:11px; padding:12px 14px; }
+    .note b{ color:var(--fg); }
+    .note .live{ display:inline-flex; align-items:center; gap:6px; font-weight:600; color:var(--grn); }
+    .note .live::before{ content:""; width:7px; height:7px; border-radius:50%; background:var(--grn); }
+
+    section{ margin:30px 0 0; }
+    h2.sec{ font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.07em;
+      color:var(--fg3); margin:0 0 4px; }
+    .seclead{ color:var(--fg2); font-size:12.5px; line-height:1.5; margin:0 0 14px; }
+
+    /* ── pipeline strip ─────────────────────────────────────────── */
+    .flow{ display:flex; flex-wrap:wrap; align-items:stretch; gap:6px; }
+    .stg{ position:relative; display:flex; flex-direction:column; gap:2px; padding:8px 11px 8px;
+      background:var(--card); border:1px solid var(--rule); border-radius:9px; min-width:74px; }
+    .stg .n{ font-size:12.5px; font-weight:700; color:var(--fg); }
+    .stg .d{ font-size:10px; color:var(--fg3); line-height:1.3; }
+    .stg.key{ border-color:var(--accline); background:var(--accbg); }
+    .stg.key .n{ color:var(--accent); }
+    .stg.term{ border-style:dashed; }
+    .arrow{ align-self:center; color:var(--rule2); font-size:13px; padding:0 1px; }
+    .branch{ margin-top:12px; display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:8px; }
+    .brow{ display:flex; gap:9px; align-items:flex-start; background:var(--card); border:1px solid var(--rule);
+      border-left:3px solid var(--accent); border-radius:9px; padding:9px 11px; }
+    .brow .cond{ font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; color:var(--accent);
+      white-space:nowrap; margin-top:1px; }
+    .brow .to{ font-size:12px; color:var(--fg2); line-height:1.4; }
+    .brow .to b{ color:var(--fg); }
+
+    /* ── live assembly ──────────────────────────────────────────── */
+    .assembly{ background:var(--card); border:1px solid var(--rule); border-radius:13px; overflow:hidden; }
+    .modes{ display:flex; gap:2px; padding:10px 12px; border-bottom:1px solid var(--rule); background:var(--bg2); flex-wrap:wrap; }
+    .modes .m{ font-size:12px; font-weight:600; color:var(--fg2); padding:6px 12px; border-radius:8px; cursor:pointer; border:1px solid transparent; }
+    .modes .m.on{ background:var(--card); color:var(--accent); border-color:var(--accline); }
+    .controls{ display:flex; flex-wrap:wrap; gap:7px 7px; padding:12px; border-bottom:1px solid var(--rule); }
+    .controls .grp{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; }
+    .controls .lbl{ font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--fg3); margin-right:2px; }
+    .chip{ font-size:12px; font-weight:600; color:var(--fg2); background:var(--bg2); border:1px solid var(--rule2);
+      border-radius:999px; padding:5px 11px; cursor:pointer; user-select:none; white-space:nowrap; }
+    .chip.on{ color:#fff; background:var(--accent); border-color:var(--accent); }
+    .chip.radio.on{ color:#fff; background:var(--accent); }
+    .chip[disabled]{ opacity:.38; cursor:not-allowed; }
+    .sep{ width:1px; align-self:stretch; background:var(--rule); margin:0 3px; }
+
+    .msgs{ padding:14px; display:flex; flex-direction:column; gap:12px; }
+    .msg{ border:1px solid var(--rule); border-radius:11px; overflow:hidden; }
+    .msg > .head{ display:flex; align-items:center; gap:9px; padding:8px 12px; background:var(--bg2); border-bottom:1px solid var(--rule); }
+    .rolebadge{ font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; padding:2px 8px; border-radius:6px; }
+    .rolebadge.system{ color:#fff; background:#3b4252; }
+    .rolebadge.user{ color:#fff; background:var(--accent); }
+    .rolebadge.assistant{ color:var(--fg2); background:var(--rule); }
+    .msg .head .meta{ font-size:11px; color:var(--fg3); }
+    .blocks{ display:flex; flex-direction:column; }
+    .blk{ padding:10px 12px; border-top:1px dashed var(--rule); }
+    .blk:first-child{ border-top:none; }
+    .blk .tag{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:5px; }
+    .blk .tag .name{ font-size:10.5px; font-weight:800; letter-spacing:.02em; color:var(--accent);
+      background:var(--accbg); border:1px solid var(--accline); border-radius:6px; padding:1px 7px; }
+    .blk .tag .name.dyn{ color:var(--fg2); background:var(--bg2); border-color:var(--rule2); }
+    .blk .tag .loc{ font-size:10.5px; color:var(--fg3); }
+    .blk .tag .loc a{ color:var(--fg3); }
+    .blk .body{ font-size:12.5px; line-height:1.55; white-space:pre-wrap; word-break:break-word; color:var(--fg); }
+    .blk.empty .body{ color:var(--fg3); font-style:italic; }
+    .rawbar{ display:flex; align-items:center; gap:10px; padding:9px 14px; border-top:1px solid var(--rule); background:var(--bg2); }
+    .rawbar .stat{ font-size:11.5px; color:var(--fg3); }
+    .rawbar .spacer{ flex:1; }
+    .mini{ font-size:11.5px; font-weight:600; color:var(--fg2); background:var(--card); border:1px solid var(--rule2);
+      border-radius:7px; padding:5px 10px; cursor:pointer; }
+    .mini:hover{ border-color:var(--accline); color:var(--accent); }
+    pre.raw{ margin:0; padding:14px; background:#1b1f24; color:#e6e8ec; font-size:11.5px; line-height:1.5;
+      overflow:auto; max-height:340px; white-space:pre-wrap; word-break:break-word; }
+    pre.raw[hidden]{ display:none; }
+
+    /* ── register / cue cards ───────────────────────────────────── */
+    .cards{ display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); }
+    .cards.wide{ grid-template-columns:1fr; }
+    .pcard{ border:1px solid var(--rule); border-radius:12px; background:var(--card); overflow:hidden; display:flex; flex-direction:column; }
+    .pcard .top{ display:flex; align-items:center; gap:8px; padding:11px 13px 9px; }
+    .pcard .kname{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12.5px; font-weight:700; color:var(--fg); }
+    .pcard .kind{ font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.03em; padding:2px 7px; border-radius:999px; border:1px solid var(--rule2); color:var(--fg3); }
+    .pcard .kind.reg{ color:var(--accent); border-color:var(--accline); background:var(--accbg); }
+    .pcard .kind.cue{ color:var(--amber); border-color:#eddcb4; background:var(--amberbg); }
+    .pcard .spacer{ flex:1; }
+    .pcard .when{ font-size:11.5px; color:var(--fg2); padding:0 13px 7px; line-height:1.45; }
+    .pcard .when .k{ color:var(--fg3); font-weight:700; }
+    .pcard .text{ font-size:12px; line-height:1.55; color:var(--fg); white-space:pre-wrap; word-break:break-word;
+      background:var(--bg2); border-top:1px solid var(--rule); padding:11px 13px; flex:1; }
+    .pcard .foot{ display:flex; align-items:center; gap:9px; padding:8px 13px; border-top:1px solid var(--rule); }
+    .pcard .foot .loc{ font-size:10.5px; color:var(--fg3); }
+    .pcard .foot .spacer{ flex:1; }
+    .pcard .foot .est{ font-size:10.5px; color:var(--fg3); font-variant-numeric:tabular-nums; }
+    .interp{ font-size:10px; font-weight:700; color:var(--amber); }
+    .missing{ color:#c0392b; font-size:12px; }
+
+    /* ── other sites ────────────────────────────────────────────── */
+    .sites{ display:flex; flex-direction:column; gap:2px; }
+    .site{ border:1px solid var(--rule); border-radius:10px; background:var(--card); margin-bottom:9px; overflow:hidden; }
+    .site > .sh{ display:flex; align-items:center; gap:9px; padding:9px 12px; cursor:pointer; }
+    .site > .sh .path{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; font-weight:700; color:var(--fg); }
+    .site > .sh .cnt{ font-size:11px; color:var(--fg3); }
+    .site > .sh .desc{ font-size:11.5px; color:var(--fg3); }
+    .site > .sh .spacer{ flex:1; }
+    .site > .sh .car{ color:var(--fg3); font-size:11px; }
+    .site .rows{ border-top:1px solid var(--rule); }
+    .site .rows[hidden]{ display:none; }
+    .prow{ padding:9px 12px; border-top:1px dashed var(--rule); }
+    .prow:first-child{ border-top:none; }
+    .prow .ph{ display:flex; align-items:center; gap:8px; margin-bottom:3px; }
+    .prow .ph .nm{ font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px; font-weight:700; color:var(--accent); }
+    .prow .ph .nm.inl{ color:var(--fg3); font-weight:600; }
+    .prow .ph .ln{ font-size:10.5px; color:var(--fg3); }
+    .prow .snip{ font-size:12px; color:var(--fg2); line-height:1.5; white-space:pre-wrap; word-break:break-word;
+      max-height:90px; overflow:hidden; position:relative; }
+
+    .err{ color:#c0392b; font-size:13px; margin:8px 0; background:#fdecec; border:1px solid #f4c9c9; border-radius:9px; padding:10px 12px; }
+    .foot-note{ margin-top:34px; color:var(--fg3); font-size:12px; line-height:1.55; border-top:1px solid var(--rule); padding-top:16px; }
+
+    /* When embedded in the Reader's modal (iframe), the modal supplies its own header. */
+    body.embedded header.pf{ display:none; }
+    body.embedded .wrap{ padding-top:14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="pf">
+      <h1>Prompt flow</h1>
+      <span class="sub">every prompt the engine builds — read live off the source</span>
+      <span class="spacer"></span>
+      <a href="index.html" class="reader-link" title="Open the EO Reader">⟵ Reader</a>
+    </header>
+
+    <p class="note">
+      <span class="live">Generated live from <code>src/</code></span> — this surface <b>imports the real
+      prompt builders</b> and <b>reads the real register &amp; cue definitions</b> straight from the source
+      files. It runs the actual <code>buildGroundedMessages</code> / <code>buildChatMessages</code> /
+      <code>buildCursorMessages</code> / <code>atomPrompt</code> functions to assemble the prompts you see below,
+      and it parses the live <code>PIPELINE</code> and every <code>SYSTEM_*</code> / <code>*_CUE</code> constant.
+      Change a prompt in the code and this panel changes with it — nothing here is a copy.
+    </p>
+
+    <div id="fatal" class="err" hidden></div>
+
+    <!-- ── The turn pipeline ─────────────────────────────────────── -->
+    <section>
+      <h2 class="sec">The turn — where prompts are built</h2>
+      <p class="seclead">The stage list read live from <code>src/turn/pipeline.js</code>. A turn is a fold of
+        these stages; <span style="color:var(--accent);font-weight:700;">route</span> picks the register and
+        <span style="color:var(--accent);font-weight:700;">prompt</span> assembles the messages the model sees.</p>
+      <div id="pipeline" class="flow"></div>
+      <div id="branch" class="branch"></div>
+    </section>
+
+    <!-- ── Live assembly ─────────────────────────────────────────── -->
+    <section>
+      <h2 class="sec">Live assembly — the flow made concrete</h2>
+      <p class="seclead">The panel below is built by calling the real prompt functions with a worked example.
+        Flip the switches: each one changes the inputs and the prompt is <b>re-assembled by the code</b>,
+        exactly as a turn would. Every block is traced back to the constant or the assembly step it came from.</p>
+      <div class="assembly">
+        <div class="modes" id="modes"></div>
+        <div class="controls" id="controls"></div>
+        <div class="msgs" id="msgs"></div>
+        <div class="rawbar">
+          <span class="stat" id="rawstat"></span>
+          <span class="spacer"></span>
+          <button class="mini" id="rawtoggle">Show raw messages</button>
+          <button class="mini" id="rawcopy">Copy</button>
+        </div>
+        <pre class="raw" id="raw" hidden></pre>
+      </div>
+    </section>
+
+    <!-- ── Registers ─────────────────────────────────────────────── -->
+    <section>
+      <h2 class="sec">Registers — the system voice per route</h2>
+      <p class="seclead">The stable system message chosen at <code>route</code>. It holds the boundary and the
+        voice, so the prefix cache holds across a turn.</p>
+      <div id="registers" class="cards"></div>
+    </section>
+
+    <!-- ── Cues ──────────────────────────────────────────────────── -->
+    <section>
+      <h2 class="sec">Cues — folded in per turn</h2>
+      <p class="seclead">Opt-in instruction blocks. Each rides only when its condition holds; otherwise the
+        prompt is byte-identical without it.</p>
+      <div id="cues" class="cards"></div>
+    </section>
+
+    <!-- ── Other prompt sites ────────────────────────────────────── -->
+    <section>
+      <h2 class="sec">Other prompt sites across the engine</h2>
+      <p class="seclead">Beyond the reading-answer path, other holons build their own prompts (routing, web
+        search, essays, RDF, prediction…). Scanned live from source — exported constants exactly, inline
+        strings best-effort. Click a file to expand.</p>
+      <div id="sites" class="sites"></div>
+    </section>
+
+    <p class="foot-note" id="footnote"></p>
+  </div>
+
+  <script>
+    // Reader opens this page inside a modal iframe; drop the standalone header link there.
+    if (window.top !== window.self) document.body.classList.add('embedded');
+  </script>
+
+  <script type="module">
+    // ════════════════════════════════════════════════════════════════════════════════════
+    //  Prompt-flow surface. TIED TO CODE by two mechanisms:
+    //    1. It IMPORTS the real prompt builders and executes them (the Live assembly section).
+    //    2. It FETCHES and parses the real source of the prompt modules (registers, cues, pipeline,
+    //       other sites) — so any edit to a constant or the stage list shows up here on next load.
+    //  No prompt text is duplicated in this file.
+    // ════════════════════════════════════════════════════════════════════════════════════
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const tokEst = (s) => Math.max(1, Math.round(String(s).length / 4));
+    const fatal = (m) => { const el = $('fatal'); el.hidden = false; el.textContent = m; };
+
+    // ── source fetch + a small, eval-free literal parser ──────────────────────────────────
+    const srcCache = {};
+    async function loadSource(file) {
+      if (srcCache[file]) return srcCache[file];
+      try {
+        const r = await fetch(file, { cache: 'no-store' });
+        if (!r.ok) throw new Error(r.status + '');
+        return (srcCache[file] = await r.text());
+      } catch (e) { return (srcCache[file] = null); }
+    }
+
+    // Read one string literal beginning at src[i] (the opening quote). Returns the decoded
+    // text, the index just past the closing quote, and whether a template carried a ${…}.
+    function readLiteral(src, i, q) {
+      let j = i + 1, out = '', interp = false; const n = src.length;
+      const ESC = { n: '\n', t: '\t', r: '\r', '\\': '\\', "'": "'", '"': '"', '`': '`', '$': '$', '0': '\0' };
+      while (j < n) {
+        const c = src[j];
+        if (c === '\\') {
+          const e = src[j + 1];
+          if (e === '\n') { j += 2; continue; }          // line continuation
+          out += (e in ESC) ? ESC[e] : e; j += 2; continue;
+        }
+        if (q === '`' && c === '$' && src[j + 1] === '{') { // template interpolation → keep raw
+          interp = true; let depth = 1, k = j + 2, expr = '';
+          while (k < n && depth > 0) { const d = src[k]; if (d === '{') depth++; else if (d === '}') depth--; if (depth > 0) expr += d; k++; }
+          out += '${' + expr + '}'; j = k; continue;
+        }
+        if (c === q) return { text: out, end: j + 1, interp };
+        out += c; j++;
+      }
+      return null; // unterminated
+    }
+
+    // From just after `=`, read a string expression: one or more literals joined by `+`.
+    // Returns null when the RHS is not a string (Object.freeze, number, array…).
+    function readStringExpr(src, i) {
+      let value = '', interp = false, saw = false, impure = false; const n = src.length;
+      while (i < n) {
+        while (i < n && (src[i] === ' ' || src[i] === '\t' || src[i] === '\n' || src[i] === '\r' || src[i] === '+')) i++;
+        if (i >= n) break;
+        const ch = src[i];
+        if (ch === "'" || ch === '"' || ch === '`') {
+          const r = readLiteral(src, i, ch);
+          if (!r) return saw ? { value, interp, impure: true } : null;
+          value += r.text; if (r.interp) interp = true; saw = true; i = r.end;
+          while (i < n && (src[i] === ' ' || src[i] === '\t' || src[i] === '\n' || src[i] === '\r')) i++;
+          if (src[i] === '+') { i++; continue; }
+          if (src[i] === ';') break;
+          impure = true; break;                 // .replace(...), etc. — best-effort value so far
+        } else { return saw ? { value, interp, impure: true } : null; }
+      }
+      return saw ? { value, interp, impure } : null;
+    }
+
+    // The contiguous // comment lines immediately above a byte offset — a constant's "why".
+    function leadingComment(src, idx) {
+      const before = src.slice(0, idx).split('\n');
+      before.pop(); // the line the export sits on
+      const lines = [];
+      for (let k = before.length - 1; k >= 0; k--) {
+        const t = before[k].trim();
+        if (t.startsWith('//')) lines.unshift(t.replace(/^\/\/\s?/, ''));
+        else if (t === '') { if (lines.length) break; }
+        else break;
+      }
+      return lines.join(' ').replace(/\s+/g, ' ').trim();
+    }
+
+    // Every `export const NAME = <string>` in a module, with value + line + comment.
+    function scanExportedStrings(src, file) {
+      const out = []; if (!src) return out;
+      const re = /export\s+const\s+([A-Za-z_$][\w$]*)\s*=/g; let m;
+      while ((m = re.exec(src))) {
+        const parsed = readStringExpr(src, re.lastIndex);
+        if (!parsed) continue;
+        const line = src.slice(0, m.index).split('\n').length;
+        out.push({ name: m[1], value: parsed.value, interp: parsed.interp, impure: parsed.impure,
+                   line, file, comment: leadingComment(src, m.index) });
+      }
+      return out;
+    }
+
+    const ghUrl = (file, line) => `https://github.com/clovenbradshaw-ctrl/eoreader4.1/blob/main/${file}#L${line}`;
+    const locHtml = (c) => `<span class="loc"><a href="${ghUrl(c.file, c.line)}" target="_blank" rel="noreferrer">${esc(c.file)}:${c.line}</a></span>`;
+
+    // ── curated metadata: descriptions + fold conditions, keyed by constant name. VALUES are
+    //    never hard-coded here — only pulled from source. If a name is missing from source it
+    //    surfaces as "not found", which is itself the signal that the code moved. ────────────
+    const META = {
+      SYSTEM_GROUND:        { kind: 'reg', role: 'The default reading voice', when: 'route → grounded, auto (a document is loaded).' },
+      SYSTEM_GROUND_STRICT: { kind: 'reg', role: 'Strict reading — answer from the lines only', when: 'the "Grounded" chip forces it; absence is the honest fallback.' },
+      SYSTEM_CHAT:          { kind: 'reg', role: 'Conversation-only fallback', when: 'route → chat (no document, register auto).' },
+      SYSTEM_FREE:          { kind: 'reg', role: 'General-knowledge, explicitly ungrounded', when: 'the "Free form" chip forces it, ignoring the document.' },
+      SYSTEM_CURSOR:        { kind: 'reg', role: 'Writing one beat of a longer piece', when: 'the cursor/write path (buildCursorMessages).' },
+      SYSTEM_WRITER:        { kind: 'reg', role: 'Render exactly one handed statement', when: 'the long-generation atom loop (atomPrompt).' },
+      EXCERPTS_HEADER:      { kind: 'cue', role: 'Header over the verbatim lines — the one channel', when: 'always, when the reading turned up spans.' },
+      SUMMARY_GUARD:        { kind: 'cue', role: 'Faithfulness guard for summaries', when: 'the task register reads "summary".' },
+      STRUCTURE_CUE:        { kind: 'cue', role: 'Answer-first, then sectioned layout', when: 'the question reads broad (compare / survey / how-why).' },
+      LIBRARIAN_CUE:        { kind: 'cue', role: 'The research-librarian posture', when: 'the reader chat path (every grounded app answer).' },
+      CAPABILITY_CUE:       { kind: 'cue', role: 'Honest about being a small in-browser model', when: 'the ask is for a long, polished piece.' },
+      GROUNDING_CUE:        { kind: 'cue', role: 'Synthesis across several sources', when: 'the longform / essay research folds.' },
+      ARC_CUE:              { kind: 'cue', role: 'Teach the talker to read the arc block', when: 'the arc is broadcast into the window (opt-in).' },
+    };
+    const REGISTER_ORDER = ['SYSTEM_GROUND', 'SYSTEM_GROUND_STRICT', 'SYSTEM_CHAT', 'SYSTEM_FREE', 'SYSTEM_CURSOR', 'SYSTEM_WRITER'];
+    const CUE_ORDER = ['EXCERPTS_HEADER', 'STRUCTURE_CUE', 'LIBRARIAN_CUE', 'CAPABILITY_CUE', 'GROUNDING_CUE', 'SUMMARY_GUARD', 'ARC_CUE'];
+
+    // The modules whose exported prompt constants we surface as registers/cues.
+    const CONST_MODULES = ['src/model/prompt.js', 'src/longgen/prompt.js', 'src/write/gravity.js'];
+
+    // ── state ─────────────────────────────────────────────────────────────────────────────
+    let CONSTS = [];            // every scanned exported string, across CONST_MODULES
+    const constByName = {};     // name → scanned const
+    let PROMPT_MOD = null;      // imported src/model/prompt.js (the executed builders)
+    let LONGGEN_MOD = null;     // imported src/longgen/prompt.js (may fail — degrade)
+
+    // ════════════════════════════════════════════════════════════════════════════════════
+    //  boot
+    // ════════════════════════════════════════════════════════════════════════════════════
+    (async function boot() {
+      // 1) import the real builders (the heart of "tied to code" — we execute them)
+      try { PROMPT_MOD = await import(new URL('src/model/prompt.js', location.href).href); }
+      catch (e) { fatal('Could not import src/model/prompt.js — the live assembly needs it. ' + e); }
+      try { LONGGEN_MOD = await import(new URL('src/longgen/prompt.js', location.href).href); }
+      catch (e) { LONGGEN_MOD = null; }   // writer demo degrades quietly
+
+      // 2) scan the constant-bearing modules from source (exact values + line numbers)
+      for (const f of CONST_MODULES) {
+        const src = await loadSource(f);
+        for (const c of scanExportedStrings(src, f)) { CONSTS.push(c); constByName[c.name] = c; }
+      }
+      // Prefer the imported runtime value for model/prompt.js consts (exact, escapes resolved).
+      if (PROMPT_MOD) for (const c of CONSTS) if (c.file === 'src/model/prompt.js' && typeof PROMPT_MOD[c.name] === 'string') c.value = PROMPT_MOD[c.name];
+
+      await renderPipeline();
+      renderRegisters();
+      renderCues();
+      renderModes();
+      renderControls();
+      buildAssembly();
+      renderAssembly();
+      await renderSites();
+      renderFootnote();
+    })();
+
+    // ════════════════════════════════════════════════════════════════════════════════════
+    //  pipeline
+    // ════════════════════════════════════════════════════════════════════════════════════
+    const STAGE_DOC = {
+      route: 'pick register',       expect: 'read the ask',      converse: 'session fold',
+      retrieve: 'find spans',       inquire: 'self-inquiry',     fold: 'read the doc',
+      predict: 'expect answer',     answerable: 'can we?',       gate: 'grounded speech',
+      prompt: 'ASSEMBLE PROMPT',    llm: 'model decodes',        bind: 'cite spans',
+      factcheck: 'audit claims',    revise: 'error-correct',     veto: 'flag ungrounded',
+      settle: 'fold horizon',
+    };
+    const KEY_STAGES = new Set(['route', 'prompt', 'llm']);
+
+    async function renderPipeline() {
+      const src = await loadSource('src/turn/pipeline.js');
+      let stages = [];
+      const m = src && src.match(/const\s+PIPELINE\s*=\s*\[([\s\S]*?)\]/);
+      if (m) stages = (m[1].match(/'([^']+)'|"([^"]+)"/g) || []).map((s) => s.replace(/['"]/g, ''));
+      if (!stages.length) stages = Object.keys(STAGE_DOC); // fallback, still honest about the set
+
+      $('pipeline').innerHTML = stages.map((s, i) => {
+        const key = KEY_STAGES.has(s) ? ' key' : '';
+        const cell = `<div class="stg${key}"><span class="n">${esc(s)}</span><span class="d">${esc(STAGE_DOC[s] || '')}</span></div>`;
+        return i < stages.length - 1 ? cell + '<span class="arrow">→</span>' : cell;
+      }).join('');
+
+      // The branch route takes — derived from the register set, pointed at the real registers.
+      const B = [
+        ['auto · doc',   'SYSTEM_GROUND',        'a document is loaded → grounded'],
+        ['grounded chip','SYSTEM_GROUND_STRICT', 'answer only from what was read'],
+        ['auto · no doc','SYSTEM_CHAT',          'nothing loaded → conversation'],
+        ['free chip',    'SYSTEM_FREE',          'ignore the document, answer freely'],
+      ];
+      $('branch').innerHTML = B.map(([cond, reg, to]) => {
+        const c = constByName[reg];
+        const loc = c ? ` <a href="${ghUrl(c.file, c.line)}" target="_blank" rel="noreferrer" style="color:var(--fg3);">${esc(reg)}</a>` : ` <span class="missing">${esc(reg)} (not found)</span>`;
+        return `<div class="brow"><span class="cond">${esc(cond)}</span><span class="to">${esc(to)}<br>→ <b>${esc(reg)}</b>${loc}</span></div>`;
+      }).join('');
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════════
+    //  register / cue cards
+    // ════════════════════════════════════════════════════════════════════════════════════
+    function promptCard(name) {
+      const c = constByName[name]; const meta = META[name] || {};
+      if (!c) return `<div class="pcard"><div class="top"><span class="kname">${esc(name)}</span><span class="spacer"></span></div>`
+        + `<div class="when missing">Not found in source — this constant may have been renamed or removed.</div></div>`;
+      const kindCls = meta.kind === 'reg' ? 'reg' : meta.kind === 'cue' ? 'cue' : '';
+      const kindLbl = meta.kind === 'reg' ? 'register' : meta.kind === 'cue' ? 'cue' : 'string';
+      return `<div class="pcard">
+        <div class="top">
+          <span class="kname">${esc(name)}</span>
+          <span class="kind ${kindCls}">${kindLbl}</span>
+          <span class="spacer"></span>
+          ${c.interp ? '<span class="interp" title="contains ${…} filled at build time">${…}</span>' : ''}
+        </div>
+        ${meta.role ? `<div class="when"><span class="k">is</span> ${esc(meta.role)}</div>` : ''}
+        ${meta.when ? `<div class="when"><span class="k">rides when</span> ${esc(meta.when)}</div>` : ''}
+        <div class="text">${esc(c.value)}</div>
+        <div class="foot">${locHtml(c)}<span class="spacer"></span><span class="est">${c.value.length} chars · ~${tokEst(c.value)} tok</span></div>
+      </div>`;
+    }
+    function renderRegisters() {
+      const names = REGISTER_ORDER.filter((n) => constByName[n] || META[n]);
+      $('registers').innerHTML = names.map(promptCard).join('');
+    }
+    function renderCues() {
+      const names = CUE_ORDER.filter((n) => constByName[n] || META[n]);
+      $('cues').innerHTML = names.map(promptCard).join('');
+    }
+
+    // ════════════════════════════════════════════════════════════════════════════════════
+    //  live assembly — the worked example, assembled by the real builders
+    // ════════════════════════════════════════════════════════════════════════════════════
+    const EX = {
+      question: 'How did Gregor react when he first saw his transformed body?',
+      broad: 'Compare how Gregor and his father respond to the transformation.',
+      spans: [
+        { text: 'When Gregor Samsa woke one morning from uneasy dreams he found himself transformed into a monstrous vermin.', score: 3 },
+        { text: 'He lay on his hard, armour-plated back and saw his dome-like brown belly divided into stiff arched segments.', score: 2 },
+        { text: '"What has happened to me?" he thought. It was no dream.', score: 1 },
+        { text: 'His many legs, pitifully thin against the rest of his bulk, waved helplessly before his eyes.', score: 0.5 },
+      ],
+      orientation: 'metamorphosis.txt · text · 1902 sentences',
+      conversation: {
+        notes: 'Earlier you traced how the household’s sympathy slowly curdles into resentment.',
+        pastTurns: ['You asked: who is Grete?'],
+        settled: ['Gregor is a travelling salesman'],
+      },
+      arc: 'The reading moved — at first the shock of waking, then the slow turn toward the family’s dread.',
+      graph: 'Gregor -> vermin : became\nGregor -> job : dreads\nfamily -> Gregor : recoils',
+      steer: 'They want the emotional beat, not a plot recap — lead with what the lines show of his inner reaction and where the reading is thin, say so.',
+    };
+
+    const MODES = [
+      { id: 'grounded', label: 'Reading answer' },
+      { id: 'cursor',   label: 'Cursor · one beat' },
+      { id: 'writer',   label: 'Writer · one atom' },
+    ];
+    let mode = 'grounded';
+
+    // toggles for the reading-answer mode
+    const T = {
+      register: 'auto',   // auto | strict | chat | free
+      doc: true, readerCues: true, broad: false, longform: false,
+      summary: false, conversation: false, meta: false, arc: false, graph: false, steer: false,
+    };
+
+    let LAST = { messages: [], raw: '' };
+
+    function renderModes() {
+      $('modes').innerHTML = MODES.map((m) => `<span class="m${m.id === mode ? ' on' : ''}" data-mode="${m.id}">${esc(m.label)}</span>`).join('');
+      $('modes').querySelectorAll('[data-mode]').forEach((el) => el.addEventListener('click', () => {
+        mode = el.dataset.mode; renderControls(); buildAssembly(); renderAssembly();
+      }));
+    }
+
+    function renderControls() {
+      if (mode !== 'grounded') { $('controls').innerHTML =
+        `<span class="lbl">Inputs</span><span style="font-size:12px;color:var(--fg2);">Fixed worked example — this path takes no per-turn switches.</span>`;
+        return; }
+      const grounded = T.register === 'auto' || T.register === 'strict';
+      const radio = (id, label) => `<span class="chip radio${T.register === id ? ' on' : ''}" data-radio="${id}">${esc(label)}</span>`;
+      const tog = (id, label, dis) => `<span class="chip${T[id] ? ' on' : ''}" data-tog="${id}"${dis ? ' disabled' : ''}>${esc(label)}</span>`;
+      $('controls').innerHTML =
+        `<div class="grp"><span class="lbl">Register</span>${radio('auto', 'Auto (grounded)')}${radio('strict', 'Strict')}${radio('chat', 'Chat')}${radio('free', 'Free')}</div>`
+        + `<div class="sep"></div>`
+        + `<div class="grp"><span class="lbl">Fold in</span>`
+        + tog('doc', 'Document loaded', !grounded)
+        + tog('readerCues', 'Librarian cue', !grounded)
+        + tog('broad', 'Broad question', !grounded)
+        + tog('longform', 'Longform ask', !grounded)
+        + tog('summary', 'Summary task', !grounded)
+        + tog('conversation', 'History', false)
+        + tog('meta', 'Meta-conversational', !grounded)
+        + tog('arc', 'Arc broadcast', !grounded)
+        + tog('graph', 'Meaning graph', !grounded)
+        + tog('steer', 'Discourse steer', !grounded)
+        + `</div>`;
+      $('controls').querySelectorAll('[data-radio]').forEach((el) => el.addEventListener('click', () => {
+        T.register = el.dataset.radio; if (T.register === 'chat' || T.register === 'free') { /* grounded-only toggles ignored */ }
+        renderControls(); buildAssembly(); renderAssembly();
+      }));
+      $('controls').querySelectorAll('[data-tog]').forEach((el) => el.addEventListener('click', () => {
+        if (el.hasAttribute('disabled')) return;
+        const k = el.dataset.tog; T[k] = !T[k];
+        if (k === 'meta' && T.meta) T.conversation = true;      // meta needs a thread
+        if (k === 'conversation' && !T.conversation) T.meta = false;
+        renderControls(); buildAssembly(); renderAssembly();
+      }));
+    }
+
+    function buildAssembly() {
+      if (!PROMPT_MOD) { LAST = { messages: [], raw: '' }; return; }
+      const P = PROMPT_MOD;
+      try {
+        if (mode === 'cursor') {
+          LAST.messages = P.buildCursorMessages({
+            orientation: EX.orientation,
+            established: 'Gregor Samsa, a travelling salesman',
+            integrals: [{ name: 'Gregor Samsa' }],
+            open: ['whether he can still make himself understood'],
+            edge: 'Gregor -> door : approaches',
+            spans: [{ text: 'He tried to call out, but only a thin, twittering sound escaped him.' }],
+            target: 'one plain past-tense sentence that follows on from the prose',
+            band: 'firm',
+          });
+        } else if (mode === 'writer') {
+          if (!LONGGEN_MOD) { LAST = { messages: [], raw: '', writerErr: true }; return; }
+          const a = LONGGEN_MOD.atomPrompt({
+            fold: { notes: 'A travelling salesman wakes transformed; the household does not yet know.' },
+            units: [{ text: 'Gregor woke to find himself changed.' }, { text: 'His room felt suddenly small.' }],
+            proposition: { subClaim: 'the family gathers uneasily at his door', band: 'firm',
+              spans: [{ text: 'They knocked softly, asking why he had not risen.' }] },
+          });
+          // Present the atom's three parts as a system + user pair, the way the loop feeds a backend.
+          LAST.messages = [
+            { role: 'system', content: a.stablePrefix, _atom: 'stable prefix · cache ' + a.cacheKey },
+            { role: 'assistant', content: a.readWindow, _atom: 'read-window (the prose so far)' },
+            { role: 'user', content: a.suffix, _atom: 'volatile suffix (the one proposition)' },
+          ];
+        } else {
+          LAST.messages = buildReadingMessages(P);
+        }
+        LAST.raw = LAST.messages.map((m) => `${m.role.toUpperCase()}:\n${m.content}`).join('\n\n───────────\n\n');
+      } catch (e) {
+        LAST = { messages: [], raw: '', buildErr: String(e) };
+      }
+    }
+
+    function buildReadingMessages(P) {
+      const grounded = T.register === 'auto' || T.register === 'strict';
+      if (!grounded) {
+        return P.buildChatMessages({
+          question: EX.question,
+          history: T.conversation ? [{ role: 'user', content: 'Who is Grete?' }, { role: 'assistant', content: 'Gregor’s younger sister.' }] : [],
+          notes: T.conversation ? EX.conversation.notes : '',
+          free: T.register === 'free',
+          now: null,
+        });
+      }
+      const q = T.broad ? EX.broad : EX.question;
+      // Mirror the reader chat's own composition (app.dc.js): librarian cue + either the
+      // capability cue (longform) or the scope shape, joined as the `shape` argument.
+      let shape = '';
+      if (T.readerCues) shape = [P.LIBRARIAN_CUE, T.longform ? P.CAPABILITY_CUE : P.shapeForScope(q)].filter(Boolean).join('\n\n');
+      else shape = P.shapeForScope(q);
+      const conversation = T.conversation
+        ? { notes: EX.conversation.notes, pastTurns: EX.conversation.pastTurns, settled: EX.conversation.settled }
+        : {};
+      return P.buildGroundedMessages({
+        question: q,
+        spans: T.doc ? EX.spans : [],
+        orientation: T.doc ? EX.orientation : '',
+        task: T.summary ? 'summary' : 'answer',
+        conversation,
+        meta: T.meta,
+        strict: T.register === 'strict',
+        arc: T.arc ? EX.arc : '',
+        graph: T.graph ? EX.graph : '',
+        steer: T.steer ? EX.steer : '',
+        shape,
+        now: null,
+      });
+    }
+
+    // trace a finished block back to the constant / assembly step it came from
+    function provenanceOf(block) {
+      const b = block.trim();
+      // per-turn sample data pushed verbatim as its own block
+      if (b && b === EX.steer.trim()) return { name: 'discourse steer', dyn: true };
+      for (const c of CONSTS) {
+        if (!c.value || c.value.length < 8) continue;
+        const v = c.value.trim();
+        const head = v.slice(0, Math.min(60, v.length));
+        if (b === v || b.startsWith(head) || (v.length > 20 && b.indexOf(head) >= 0)) {
+          const meta = META[c.name] || {};
+          return { name: c.name, dyn: false, file: c.file, line: c.line, kind: meta.kind };
+        }
+      }
+      const HDR = constByName.EXCERPTS_HEADER && constByName.EXCERPTS_HEADER.value;
+      const D = [
+        [/^What it was:/, 'orientation line'],
+        [/^What it means/, 'meaning graph (web path)'],
+        [/Let this shape the telling/, 'arc broadcast'],
+        [/^The answer so far/, 'planner read-window'],
+        [/^Who this beat is about/, 'cursor · integrals'],
+        [/^Unsettled — do NOT assert/, 'cursor · void slots'],
+        [/^What happens \(from the document\)/, 'cursor · the edge'],
+        [/^You are reading /, 'cursor · orientation'],
+        [/^Established so far:/, 'cursor · established'],
+        [/^Write: /, 'cursor · target'],
+        [/^The situation so far:/, 'writer · the fold'],
+        [/^Here is the source line:/, 'writer · source'],
+        [HDR ? new RegExp('^' + HDR.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) : /__never__/, 'excerpts — the one channel'],
+        [/^Earlier in this reading|^They had asked you|^The conversation so far/, 'session fold'],
+        [/^Already settled with them/, 'common ground'],
+        [/^For the SHAPE only/, 'shape exemplar'],
+        [/^They asked you:/, 'the live question'],
+        [/^Your reading turned up nothing/, 'strict absence clause'],
+        [/^Answer them now|^Answer their latest|^Answer their question now|^Write one|^Write natural prose/, 'answer / write clause'],
+        [/local time\)\.$/, 'current-moment line'],
+        [/^Notes about our conversation/, 'chat session notes'],
+      ];
+      for (const [re, label] of D) if (re.test(b)) return { name: label, dyn: true };
+      return { name: 'assembled block', dyn: true };
+    }
+
+    function renderAssembly() {
+      const box = $('msgs');
+      if (LAST.writerErr) { box.innerHTML = `<div class="err">The writer path (src/longgen/prompt.js) could not be imported in this context.</div>`; $('rawstat').textContent = ''; return; }
+      if (LAST.buildErr) { box.innerHTML = `<div class="err">Build failed: ${esc(LAST.buildErr)}</div>`; return; }
+      if (!LAST.messages.length) { box.innerHTML = `<div class="err">No messages — the prompt builder is unavailable.</div>`; return; }
+
+      box.innerHTML = LAST.messages.map((m) => {
+        // The system message is one register (+ optional moment line) — don't split it into
+        // paragraph blocks. The user turn is the assembled stack — split on the \n\n joiner.
+        const blocks = (m._atom || m.role === 'system') ? [m.content] : String(m.content).split(/\n\n+/);
+        const rows = blocks.map((blk) => {
+          const isEmpty = !blk.trim();
+          const prov = m._atom ? { name: m._atom, dyn: true } : provenanceOf(blk);
+          const c = (!prov.dyn && prov.file) ? { file: prov.file, line: prov.line } : null;
+          const loc = c ? ` ${locHtml(c)}` : '';
+          const nameCls = prov.dyn ? 'name dyn' : 'name';
+          return `<div class="blk${isEmpty ? ' empty' : ''}">
+            <div class="tag"><span class="${nameCls}">${esc(prov.name)}</span>${loc}</div>
+            <div class="body">${isEmpty ? '(empty)' : esc(blk)}</div>
+          </div>`;
+        }).join('');
+        return `<div class="msg">
+          <div class="head"><span class="rolebadge ${m.role}">${esc(m.role)}</span>
+            <span class="meta">${blocks.length} block${blocks.length === 1 ? '' : 's'} · ${String(m.content).length} chars · ~${tokEst(m.content)} tok</span></div>
+          <div class="blocks">${rows}</div>
+        </div>`;
+      }).join('');
+
+      const totChars = LAST.messages.reduce((a, m) => a + String(m.content).length, 0);
+      $('rawstat').textContent = `${LAST.messages.length} messages · ${totChars} chars · ~${Math.round(totChars / 4)} tok assembled by the real builder`;
+      $('raw').textContent = LAST.raw;
+    }
+
+    $('rawtoggle').addEventListener('click', () => {
+      const pre = $('raw'); pre.hidden = !pre.hidden;
+      $('rawtoggle').textContent = pre.hidden ? 'Show raw messages' : 'Hide raw messages';
+    });
+    $('rawcopy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(LAST.raw || ''); $('rawcopy').textContent = 'Copied'; setTimeout(() => $('rawcopy').textContent = 'Copy', 1200); } catch (e) {}
+    });
+
+    // ════════════════════════════════════════════════════════════════════════════════════
+    //  other prompt sites — exported constants exactly, inline strings best-effort
+    // ════════════════════════════════════════════════════════════════════════════════════
+    const SITE_MODULES = [
+      ['src/turn/meta-route.js',      'routes a turn — compose / ground / research / isolate'],
+      ['src/turn/web.js',             'the live-web reading turn'],
+      ['src/research/driver.js',      'deep-research: the read/gather loop'],
+      ['src/essay/driver.js',         'long-form essay generation'],
+      ['src/write/brief.js',          'the discourse brief / steer'],
+      ['src/write/rdf.js',            'turning a reading into RDF triples'],
+      ['src/perceiver/predict.js',    'next-token / continuation prediction'],
+      ['src/tasks/spec.js',           'task graphs learned from examples'],
+      ['src/longgen/answerable.js',   'is the question answerable from the doc?'],
+    ];
+    // A string literal (or template) looks like a model prompt when it carries second-person
+    // instruction. Best-effort — clearly labelled as scanned, never presented as exhaustive.
+    const PROMPT_SIGNAL = /\b(you are|you'?ll|you (write|turn)|your task|answer (the|them|from|in)|write (one|a |exactly|natural|the|a flowing)|reply (in|with)|respond|rewrite|do not (assert|invent|quote|add)|never (claim|invent|quote)|in your own words|say so plainly|predict|summar(y|ize|ise))\b/i;
+    // Reject captures where code leaked into the string — a regex literal or an apostrophe in
+    // a construct the scanner can't fully tokenise. Cheap guard for the best-effort inline pass.
+    const CODE_JUNK = /\/\/|\/\*|=>|\.\w+\(|\)\s*\./;
+
+    function scanInlinePrompts(src, file) {
+      const out = []; if (!src) return out; const n = src.length; const seen = new Set();
+      for (let i = 0; i < n; i++) {
+        const ch = src[i], nx = src[i + 1];
+        if (ch === '/' && nx === '/') { while (i < n && src[i] !== '\n') i++; continue; }   // line comment
+        if (ch === '/' && nx === '*') { i += 2; while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i++; i++; continue; } // block comment
+        if (ch === "'" || ch === '"' || ch === '`') {
+          const r = readLiteral(src, i, ch);
+          if (!r) continue;
+          const v = r.text;
+          if (v.length >= 40 && PROMPT_SIGNAL.test(v) && !CODE_JUNK.test(v)) {
+            const key = v.slice(0, 80);
+            if (!seen.has(key)) { seen.add(key); out.push({ text: v, line: src.slice(0, i).split('\n').length, interp: r.interp }); }
+          }
+          i = r.end - 1;
+        }
+      }
+      return out;
+    }
+
+    async function renderSites() {
+      const parts = [];
+      for (const [file, desc] of SITE_MODULES) {
+        const src = await loadSource(file);
+        if (!src) { parts.push(`<div class="site"><div class="sh"><span class="path">${esc(file)}</span><span class="cnt">unreadable</span></div></div>`); continue; }
+        const exported = scanExportedStrings(src, file).filter((c) => c.value.length >= 30 && PROMPT_SIGNAL.test(c.value));
+        const exportedNames = new Set(exported.map((c) => c.value.slice(0, 80)));
+        const inline = scanInlinePrompts(src, file).filter((p) => !exportedNames.has(p.text.slice(0, 80)));
+        const total = exported.length + inline.length;
+        const rows = [
+          ...exported.map((c) => promptRow(c.name, c.value, c.line, file, false, c.interp)),
+          ...inline.map((p) => promptRow('inline', p.text, p.line, file, true, p.interp)),
+        ].join('') || `<div class="prow"><div class="snip" style="color:var(--fg3);font-style:italic;">No model-facing prompt strings matched the scan here.</div></div>`;
+        parts.push(`<div class="site">
+          <div class="sh" data-site>
+            <span class="path">${esc(file)}</span><span class="cnt">${total} prompt${total === 1 ? '' : 's'}</span>
+            <span class="desc">${esc(desc)}</span><span class="spacer"></span><span class="car">▸</span>
+          </div>
+          <div class="rows" hidden>${rows}</div>
+        </div>`);
+      }
+      $('sites').innerHTML = parts.join('');
+      $('sites').querySelectorAll('[data-site]').forEach((el) => el.addEventListener('click', () => {
+        const rows = el.parentElement.querySelector('.rows'); const car = el.querySelector('.car');
+        rows.hidden = !rows.hidden; car.textContent = rows.hidden ? '▸' : '▾';
+      }));
+    }
+    function promptRow(name, text, line, file, inline, interp) {
+      const snip = text.length > 320 ? text.slice(0, 320) + ' …' : text;
+      return `<div class="prow">
+        <div class="ph"><span class="nm${inline ? ' inl' : ''}">${esc(name)}</span>
+          <a class="ln" href="${ghUrl(file, line)}" target="_blank" rel="noreferrer">:${line}</a>
+          ${interp ? '<span class="interp">${…}</span>' : ''}</div>
+        <div class="snip">${esc(snip)}</div>
+      </div>`;
+    }
+
+    function renderFootnote() {
+      const nConst = CONSTS.length, nReg = REGISTER_ORDER.filter((n) => constByName[n]).length, nCue = CUE_ORDER.filter((n) => constByName[n]).length;
+      $('footnote').innerHTML =
+        `Read this load: <b>${nReg}</b> registers, <b>${nCue}</b> cues, <b>${nConst}</b> prompt constants scanned from source, `
+        + `plus the live builders from <code>src/model/prompt.js</code>` + (LONGGEN_MOD ? ` and <code>src/longgen/prompt.js</code>` : '') + `. `
+        + `Everything above is derived from the code at load time — edit a prompt and reopen this panel to see it change.`;
+    }
+  </script>
+</body>
+</html>
