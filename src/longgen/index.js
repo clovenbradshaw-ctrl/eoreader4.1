@@ -24,6 +24,18 @@ export {
   developableRegions, followUpOffer, WANTED_TYPES,
 } from './answerable.js';
 export { arcPhase, phaseBias, applyPhaseBias, shouldCollapse } from './shape.js';
+// Paragraph at a time — short output that coheres to a larger whole
+// (docs/paragraph-at-a-time.md). The skeleton (SEG, the shape), the continuation
+// render (condition the artifact, not the behavior), the progress fold (how far
+// along, workspace not a bar), and the composer that walks the skeleton one
+// paragraph per call — each a CONTINUATION, gated by EVA, resumable across messages.
+export { buildSkeleton, headingOf } from './skeleton.js';
+export {
+  renderContinuation, seedFor, leadSentence, connectiveFor,
+  SYSTEM_CONTINUE, DEFAULT_GENRE,
+} from './render.js';
+export { progressAgainst } from './progress.js';
+export { composeParagraphs, evaSplice, frameLeak } from './compose.js';
 export {
   atomPrompt, stablePrefix, prefixCacheKey, readWindow,
   propositionInstruction, speculateNext, SYSTEM_WRITER,

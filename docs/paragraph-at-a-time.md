@@ -155,16 +155,32 @@ handing the material, and there is nothing to forbid.
 "A sense of the goal of the next chunk" is not vague. It is two persisted
 objects, and they are what the falcons run never had.
 
-### Shape — derived from the field, copied forward, not a canon
+### Shape — two levels, emergent from the corpus, copied forward, not a canon
 
-The shape is the set of regions the proper output should cover, **read off the
-field** — the developable regions of the ground (`developableRegions`,
-`answerable.js`) — not a template chosen from outside and imposed. `shape.js` is
-emphatic about why: a canon of response shapes is *"a void gate run backwards …
-a balance the evidence cannot earn."* So the shape is *discovered* at plan time
-from what the ground can actually develop, then **copied forward across every
-message, never rewritten** — the way the essay's thesis is copied into every
-carry (`docs/longform-generation.md`).
+The shape has **two levels**: SECTIONS, each an ordered run of paragraph beats.
+A beat's role is `open` (the first paragraph of its section, which carries the
+heading) or `continue` (a paragraph that picks up *within* the section — no new
+heading, the prose flows on). Not every paragraph is its own section; a heading
+is furniture only at a section boundary, and inside a section the goal rides
+purely as the seed (DEF) and the continuity (CON).
+
+The structure has two sources, and the honest one is emergent. The **sections
+come from processing a corpus**, not from a per-query retrieval: the significance
+loop surfaces the salient **findings**, and the surfer's frame-breaks — where the
+`atmosphere` / paradigm shifts (`surfer/atmosphere.js`, `surfer/trajectory.js`) —
+are the natural section boundaries. Sections are the reading's own thematic
+segments; the paragraphs within a section are its findings. That outline is an
+input, produced upstream by corpus processing, handed to `buildSkeleton`.
+
+When no emergent outline is available, the fallback is a **single flowing
+section** over the developable regions (`developableRegions`, `answerable.js`) —
+paragraphs that pick up within one section, never headed stubs. We do **not**
+invent section breaks from a per-query retrieval; `shape.js` is emphatic that a
+canon of response shapes is *"a void gate run backwards … a balance the evidence
+cannot earn."* So multi-section structure is *discovered* by the corpus, and
+whichever shape is carved is **copied forward across every message, never
+rewritten** — the way the essay's thesis is copied into every carry
+(`docs/longform-generation.md`).
 
 The request's own length demand seeds the shape. *"5 paragraphs"* is a demand
 for a five-region shape; if the field offers only two developable regions, the
@@ -252,19 +268,171 @@ new task; it is the same shape, `covered: 1, planned: 5`, resumed.
 - **Resume is seamless.** N paragraphs then M more from the returned state yield
   the same paragraphs as N+M at once — the state is a sufficient statistic.
 
+## Condition the artifact, not the behavior
+
+The governing principle, sharper than "organic input." Every lever is one of two
+kinds. An **organic** lever conditions what the text *is* — its genre, register,
+structure, grounding, momentum — and the output you want falls out as a side
+effect of the text being that thing. An **inorganic** lever polices what the
+model *does* — "don't say OK," "write normally," "one paragraph only" — and it
+fights the model and leaks the task frame.
+
+Two failure modes hide in the rejected instructions, and the falcons run shows
+both. *"Don't say OK"* is pink-elephant priming: naming the token raises its
+salience. *"Write in normal language"* is worse — it reveals there is a task with
+a supervisor, which activates the assistant register: preambles, "Here's a
+paragraph that…", meta-commentary. The instruction meant to suppress the
+assistant voice is what summons it. **You cannot suppress the frame from inside
+the frame** — which is why turn 0 opened *"According to what I found"* and turn 1
+parroted the seeded escape hatch verbatim.
+
+So remove the task frame entirely: **the model never answers a request, it
+continues a document.** The generation act is always "continue this text," never
+"write me a paragraph about X." Then the things you wanted are free:
+
+- no preamble — you cannot preface a continuation; there is nothing to
+  acknowledge mid-document;
+- register is *inherited*, not instructed — the model matches the voice, tense,
+  and diction of the prose it is extending (the organic replacement for "write
+  normally," and about the most reliable behaviour an LM has);
+- continuity is *structural* — the prior paragraph is literally the left-context,
+  so threading and rhythm carry without a "make it flow" instruction.
+
+The grounding constraint moves the same way. A continuation optimizes
+plausibility, not truth, so a pure-continue model extends past what the fold
+supports. You cannot fix that with "only use the given facts" — an instruction
+that cracks the frame and a small model ignores anyway. You move the
+truth-constraint from the prompt to the **validator**: let it continue, then
+check each claim against the slice's provenance and regenerate on an ungrounded
+introduction. That is already the eoreader ethos — `bindAndVeto` *is* EVA — which
+is why the policing cues on today's generation prompt (`LIBRARIAN_CUE`'s "invent
+no quotations," `CAPABILITY_CUE`'s "don't pad") are redundant *and* leak the
+frame: EVA already guards what they nag about. Strip them; keep EVA.
+
+## Injecting a goal without a command
+
+The hard part: a goal is naturally an instruction, and an instruction cracks the
+continuation frame back open. Three placements inject direction as document, not
+command — each mapped to the operator it realizes:
+
+- **Goal as furniture — SEG.** The beat's topic rides in as a *heading the model
+  writes beneath* ("## Who signed off"), a document element, not an imperative.
+  Stripped from the final output; it is scaffolding.
+- **Goal as a seeded topic sentence — DEF.** Prepend the paragraph's first
+  sentence in the document's own voice and let the model complete it. *"But the
+  timeline complicates that account."* is not "write about how the timeline is a
+  problem" — it is a sentence in the artifact that commits the paragraph's
+  direction, and because it is mid-document the assistant register cannot fire.
+- **Continuity/pivot as the handoff — the seam.** Good prose ends a paragraph by
+  opening the door the next one walks through. The seeded DEF carries that
+  momentum; the seam is a phrased transition — a gate, not an operator (it may
+  reuse only its neighbours' vocabulary and contradict nothing it connects).
+
+Length control is structural too: with the next beat's heading already present
+and a gap before it, the model bridges the gap with roughly one paragraph — the
+skeleton is the length spec. Under fill-in-the-middle, do this as literal infill;
+on a plain chat model, show the upcoming heading and stop on the next heading
+marker. You never say "one paragraph, then stop."
+
+## The operator algebra (read from the live code)
+
+The nine operators, as `docs/operators.md` and `src/longgen/resolve.js` (the
+`STANCE` map) define them — the loop speaks this algebra, and three easy mis-reads
+are corrected here (CON, SYN, NUL):
+
+| operator | cube cell | in the loop |
+|---|---|---|
+| **SEG** | Differentiate × Structure — *resplit* | carve the skeleton; the heading boundaries (goal-as-furniture) |
+| **DEF** | Differentiate × Interpretation — *assert / define* | the seeded topic sentence that sets the beat's terms |
+| **SIG** | Relate × Existence — *attribute* | the significance read that picks the beat's slice (the surfer does the selecting) |
+| **CON** | Relate × Structure — *the binding bond* | bind each rendered claim to its source span — **not** the prose connective |
+| **INS** | Generate × Existence — *instantiate* | mint the slice's facts as new commitments in the document |
+| **EVA** | Relate × Interpretation — *evaluate* | the provenance gate: check the paragraph against its slice |
+| **SYN** | Generate × Structure — *cohere → assert* | the **closing** beat that draws the fired constituents together — not every render |
+| **REC** | Generate × Interpretation — *learn* | fold the accepted paragraph into the carry (loop closure) |
+| **NUL** | Differentiate × Existence — *hold* | hold a beat whose slice is present but does not cohere — the honest "seen, unresolved," never a blank |
+
+So one beat's body is **INS + CON** (mint and bind), opened by a **DEF** seed and
+gated by **EVA**; **SYN** lands only the close; **NUL** is the escape hatch for an
+uncohered beat; the blank cold-start is the empty log, opened by DEF + SEG.
+
+## The loop
+
+```
+state = ⟨skeleton (SEG), slice selector (SIG), seed, prior⟩
+for beat b in skeleton:
+    ctx = render(state, b)      // ALWAYS a continuation, never an instruction
+    p   = model.continue(ctx)   // one paragraph — INS + CON
+    p   = EVA(p, slice(b))       // per-sentence provenance; splice + regen below threshold
+    state = REC(state, p, b)     // fold the accepted paragraph into the carry
+```
+
+`render` is the load-bearing function; its invariant: the tail of what the model
+sees is the running document ending mid-sentence, the facts above a hard boundary
+(the excerpts block — the theory's "Record: …"), and the current heading in
+place. Cold-start is the same shape with a genre declaration ("The following is a
+grounded explanatory article.") plus the first heading and an opening clause — a
+genre declaration is organic because it conditions what the text *is*, not what
+the model must avoid. That line is the boundary between organic and inorganic.
+
+## Two rulings
+
+- **The seed is a per-beat SEG choice, and the tight seed is grounded by
+  construction.** A load-bearing beat gets a full topic sentence; a connective
+  beat gets a heading plus a dangling connective and lets the render own the
+  claim. But the tight seed is *not* free-authored prose — it is the text
+  projection of the beat's strongest already-*bound* commitment. So tight goal
+  control does not reopen the grounding hole: the seed is a rendered bound claim,
+  and EVA has nothing to strike in it. Free-authoring the seed is the one way to
+  smuggle an ungrounded thesis back in.
+- **EVA splices; it does not regenerate wholesale.** Verify per sentence at claim
+  grain, keep the bound prefix, strike the ungrounded tail, and regenerate the
+  paragraph only when the bound fraction falls below `REBIND_THRESHOLD` — the
+  floor already in `continuation.js`. After a splice, re-derive the handoff from
+  the *surviving* terminal claim, or the next beat's seed threads off a sentence
+  that no longer exists.
+
+## Reconciliation with the running prototype
+
+A Claude-backed React prototype implements this exact loop (INTAKE+SEG → per beat
+[SIG · render · SYN · EVA · REC] → assemble) and settles three things by showing
+its hand:
+
+- **Completion frame vs. true prefill.** A hosted chat endpoint blocks assistant
+  prefill, so the prototype approximates the continuation with a *frame*: the
+  document sits in the user turn and the seed rides as a required opening ("begin
+  with exactly …"), plus a minimal output constraint ("only the paragraph"). The
+  eoreader target is a *local* model (WebLLM), where prefill IS available — so the
+  render here can end the prompt literally on the seed and drop even that residual
+  framing. Same loop, purer on the platform we ship to.
+- **The seed: authored vs. projected.** The prototype has the planner *author* the
+  seed sentence (an LLM writing a natural topic sentence) and trusts EVA to catch
+  a bad one. This slice takes the conservative ruling instead — the tight seed is
+  the text projection of an already-bound span, grounded by construction, so EVA
+  has nothing to strike in it. The authored seed reads more naturally; the
+  projected seed cannot smuggle an unchecked thesis. Both are legitimate; an
+  `authored` seed mode is a later option, gated by the same EVA.
+- **EVA: mechanical binder vs. LLM judge.** The prototype's EVA is an LLM judge
+  (grounded/on-beat) plus a regex leak check. This slice keeps EVA mechanical —
+  `bindAndVeto` for grounding (no model call, deterministic) — and adopts the
+  prototype's regex outright as `frameLeak`: the assistant-register leaks that
+  bind lexically and would otherwise sail past the grounding floor. The leak
+  check is the one piece of the judge that a mechanical validator cannot supply,
+  so it is worth its regex.
+
 ## Where it lives
 
 | concern | file | reuse or new |
 |---|---|---|
-| the loop, re-cut to paragraph grain | `src/longgen/continuation.js` | extend |
-| the organic prompt (strip the prohibitions) | `src/longgen/prompt.js` (`SYSTEM_WRITER`, `propositionInstruction`) | rewrite |
+| the skeleton (SEG) — beats from developable regions, honest-floored | `src/longgen/skeleton.js` | new |
+| `render` — the continuation frame + per-beat seed (DEF/heading) | `src/longgen/render.js` | new |
+| the paragraph composer — the loop (SIG · render · EVA · REC) | `src/longgen/compose.js` | new |
+| the progress fold (covered/planned, workspace not a bar) | `src/longgen/progress.js` | new |
+| the floor, per-sentence at claim grain (EVA) | `src/ground/index.js` (`bindAndVeto`) | reuse |
 | the render call | `src/arc/generate.js` (`generateSection`) | reuse |
-| the floor, per-sentence at claim grain | `src/ground/index.js` (`bindAndVeto`) | reuse |
-| the cluster resolver (2–4 claims per paragraph) | `src/longgen/resolve.js` | extend |
-| the shape (derived regions, copied forward) | new — `src/longgen/shape` region plan beside `arcPhase` | new |
-| the progress fold (covered/planned, workspace) | new — a pure fold over `units` against the shape | new |
-| the self-read weld → predicted retrieval | `src/predict` (`buildMoveLog`, `predictNextMove`), `src/surfer` (`surfFold`, `salienceField`) | wire |
-| the resumable state carrying shape + progress | `src/longgen/continuation.js` (`state`) | extend |
+| the organic-prompt cleanup (strip `LIBRARIAN_CUE` / `CAPABILITY_CUE` policing) | `src/model/prompt.js` | later slice |
+| the self-read weld → predicted retrieval | `src/predict` (`buildMoveLog`, `predictNextMove`), `src/surfer` (`surfFold`, `salienceField`) | later slice |
+| the resumable state carrying skeleton + progress | `src/longgen/compose.js` (`state`) | new |
 
 ## EO reading
 
