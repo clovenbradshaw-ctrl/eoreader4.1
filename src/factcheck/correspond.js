@@ -22,6 +22,7 @@
 
 import { segmentSentences }       from '../perceiver/parse/index.js';
 import { parseRelations, headVerb } from '../perceiver/parse/index.js';
+import { clauseForVerb }           from '../perceiver/parse/index.js';
 import { checkRelationConflict, checkObjectFunctionalConflict, checkRelationAgree, typeOf } from '../core/index.js';
 import { coherence, terrainInfo }  from '../core/index.js';
 import { operatorsByDomain }       from '../core/index.js';
@@ -181,8 +182,16 @@ export const claimedEdges = ({ prose, doc, cursor = Infinity, referents = false 
 // the classifier can embed at whichever grain its centroids were built in (the
 // verb doubles as the clause when no sentence is available, e.g. a bare void
 // relation). Returns the cell key or null (no-commit / weak embedder).
+//
+// CLAUSE GRAIN (clause-layer.js) — the centroids are clause-grain ("the unit is the
+// proposition", docs/phasepost.md), so we narrow a full-sentence argument to the CLAUSE
+// carrying this verb before embedding. A compound sentence yielding two edges no longer
+// types BOTH against the same sentence-wide text; each edge is measured against its own
+// clause. A bare relation or a single-clause sentence is returned unchanged, so the
+// query is never emptier than before.
 const patternCell = async (classifier, clause, verb) => {
-  const p = await classifier.classify({ clause: clause || verb || '', verb: verb || '' });
+  const scoped = clauseForVerb(clause, verb);
+  const p = await classifier.classify({ clause: scoped || verb || '', verb: verb || '' });
   return { live: !!p.live, cell: p.pattern?.cell || null };
 };
 
