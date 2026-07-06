@@ -319,6 +319,8 @@ export const buildGroundedMessages = ({
   graph = '',
   arc = '',                // the reading's own arc (write/gravity.js arcLines); '' → no block, byte-identical
   shape = '',              // the answer-first/sectioned shape cue (shapeForScope); '' → no block, byte-identical
+  steer = '',              // the discourse read's BRIEF — what THIS user actually wants (app.dc.js _steerLine);
+                           // folded in just before the answer clause and echoed in it. '' → no block, byte-identical.
   tail = '',              // the planner's read-window — the prose written so far this turn (spec-planner.md §5/§6)
 } = {}) => {
   const blocks = [];
@@ -431,12 +433,24 @@ export const buildGroundedMessages = ({
   if (strict && !spans.length)
     blocks.push('Your reading turned up nothing bearing on their question — it is not covered by what you read. Say that plainly, the way a person would (for example: "I didn\'t find anything about that in what I read" — first person, never "the reading doesn\'t mention…"), then, if you can, answer from general knowledge, making clear that part is not from what you read.');
 
+  // THE DISCOURSE STEER — the metacognition's BRIEF on what THIS user is actually after, folded in
+  // as the last instruction before the answer clause (where a small model attends hardest). It is a
+  // note to the model about how to AIM the reply, not content to echo — so it decides what gets
+  // foregrounded, not what gets restated. The dolphins failure this fixes: a read that said the user
+  // wanted an overview of dolphins still answered with whatever spans surfaced (climate change, meat)
+  // because the read only rode along as passive "steering". Now it leads the answer clause. Empty
+  // (every non-steered caller) → no block → byte-identical.
+  if (steer) blocks.push(steer);
+
   // The ANSWER CLAUSE, last (§1) — where a small model attends hardest. The restriction is
   // lifted: the talker answers, from the lines when they cover it and from general knowledge
   // when they don't (saying which). Not from document is FLAGGED downstream, not forbidden here.
   //   When a prior thread rode above, the clause names the live question outright so the talker
   //   answers THAT one and not the earlier turns it just saw.
-  blocks.push(metaConv
+  //   When a steer rode above, the clause closes on it too — the last words the model reads are
+  //   "aim it at what they want", not a generic "answer them now" that discards the brief.
+  const aim = steer ? ' Keep the whole reply aimed at what they’re actually after (the brief just above) — lead with what your reading speaks to it, not with whatever else happened to surface.' : '';
+  blocks.push((metaConv
     ? `Answer their question now — “${question}” — about the conversation above. Draw on those ` +
       'prior topics as its subject, grounded in what your reading turned up where it bears ' +
       'on the answer; say which part is from what you read and which from general knowledge.'
@@ -444,7 +458,7 @@ export const buildGroundedMessages = ({
     ? `Answer their latest question now — “${question}” — in your own words. If what you read ` +
       'doesn\'t cover it, answer from general knowledge and say that part isn\'t from what you read.'
     : 'Answer them now, in your own words. If what you read doesn\'t cover it, answer from ' +
-      'general knowledge and say that part isn\'t from what you read.');
+      'general knowledge and say that part isn\'t from what you read.') + aim);
 
   const sysBase = strict ? SYSTEM_GROUND_STRICT : SYSTEM_GROUND;
   const moment = currentMomentLine(now);

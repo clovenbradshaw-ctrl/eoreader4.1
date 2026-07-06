@@ -253,6 +253,26 @@ test('the librarian cue forbids inventing a quotation', () => {
     'quoting is bounded to what was actually read');
 });
 
+// ── The discourse steer: the read's brief, folded in just before the answer clause ──
+// The metacognition's read of what the user wants rides in its own slot (app.dc.js _steerLine),
+// placed last before the answer clause and echoed in it — so it AIMS the reply instead of trailing
+// the librarian cue as passive background. Opt-in; absent → byte-identical to the un-steered prompt.
+test('buildGroundedMessages carries the steer opt-in and is byte-identical without it', () => {
+  const base = { question: 'dolphins', spans: [{ idx: 0, text: 'A line about dolphins.' }] };
+  const bare = buildGroundedMessages(base);
+  const withSteer = buildGroundedMessages({ ...base, steer: 'What this turn is really for: the user wants an overview of dolphins. Aim the answer at that.' });
+  // The brief rides verbatim, before the answer clause.
+  assert.match(withSteer[1].content, /the user wants an overview of dolphins/);
+  const steerAt = withSteer[1].content.indexOf('the user wants an overview');
+  const answerAt = withSteer[1].content.indexOf('Answer them now');
+  assert.ok(steerAt >= 0 && answerAt > steerAt, 'the steer lands before the answer clause');
+  // The answer clause closes on the aim when a steer rode above.
+  assert.match(withSteer[1].content, /Keep the whole reply aimed at what they’re actually after/);
+  // No steer → byte-identical, and the clause stays the plain "Answer them now."
+  assert.deepEqual(buildGroundedMessages({ ...base, steer: '' }), bare, 'no steer → byte-identical');
+  assert.doesNotMatch(bare[1].content, /Keep the whole reply aimed/, 'un-steered clause carries no aim');
+});
+
 // ── The current-moment line (the running app's clock) ────────────────────────
 test('currentMomentLine is empty without a clock and formatted with one (byte-identical default)', () => {
   assert.equal(currentMomentLine(), '');
