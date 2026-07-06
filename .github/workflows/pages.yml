@@ -38,7 +38,7 @@ jobs:
       - name: Stage the shipped file set
         run: |
           mkdir -p _site
-          cp index.html templates.html favicon.ico favicon.svg apple-touch-icon.png _site/
+          cp index.html templates.html prompt-flow.html favicon.ico favicon.svg apple-touch-icon.png _site/
           cp -R vendor src data templates _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

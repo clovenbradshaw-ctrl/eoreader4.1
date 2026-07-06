@@ -66,7 +66,7 @@ class Component extends DCLogic {
       // Default is 'native' — render the real page as HTML first; switch to the stripped
       // reader view only on request (the toggle persists 'reader' for those who prefer it).
       viewMode:(savedViewMode==='reader'?'reader':'native'),
-      accent:savedAccent||null, highlightStyle:savedHL||'marker', settingsOpen:false, templatesOpen:false,
+      accent:savedAccent||null, highlightStyle:savedHL||'marker', settingsOpen:false, templatesOpen:false, promptFlowOpen:false,
       hoverPivot:savedHoverPivot||'dwell', clickAction:savedClickAct||'ask', hoverDelay:Math.max(150,Math.min(2000,+savedHoverDelay||1100)),
       // THE COMPOSER CARRIES NO MODE STATE (design/chat-redesign/REVISIONS.md).
       // Register, depth, strategy and web reach are all EMERGENT — read off the
@@ -8336,6 +8336,7 @@ class Component extends DCLogic {
       settingsOpen:this.state.settingsOpen,onToggleSettings:()=>this.toggleSettings(),onCloseSettings:()=>this.closeSettings(),
       chorus:this._chorusView(),
       templatesOpen:this.state.templatesOpen,onOpenTemplates:()=>this.setState({templatesOpen:true,settingsOpen:false}),onCloseTemplates:()=>this.setState({templatesOpen:false}),templatesStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
+      promptFlowOpen:this.state.promptFlowOpen,onOpenPromptFlow:()=>this.setState({promptFlowOpen:true,settingsOpen:false}),onClosePromptFlow:()=>this.setState({promptFlowOpen:false}),promptFlowStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
       memOpen:this.state.memOpen,onOpenMem:()=>this.setState({memOpen:true,settingsOpen:false}),onCloseMem:()=>this.setState({memOpen:false}),memStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},onExportMem:()=>this.exportMemory(),mem:(this.state.memOpen?this.memoryLog():{rows:[],hasRows:false,statLine:'',empty:true}),
       memTab:this.state.memTab||'sources',memTabSources:(this.state.memTab||'sources')==='sources',memTabLog:this.state.memTab==='log',
       onMemSources:()=>this.setState({memTab:'sources'}),onMemLog:()=>this.setState({memTab:'log'}),
