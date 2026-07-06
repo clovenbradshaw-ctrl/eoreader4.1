@@ -19,11 +19,14 @@ import { reflectAnswer } from '../ground/reflect.js';
 // answer as grounded to a SOURCE (with the precise line it came from — jumpable) or to the
 // VOID (the model's own words). The app calls this per grounded turn so every span the reader
 // hovers can say whether it was read or said, and where. Pure and DOM-free; the chat renders it.
-import { groundSpans, groundSummary } from '../ground/spans.js';
+// supportVerdict (ground/spans.js): the ANSWER-GRAIN bind-check the grounding badge reads —
+// turns the per-span tally into an honest "matched" / "the model's own words" decision, so the
+// chat path never badges a namesake-passage answer as grounded. Shared with the text organ.
+import { groundSpans, groundSummary, supportVerdict } from '../ground/spans.js';
 
 if (typeof window !== 'undefined') {
-  window.eoGen = { reflectAnswer, groundSpans, groundSummary, version: 7 };
+  window.eoGen = { reflectAnswer, groundSpans, groundSummary, supportVerdict, version: 8 };
   window.dispatchEvent(new Event('eogen-ready'));
 }
 
-export { reflectAnswer, groundSpans, groundSummary };
+export { reflectAnswer, groundSpans, groundSummary, supportVerdict };
