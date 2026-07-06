@@ -4931,7 +4931,11 @@ class Component extends DCLogic {
       const prevMsgs=((cur&&cur.messages)||[]).filter(m=>m.text&&!m.pending);
       const exchange=prevMsgs.slice(-2).map(m=>{const isUser=m.role==='user';
         return (isUser?'user: ':'assistant: ')+this.truncLabel(this.norm(m.text),isUser?200:140);}).join('\n');
-      const prompt=M.discoursePrompt(q,fold,{exchange,now:new Date()});
+      // The reading loaded into THIS chat, handed to the metacognition so it knows a document is in
+      // scope on turn one — before any turn has settled a `warm` source into the fold. Without it the
+      // read reports a book-scoped chat as "isolated" and calls the loaded book unspecified. Empty for
+      // an isolated (net-new) chat, where the read should stay "an isolated assistant chat".
+      const prompt=M.discoursePrompt(q,fold,{exchange,now:new Date(),scope:this._chatScopeLabel(cur)});
       this._setThink(id,'Reading the conversation — what is this turn really asking for…');
       // Fail FAST to the fallback when the model is wedged (e.g. just after a user Stop, which can
       // leave the in-browser decoder stalled for the first call of the next turn): a shorter guard
@@ -5370,6 +5374,20 @@ class Component extends DCLogic {
       const F=this._FOLD||(this._FOLD=await import(new URL('src/core/conversation-fold.js',document.baseURI).href));
       return F.projectFold((cur&&cur.messages)||[],{chatId:(cur&&cur.id)||'',foldRules:{warmWindow:3}});
     }catch(e){return {stance:null,focus:null,warm:[],stanceDesc:'an isolated assistant chat'};}
+  }
+  // The reading loaded into a chat, as a human label for the discourse read (chatOrientation:
+  // "«title» · N propositions read", or the everything-scope summary). The fold's `warm` only
+  // learns a source AFTER a turn cites it, so on turn one a book-scoped chat looks isolated; this
+  // reads the chat's EXPLICIT scope instead, so the metacognition knows a document is in scope from
+  // the first turn. Empty string for a genuinely isolated (net-new) chat → today's behavior. Guarded:
+  // any fault → '' → the read falls back to the fold's stance description, never worse.
+  _chatScopeLabel(cur){
+    try{
+      if(!cur)return '';
+      if(this.chatScopeAll(cur))return this.chatOrientation([]);
+      const ss=this.chatSourcesOf(cur);
+      return ss.length?this.chatOrientation(ss):'';
+    }catch(e){return '';}
   }
   // The compose FOCUS enacted by a turn — the KIND that labels the work and the
   // running SUBJECT slot. A turn that names its own kind ("write a haiku") or subject

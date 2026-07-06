@@ -557,18 +557,24 @@ export const createMetaRouter = ({ speech, fold = null, bases, seed } = {}) => {
   };
 };
 
-// The metacognition's prompt — free speech, deliberately WITHOUT a format contract. It sees
-// only the discourse (the carried stance, the last exchange, the new message) — not the
-// document, not a tool inventory: a metacognition about what is going on, not a planner.
-// `now` (a Date, or a preformatted string) anchors the read in time: without it the model
-// cannot tell that "the weather", "the score", "the latest" are asks about a NOW it does not
-// contain — the discourse fact that makes them world-questions.
-export const discoursePrompt = (message, fold = null, { exchange = '', now = null } = {}) => {
+// The metacognition's prompt — free speech, deliberately WITHOUT a format contract. It sees the
+// discourse (the carried stance, the last exchange, the new message) AND what reading is loaded
+// into the chat (`scope`) — but never the document's CONTENT: a metacognition about what is going
+// on, not a planner. Knowing a document is IN SCOPE is a discourse fact (the user attached it),
+// distinct from reading its text. Without it, the fold's `warm` is empty on the first turn of a
+// fresh chat, so the read calls a book-scoped chat "an isolated assistant chat" and reports the
+// loaded book as unspecified ("they haven't said which book") — which then steers the answer into
+// a needless clarify or an ungrounded guess. `now` (a Date, or a preformatted string) anchors the
+// read in time: without it the model cannot tell that "the weather", "the score", "the latest" are
+// asks about a NOW it does not contain — the discourse fact that makes them world-questions.
+export const discoursePrompt = (message, fold = null, { exchange = '', now = null, scope = '' } = {}) => {
   const when = now instanceof Date
     ? now.toLocaleString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })
     : (now ? String(now) : '');
+  const reading = String(scope || '').trim();
   return (
-    'You are watching one conversation. Right now: ' + stanceDescOf(fold) + '.\n' +
+    'You are watching one conversation. Right now: ' + (reading ? 'reading ' + reading : stanceDescOf(fold)) + '.\n' +
+    (reading ? 'That reading is already loaded into this chat and in scope — so when the user says "this", "it", "the book", or "the document" they mean it; it is not unspecified, and you need not ask which book or document they mean.\n' : '') +
     (when ? 'It is now ' + when + '.\n' : '') +
     (exchange ? 'The last exchange:\n' + exchange + '\n' : '') +
     'The user just said: "' + String(message || '') + '"\n' +

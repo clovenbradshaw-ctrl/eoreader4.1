@@ -379,6 +379,18 @@ test('discoursePrompt carries the stance and message but demands NO format', () 
     'no format contract — the speech is measured, not parsed');
 });
 
+test('discoursePrompt names the loaded reading so a book-scoped first turn is not "isolated"', () => {
+  const label = '“Governable Spaces” · 13197 propositions read';
+  const p = discoursePrompt('summarize this book', null, { scope: label });
+  assert.ok(p.includes('Right now: reading ' + label), 'the loaded reading replaces the isolated-chat stance');
+  assert.ok(!p.includes('an isolated assistant chat'), 'a scoped chat is never reported as isolated');
+  assert.ok(/not unspecified/.test(p) && /which book or document/.test(p), 'the read is told the document is in scope, not underspecified');
+  // No scope → byte-identical to the pre-scope prompt (isolated first turn is unchanged).
+  const p0 = discoursePrompt('summarize this book', null, {});
+  assert.ok(p0.includes('an isolated assistant chat'), 'no scope → the isolated-chat stance still stands');
+  assert.ok(!p0.includes('already loaded into this chat'), 'no scope → no in-scope line');
+});
+
 test('discoursePrompt anchors the read in time when given a now', () => {
   const now = new Date('2026-07-02T15:30:00');
   const p = discoursePrompt('what is the weather?', null, { now });
