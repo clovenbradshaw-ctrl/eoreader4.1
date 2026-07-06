@@ -384,7 +384,7 @@ test('discoursePrompt names the loaded reading so a book-scoped first turn is no
   const p = discoursePrompt('summarize this book', null, { scope: label });
   assert.ok(p.includes('Right now: reading ' + label), 'the loaded reading replaces the isolated-chat stance');
   assert.ok(!p.includes('an isolated assistant chat'), 'a scoped chat is never reported as isolated');
-  assert.ok(/not unspecified|need not ask which one/.test(p), 'the read is told the document is in scope, not underspecified');
+  assert.ok(/not unspecified/.test(p) && /which book or document/.test(p), 'the read is told the document is in scope, not underspecified');
   // No scope → byte-identical to the pre-scope prompt (isolated first turn is unchanged).
   const p0 = discoursePrompt('summarize this book', null, {});
   assert.ok(p0.includes('an isolated assistant chat'), 'no scope → the isolated-chat stance still stands');

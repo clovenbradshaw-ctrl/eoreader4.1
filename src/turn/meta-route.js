@@ -574,7 +574,7 @@ export const discoursePrompt = (message, fold = null, { exchange = '', now = nul
   const reading = String(scope || '').trim();
   return (
     'You are watching one conversation. Right now: ' + (reading ? 'reading ' + reading : stanceDescOf(fold)) + '.\n' +
-    (reading ? 'That reading is already loaded into this chat and in scope — so when the user says "this", "it", "the book", or "the document" they mean it; it is not unspecified, and you need not ask which one.\n' : '') +
+    (reading ? 'That reading is already loaded into this chat and in scope — so when the user says "this", "it", "the book", or "the document" they mean it; it is not unspecified, and you need not ask which book or document they mean.\n' : '') +
     (when ? 'It is now ' + when + '.\n' : '') +
     (exchange ? 'The last exchange:\n' + exchange + '\n' : '') +
     'The user just said: "' + String(message || '') + '"\n' +
