@@ -22,6 +22,9 @@ const OP_COLOR = Object.freeze({
   REC: '#d6618f',  // learned rule
 });
 const opColor = (op) => OP_COLOR[op] || 'var(--limner-edge, #8a93a6)';
+// Operator → glyph (docs/eot-surface-syntax.md, Appendix A) — the edge wears
+// the mark of the operator that wrote it.
+const OP_GLYPH = Object.freeze({ CON: '⋈', SIG: '⊡', SYN: '∨', DEF: '⊢', SEG: '｜', REC: '⊛' });
 
 // role → node fill
 const ROLE_FILL = Object.freeze({
@@ -94,9 +97,11 @@ export const render = (geom, theme = {}) => {
     const line = `<line class="limner-edge" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" ` +
       `stroke="${opColor(op)}" stroke-width="${sw}" stroke-opacity="0.7"${dash}>` +
       `<title>${esc(op || 'tie')}${e.label ? ': ' + esc(e.label) : ''}</title></line>` + head;
-    if (!e.label) return line;
+    const glyph = OP_GLYPH[op] || '';
+    if (!glyph && !e.label) return line;
     const mx = ((e.x1 + e.x2) / 2).toFixed(2), my = ((e.y1 + e.y2) / 2).toFixed(2);
-    return line + `<text class="limner-elabel" x="${mx}" y="${my}" text-anchor="middle">${esc(short(e.label, 14))}</text>`;
+    const mid = glyph + (e.label ? (glyph ? ' ' : '') + short(e.label, 14) : '');
+    return line + `<text class="limner-elabel" x="${mx}" y="${my}" text-anchor="middle" style="fill:${opColor(op)}">${esc(mid)}</text>`;
   }).join('');
 
   const nodes = (geom.nodes || []).map(n => {

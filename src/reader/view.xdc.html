@@ -860,7 +860,10 @@
             <div style="background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 8px 4px;margin-bottom:8px;">
               <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 6px 6px;">
                 <span style="font-size:10.5px;color:var(--ink3);">Connected records as a DAG — arrows read subject → object · click any node to open it · dashed = another name for the same thing</span>
-                <span style="font-size:10.5px;color:var(--ink3);">{{ egoMeta }}</span>
+                <span style="display:inline-flex;align-items:center;gap:8px;">
+                  <button onclick="{{ onEgoLabels }}" title="Toggle the edge chips between relation words and EO operator glyphs" style="font-size:10px;font-weight:700;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;" style-hover="border-color:var(--accline);color:var(--acc)">{{ egoLabelsLabel }}</button>
+                  <span style="font-size:10.5px;color:var(--ink3);">{{ egoMeta }}</span>
+                </span>
               </div>
               {{ egoViz }}
             </div>

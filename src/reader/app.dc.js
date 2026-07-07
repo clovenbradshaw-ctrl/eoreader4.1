@@ -5980,13 +5980,26 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     const m=new Map();
     for(const e of this.edgesOf(sel)){
       const out=e.from===sel,o=out?e.to:e.from;
-      let d=m.get(o);if(!d){d={inW:0,outW:0,inVias:new Set(),outVias:new Set()};m.set(o,d);}
-      const w=((e.weight!=null?e.weight:1)||0)+1e-4,via=e.relType||e.via||e.kind;
-      if(out){d.outW+=w;if(!this.junkRel(via))d.outVias.add(via);}
-      else{d.inW+=w;if(!this.junkRel(via))d.inVias.add(via);}
+      let d=m.get(o);if(!d){d={inW:0,outW:0,inVias:new Set(),outVias:new Set(),inOps:new Map(),outOps:new Map()};m.set(o,d);}
+      const w=((e.weight!=null?e.weight:1)||0)+1e-4,via=e.relType||e.via||e.kind,k=e.kind||null;
+      if(out){d.outW+=w;if(!this.junkRel(via))d.outVias.add(via);if(k)d.outOps.set(k,(d.outOps.get(k)||0)+1);}
+      else{d.inW+=w;if(!this.junkRel(via))d.inVias.add(via);if(k)d.inOps.set(k,(d.inOps.get(k)||0)+1);}
     }
     return m;
   }
+  // EO operator → glyph (docs/eot-surface-syntax.md, Appendix A). An edge is an
+  // event some operator wrote; the glyph says WHICH — ⋈ a CON bond, ⊡ a SIG
+  // attribute — so the edge shows its own provenance, not just a verb.
+  opGlyph(k){return ({con:'⋈',sig:'⊡',syn:'∨',def:'⊢',seg:'｜',rec:'⊛',ins:'△',nul:'∅',eva:'⊨'})[String(k||'').toLowerCase()]||'';}
+  opName(k){return ({con:'bond',sig:'attribute',syn:'merge',def:'assertion',seg:'split',rec:'rule'})[String(k||'').toLowerCase()]||String(k||'');}
+  // Operator triad (docs/eot-surface-syntax.md Appendix A: Existence · Structure ·
+  // Significance) → [line, fill] chip colours, so an edge's operator chip reads
+  // the same everywhere in the app.
+  opTriad(k){k=String(k||'').toLowerCase();
+    if(k==='nul'||k==='sig'||k==='ins')return ['#6a5acd','#efeafa'];
+    if(k==='seg'||k==='con'||k==='syn')return ['#0f8a74','#e3f4f0'];
+    if(k==='def'||k==='eva'||k==='rec')return ['#b8730a','#f9efdd'];
+    return null;}
   _dagRel(vias,fb){const a=[...vias].filter(Boolean);return a.find(v=>String(v).length<22)||a[0]||fb;}
   // One left→right DAG edge: a cubic bezier with horizontal end tangents and a
   // solid arrowhead at the target border; `back` adds a second head at the
@@ -6006,10 +6019,11 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     const GRAINC={Ground:'#2f6f9e',Figure:'#b06f2a',Pattern:'#2f7d54'};
     const dirs=this.dirSplit(sel);
     const real=nbrs.filter(n=>n&&n.id!=null).slice(0,14).map(n=>{
-      const d=dirs.get(n.id)||{inW:0,outW:1,inVias:new Set(),outVias:new Set()};
+      const d=dirs.get(n.id)||{inW:0,outW:1,inVias:new Set(),outVias:new Set(),inOps:new Map(),outOps:new Map()};
       const incoming=d.inW>d.outW;
+      let op=null,opN=0;(incoming?d.inOps:d.outOps).forEach((v,k)=>{if(v>opN){opN=v;op=k;}});
       return{label:this.labelOf(n.id),id:n.id,w:Math.max(0.001,n.w||1),grain:n.grain||'Figure',llm:!!n.llm,
-        incoming,mutual:d.inW>1e-3&&d.outW>1e-3,
+        incoming,mutual:d.inW>1e-3&&d.outW>1e-3,op,glyph:this.opGlyph(op),
         rel:this._dagRel(incoming?d.inVias:d.outVias,(n.vias&&n.vias[0])||'related')};});
     const fac=(facets||[]).slice(0,5);
     const left=real.filter(n=>n.incoming),right=real.filter(n=>!n.incoming);
@@ -6039,21 +6053,30 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     // read subject → object, and the verb rides the arrow as a pill — the edge
     // carries the claim, not the margin
     const spread=(i,n)=>n<2?0:((i/(n-1))-0.5)*2*Math.min(26,(n-1)*9);
-    const pill=(key,px,py,txt,gc,on,faded)=>{const pw=txt.length*5.4+14;return[
-      h('rect',{key:key+'pr',x:px-pw/2,y:py-8.5,width:pw,height:17,rx:8.5,fill:'#fff',stroke:on?'#8a531e':gc,strokeWidth:on?1.4:1,opacity:faded?0:0.95}),
-      h('text',{key:key+'pt',x:px,y:py+3.5,textAnchor:'middle',style:{fontSize:'9.5px',fontWeight:'600',fill:on?'#8a531e':gc,pointerEvents:'none'},opacity:faded?0:1},txt)];};
+    // The chip ON the line: either the relation word or the operator glyph
+    // (state.egoGlyphs toggles), coloured by the operator's triad — the same
+    // chip grammar everywhere an EO edge is drawn.
+    const glyphMode=!!this.state.egoGlyphs;
+    const pill=(key,px,py,nd,on,faded)=>{
+      const gc=GRAINC[nd.grain]||GRAINC.Figure,tri=this.opTriad(nd.op);
+      const line=on?'#8a531e':(tri?tri[0]:gc),fill=tri?tri[1]:'#fff';
+      const txt=(glyphMode?(nd.glyph||'·'):this.truncLabel(nd.rel,14))+(nd.mutual?' ↔':'');
+      const mono=glyphMode,pw=Math.max(20,txt.length*(mono?7:5.4)+(mono?10:14));
+      return[
+        h('rect',{key:key+'pr',x:px-pw/2,y:py-8.5,width:pw,height:17,rx:8.5,fill,stroke:line,strokeWidth:on?1.4:1,opacity:faded?0:0.95}),
+        h('text',{key:key+'pt',x:px,y:py+3.5,textAnchor:'middle',style:{fontSize:mono?'10.5px':'9.5px',fontWeight:'600',fill:line,fontFamily:mono?'ui-monospace,Menlo,Consolas,monospace':'inherit',pointerEvents:'none'},opacity:faded?0:1},txt)];};
     left.forEach((nd,i)=>{const on=nd.id===hov,faded=anyHover&&!on,gc=GRAINC[nd.grain]||GRAINC.Figure;
       const oy=spread(i,left.length),ex=ccx-Math.sqrt(Math.max(1,41*41-oy*oy)),ey=cy+oy;
-      const sx=nd._x+nd._r,txt=this.truncLabel(nd.rel,14)+(nd.mutual?' ↔':'');
+      const sx=nd._x+nd._r;
       layers.push(h('g',{key:'eL'+i,style:{pointerEvents:'none'}},
         this._dagEdge('eL'+i,sx,nd._y,ex,ey,{color:on?'#8a531e':gc,w:on?3.4:1.2+(nd.w/wmax)*2.6,op:faded?0.1:0.55,back:nd.mutual})
-        .concat(pill('eL'+i,(sx+ex)/2,(nd._y+ey)/2,txt,gc,on,faded))));});
+        .concat(pill('eL'+i,(sx+ex)/2,(nd._y+ey)/2,nd,on,faded))));});
     right.forEach((nd,i)=>{const on=nd.id===hov,faded=anyHover&&!on,gc=GRAINC[nd.grain]||GRAINC.Figure;
       const oy=spread(i,right.length),sx=ccx+Math.sqrt(Math.max(1,41*41-oy*oy)),sy=cy+oy;
-      const ex=nd._x-nd._r,txt=this.truncLabel(nd.rel,14)+(nd.mutual?' ↔':'');
+      const ex=nd._x-nd._r;
       layers.push(h('g',{key:'eR'+i,style:{pointerEvents:'none'}},
         this._dagEdge('eR'+i,sx,sy,ex,nd._y,{color:on?'#8a531e':gc,w:on?3.4:1.2+(nd.w/wmax)*2.6,op:faded?0.1:0.55,back:nd.mutual})
-        .concat(pill('eR'+i,(sx+ex)/2,(sy+nd._y)/2,txt,gc,on,faded))));});
+        .concat(pill('eR'+i,(sx+ex)/2,(sy+nd._y)/2,nd,on,faded))));});
     // nodes + outward name labels with white halo for legibility
     const node=(nd,i,side)=>{const on=nd.id===hov,faded=anyHover&&!on,c=this.hashColor(nd.label);
       const anchor=side<0?'end':'start',lx=side<0?nd._x-nd._r-10:nd._x+nd._r+10;
@@ -6092,12 +6115,15 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
           h('text',{key:'r',x:ccx+20,y:fy+13,textAnchor:'start',style:{fontSize:'9.5px',fontStyle:'italic',fill:'#9aa1ab',pointerEvents:'none'}},'also called')
         ]));});
     }
-    // grain legend + the arrow key
+    // grain legend + the arrow key + the operator glyphs actually on screen
     const leg=[['Ground',GRAINC.Ground],['Figure',GRAINC.Figure],['Pattern',GRAINC.Pattern]];
+    const opsSeen=[...new Set(real.map(n=>n.op).filter(Boolean))];
+    const legTail=[h('text',{key:'la',x:9,y:22+3*17,style:{fontSize:'10px',fontWeight:'600',fill:'#7a8089'}},'→ subject acts on object')];
+    if(opsSeen.length)legTail.push(h('text',{key:'lo',x:9,y:22+3*17+15,style:{fontSize:'10px',fontWeight:'600',fill:'#7a8089'}},
+      opsSeen.map(k=>this.opGlyph(k)+' '+this.opName(k)).join(' · ')));
     layers.push(h('g',{key:'legend'},leg.reduce((acc,[t,col],i)=>{const yy=22+i*17;
       acc.push(h('circle',{key:'ld'+i,cx:13,cy:yy-3,r:4,fill:col}));
-      acc.push(h('text',{key:'lt'+i,x:23,y:yy,style:{fontSize:'10px',fontWeight:'600',fill:'#7a8089'}},t));return acc;},
-      [h('text',{key:'la',x:9,y:22+3*17,style:{fontSize:'10px',fontWeight:'600',fill:'#7a8089'}},'→ subject acts on object')])));
+      acc.push(h('text',{key:'lt'+i,x:23,y:yy,style:{fontSize:'10px',fontWeight:'600',fill:'#7a8089'}},t));return acc;},legTail)));
     return h('svg',{viewBox:'0 0 '+W+' '+H,preserveAspectRatio:'xMidYMid meet',style:{display:'block',width:'100%',height:'auto',maxHeight:'60vh'}},layers);
   }
   // Compact neighbourhood DAG for the side panel — same grammar as egoGraph
@@ -6110,9 +6136,11 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     const all=(nbrs||[]).filter(n=>n&&n.id!=null&&!this.isURLish(this.labelOf(n.id)));
     const MAXN=10,extra=Math.max(0,all.length-MAXN);
     const dirs=this.dirSplit(sel);
-    const real=all.slice(0,MAXN).map(n=>{const d=dirs.get(n.id)||{inW:0,outW:1};
+    const real=all.slice(0,MAXN).map(n=>{const d=dirs.get(n.id)||{inW:0,outW:1,inOps:new Map(),outOps:new Map()};
+      const incoming=d.inW>d.outW;
+      let op=null,opN=0;((incoming?d.inOps:d.outOps)||new Map()).forEach((v,k)=>{if(v>opN){opN=v;op=k;}});
       return{label:this.labelOf(n.id),id:n.id,w:Math.max(0.001,n.w||1),grain:n.grain||'Figure',
-        incoming:d.inW>d.outW,mutual:d.inW>1e-3&&d.outW>1e-3};});
+        incoming,mutual:d.inW>1e-3&&d.outW>1e-3,glyph:this.opGlyph(op)};});
     if(!real.length)return null;
     const left=real.filter(n=>n.incoming),right=real.filter(n=>!n.incoming);
     const rows=Math.max(left.length,right.length,1);
@@ -6128,14 +6156,20 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     let minX=0,maxX=W,minY=0,maxY=H;
     const fit=(x0,y0,x1,y1)=>{if(x0<minX)minX=x0;if(x1>maxX)maxX=x1;if(y0<minY)minY=y0;if(y1>maxY)maxY=y1;};
     const spread=(i,n)=>n<2?0:((i/(n-1))-0.5)*2*Math.min(15,(n-1)*6);
+    const midGlyph=(key,px,py,g,gc,faded)=>g?[h('text',{key:key+'g',x:px,y:py+3,textAnchor:'middle',
+      style:{fontSize:'9px',fontWeight:'700',fill:gc,paintOrder:'stroke',stroke:'#fff',strokeWidth:3,strokeLinejoin:'round',pointerEvents:'none'},opacity:faded?0:0.9},g)]:[];
     left.forEach((nd,i)=>{const on=nd.id===hov,faded=anyHover&&!on,gc=GRAINC[nd.grain]||GRAINC.Figure;
       const oy=spread(i,left.length),ex=ccx-Math.sqrt(Math.max(1,(CR+1)*(CR+1)-oy*oy)),ey=cy+oy;
+      const sx=nd._x+nd._r;
       layers.push(h('g',{key:'eL'+i,style:{pointerEvents:'none'}},
-        this._dagEdge('eL'+i,nd._x+nd._r,nd._y,ex,ey,{color:on?'#8a531e':gc,w:on?2.6:1+(nd.w/wmax)*1.8,op:faded?0.12:0.55,back:nd.mutual,alen:7,awid:3.2})));});
+        this._dagEdge('eL'+i,sx,nd._y,ex,ey,{color:on?'#8a531e':gc,w:on?2.6:1+(nd.w/wmax)*1.8,op:faded?0.12:0.55,back:nd.mutual,alen:7,awid:3.2})
+        .concat(midGlyph('eL'+i,(sx+ex)/2,(nd._y+ey)/2,nd.glyph,gc,faded))));});
     right.forEach((nd,i)=>{const on=nd.id===hov,faded=anyHover&&!on,gc=GRAINC[nd.grain]||GRAINC.Figure;
       const oy=spread(i,right.length),sx=ccx+Math.sqrt(Math.max(1,(CR+1)*(CR+1)-oy*oy)),sy=cy+oy;
+      const ex=nd._x-nd._r;
       layers.push(h('g',{key:'eR'+i,style:{pointerEvents:'none'}},
-        this._dagEdge('eR'+i,sx,sy,nd._x-nd._r,nd._y,{color:on?'#8a531e':gc,w:on?2.6:1+(nd.w/wmax)*1.8,op:faded?0.12:0.55,back:nd.mutual,alen:7,awid:3.2})));});
+        this._dagEdge('eR'+i,sx,sy,ex,nd._y,{color:on?'#8a531e':gc,w:on?2.6:1+(nd.w/wmax)*1.8,op:faded?0.12:0.55,back:nd.mutual,alen:7,awid:3.2})
+        .concat(midGlyph('eR'+i,(sx+ex)/2,(sy+nd._y)/2,nd.glyph,gc,faded))));});
     const node=(nd,i,side)=>{const on=nd.id===hov,faded=anyHover&&!on,c=this.hashColor(nd.label);
       const anchor=side<0?'end':'start',lx=side<0?nd._x-nd._r-5:nd._x+nd._r+5,ly=nd._y+3;
       const name=this.truncLabel(nd.label,16),tw=name.length*5.3+8;
@@ -9141,6 +9175,8 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     base.egoViz=this.egoGraph(sel,nbrs,facets);base.hasEgo=(nbrs.length>0||facets.length>0);
     const dd=this.dirSplit(sel);let up=0,dn=0;for(const nb of nbrs){const d=dd.get(nb.id);if(d&&d.inW>d.outW)up++;else dn++;}
     base.egoMeta=up+' upstream · '+dn+' downstream'+(facets.length?' · '+facets.length+' also-called':'');
+    base.onEgoLabels=()=>this.setState({egoGlyphs:!this.state.egoGlyphs});
+    base.egoLabelsLabel=this.state.egoGlyphs?'abc words':'⋈ glyphs';
 
     const enter=u=>()=>this.setHover(u),leave=()=>()=>this.setHover(null),openC=u=>()=>this.openSource(u);
     const dimOf=u=>(active&&active!==u)?'opacity:.24;transition:opacity .14s;':'opacity:1;transition:opacity .14s;';
