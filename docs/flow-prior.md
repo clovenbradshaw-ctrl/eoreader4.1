@@ -20,15 +20,20 @@ corpus.jsonl ─▶ eo_trajectory.mjs ─▶ trajectories.jsonl ─▶ flow_dist
 
 A fixed grid of *N* equal slices is arbitrary: a slice is a different-sized chunk of
 reading in every document, and the delta between two slices is partly an artifact of
-where the grid line fell. The reading articulates itself instead. `sectionize()`
-reads the event log's **dominant-operator runs** — the INS↔SEG alternation
-(introducing-mode vs segmenting/narrative-mode) — bounded by **NUL births** (the part
-boundaries), and cuts a section at each mode change once a minimum length is met.
+where the grid line fell. The reading articulates itself instead (the *born rule*).
+`sectionize()` reads two signals from the event log:
 
-On *Metamorphosis* that recovers ~45 variable-length sections (8–66 sentences),
-labelled `NUL SEG INS INS SEG DEF SEG INS …` — the text's own structure, with the
-three Parts falling on NUL births. The delta between consecutive sections is then a
-**real structural transition** — the discourse genuinely changed mode there.
+- **NUL births** — a NUL fires when the text re-grounds from the void. The *start* of
+  a NUL run is an **authoritative joint** (a dense opening cluster collapses to one),
+  overriding everything else — these are the parts/chapters.
+- **operator-mode shifts** — where the smoothed dominant operator changes (INS-heavy →
+  SEG-heavy = a phase transition), gated by a minimum run so flicker doesn't cut.
+
+NUL is a *boundary*, never a mode, so it is excluded from the dominant-operator vote.
+On *Metamorphosis* this recovers 48 variable-length sections with births at sentences
+**0, 289, 504** — Parts I, II, III — labelled `DEF SEG SEG INS INS SEG …`. The delta
+between consecutive sections is then a **real structural transition** — the discourse
+genuinely changed mode there.
 
 `trajectoryFromDoc(doc)` defaults to this. Two other modes stay available:
 
@@ -96,10 +101,17 @@ reading position, so a variable-count trajectory aligns to a fixed prior.
 
 `data/flow-prior.json` is a **bootstrap** prior distilled from **36 public-domain
 Project Gutenberg books** (natural sections, `--min-sent 300`, grid 24, top-10 PCs).
-Median ~150 sections/book; section length median 14 sentences (p10 8, p90 42); the
-dominant-op mix is **INS 50% · SEG 38% · DEF 8% · NUL 4%** — the introducing/
-segmenting alternation as a corpus statistic. Top-10 PCs capture **86%** of section
-variance; the whole model is **15 KB**.
+Section length median ~14 sentences; the dominant-op mix is **INS 48% · SEG 39% ·
+SIG 10% · DEF 3%** — the introducing/segmenting alternation as a corpus statistic (NUL
+is a boundary, not a label). Top-10 PCs capture **86%** of section variance; the whole
+model is **15 KB**.
+
+**What is trustworthy at 36 books (split-half agreement, `manifold_compare` sibling):**
+the build-arc (Pearson r≈0.99) and the manifold mean (r≈0.99) are stable — they are
+not artifacts of which books were sampled. The per-position **delta profile is not**
+(r≈0.4–0.6): the "lurch" signal is high-variance at this corpus size. So lean on
+arc-adherence and manifold-residual; treat the delta axis as a coarse global signal
+until the corpus is much larger.
 
 It is deliberately **not** definitive: it encodes *its* corpus (19th–early-20th-c.
 narrative). Regenerate for any register (retains no text — only statistics):

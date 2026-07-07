@@ -100,38 +100,35 @@ function spanStep(evs, mentions, lo, hi){
 // length, dominant-operator label, and whether it opens on a birth. This is what the
 // screenshot means by "one vector per natural section": variable-length sections
 // (the text moves in uneven beats), the INS↔SEG alternation, the NUL-birth parts.
-export function sectionize(doc, { minLen=8, window=4 } = {}){
+export function sectionize(doc, { minRun=6, window=8, minLen } = {}){
+  const run = minLen ?? minRun;                       // accept either name
   const nSent=doc.sentences.length;
   if(nSent<=0) return { sections:[], nulBirths:[] };
   const evs=(doc.log?.events||[]).filter(e=>OP_SET.has(e.op)&&typeof e.sentIdx==='number');
-  const tally=Array.from({length:nSent},()=>({}));
+  const counts=Array.from({length:nSent},()=>new Array(nOps).fill(0));
   const nulAt=new Set();
-  for(const e of evs){
-    if(e.sentIdx<0||e.sentIdx>=nSent) continue;
-    tally[e.sentIdx][e.op]=(tally[e.sentIdx][e.op]||0)+1;
-    if(e.op==='NUL') nulAt.add(e.sentIdx);
+  for(const e of evs){ if(e.sentIdx<0||e.sentIdx>=nSent) continue; counts[e.sentIdx][OP_INDEX[e.op]]++; if(e.op==='NUL') nulAt.add(e.sentIdx); }
+  // smoothed dominant operator, EXCLUDING NUL — NUL is a birth/boundary, not a mode.
+  const domAt=(si)=>{ const acc=new Array(nOps).fill(0);
+    for(let j=Math.max(0,si-window);j<=Math.min(nSent-1,si+window);j++) for(let d=0;d<nOps;d++) acc[d]+=counts[j][d];
+    let best=OP_INDEX.INS,bv=-1; for(let d=0;d<nOps;d++){ if(d===OP_INDEX.NUL) continue; if(acc[d]>bv){bv=acc[d];best=d;} } return best; };
+  // NUL RUN-STARTS are authoritative births (the text re-grounding from the void);
+  // mode-shifts are secondary joints, gated by min-run. A dense NUL cluster (Kafka's
+  // opening) collapses to its run-start, so births are the real parts, not flicker.
+  const joints=[0]; const births=new Set([0]); let prev=domAt(0);
+  for(let si=1;si<nSent;si++){
+    if(nulAt.has(si)&&!nulAt.has(si-1)){ if(joints[joints.length-1]!==si){ joints.push(si); births.add(si); } prev=domAt(si); continue; }
+    const d=domAt(si);
+    if(d!==prev && si-joints[joints.length-1]>=run){ joints.push(si); prev=d; }
   }
-  const raw=new Array(nSent); let last='INS';
-  for(let s=0;s<nSent;s++){ const t=tally[s], ks=Object.keys(t);
-    if(ks.length) last=ks.reduce((a,b)=>(t[b]>(t[a]||0)?b:a),ks[0]); raw[s]=last; }
-  const mode=new Array(nSent);
-  for(let s=0;s<nSent;s++){ const c={};
-    for(let j=Math.max(0,s-window);j<=Math.min(nSent-1,s+window);j++) c[raw[j]]=(c[raw[j]]||0)+1;
-    mode[s]=Object.keys(c).reduce((a,b)=>(c[b]>c[a]?b:a)); }
-  const cuts=[0];
-  for(let s=1;s<nSent;s++){
-    const boundary=mode[s]!==mode[s-1]||nulAt.has(s);
-    if(boundary&&(s-cuts[cuts.length-1])>=minLen) cuts.push(s);
-  }
-  cuts.push(nSent);
+  joints.push(nSent);
+  const dom=(lo,hi)=>{ const acc=new Array(nOps).fill(0);
+    for(let s=lo;s<=hi;s++) for(let d=0;d<nOps;d++) acc[d]+=counts[s][d];
+    let best=OP_INDEX.INS,bv=-1; for(let d=0;d<nOps;d++){ if(d===OP_INDEX.NUL) continue; if(acc[d]>bv){bv=acc[d];best=d;} } return OPERATORS[best]; };
   const sections=[];
-  for(let i=0;i<cuts.length-1;i++){
-    const lo=cuts[i], hi=cuts[i+1]-1, c={};
-    for(let s=lo;s<=hi;s++) c[mode[s]]=(c[mode[s]]||0)+1;
-    const op=Object.keys(c).reduce((a,b)=>(c[b]>c[a]?b:a));
-    sections.push({ lo, hi, len:hi-lo+1, op, born:nulAt.has(lo) });
-  }
-  return { sections, nulBirths:[...nulAt].sort((a,b)=>a-b) };
+  for(let k=0;k<joints.length-1;k++){ const lo=joints[k], hi=joints[k+1]-1; if(hi<lo) continue;
+    sections.push({ lo, hi, len:hi-lo+1, op:dom(lo,hi), born:births.has(lo) }); }
+  return { sections, nulBirths:[...births].sort((a,b)=>a-b) };
 }
 
 // Build a trajectory from an eoreader parseText() doc. INSIDE eoreader4.1 this is

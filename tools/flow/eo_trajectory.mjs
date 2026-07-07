@@ -35,7 +35,8 @@ const OUT      = String(flag('--out','trajectories.jsonl'));
 const SEGMENT  = String(flag('--segment','sections'));
 const STEPS    = parseInt(flag('--steps','40'),10);
 const PER_SENT = parseInt(flag('--per-sentences','12'),10);
-const MIN_LEN  = parseInt(flag('--min-len','8'),10);
+const MIN_RUN  = parseInt(flag('--min-run', flag('--min-len','6')),10);   // section min length
+const WINDOW   = parseInt(flag('--window','8'),10);                        // mode-smoothing half-width
 const HEAD     = parseInt(flag('--head','400000'),10);   // full arc; cap protects pathological files
 const SAMPLE   = parseInt(flag('--sample','150'),10);
 const MIN_SENT = parseInt(flag('--min-sent','80'),10);
@@ -50,7 +51,7 @@ const { trajectoryFromDoc } = await import(pathToFileURL(flowEntry).href);
 
 const segOpts = SEGMENT==='sentences' ? { perSentences: PER_SENT }
   : SEGMENT==='equal' ? { segment:'equal', steps: STEPS }
-  : { segment:'sections', minLen: MIN_LEN };
+  : { segment:'sections', minRun: MIN_RUN, window: WINDOW };
 
 function trajectory(text){
   const doc = parseText(HEAD ? text.slice(0,HEAD) : text);
