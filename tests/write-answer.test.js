@@ -104,7 +104,7 @@ const groundedDoc = (text) => {
   return doc;
 };
 
-test('runTurn streams a grounded answer through onToken and records the beats (§5)', async () => {
+test('runTurn streams a grounded answer one paragraph at a time (write/paragraphs.js)', async () => {
   const doc = groundedDoc(CHAIN);
   const audit = createAuditLog();
   const emitted = [];
@@ -114,12 +114,11 @@ test('runTurn streams a grounded answer through onToken and records the beats (�
   });
   assert.equal(res.route, 'grounded');
   assert.ok(res.answer.length > 0, 'the streamed draft is the answer');
-  assert.ok(emitted.length > 0 && emitted.join('').includes(res.answer.replace(/\s*\[s\d+\]/g, '').trim().slice(0, 8)),
-    'tokens were emitted as the answer decoded');
+  assert.equal(emitted.join(''), res.turn.rawOutput, 'the visible stream IS the draft — the boundary gate never leaks');
   const llm = audit.turns[0].steps.find(s => s.name === 'llm');
-  assert.ok(llm.data.streamed, 'the llm step carries the streaming telemetry');
-  assert.equal(llm.data.streamed.beats, llm.data.streamed.sites.length, 'one site per beat');
-  // revise is retired on the streaming path — never a block rewrite that un-streams (§3c)
+  assert.ok(llm.data.streamed, 'the llm step carries the paragraph telemetry');
+  assert.ok(llm.data.streamed.paragraphs >= 1, 'at least one paragraph was realised');
+  // revise stays retired on the streamed path — never a block rewrite that un-streams
   const rev = audit.turns[0].steps.find(s => s.name === 'revise');
   assert.ok(!rev?.data?.attempts, 'no block rewrite on the streamed answer');
 });

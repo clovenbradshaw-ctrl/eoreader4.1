@@ -17,7 +17,7 @@
 // `runtime: 'native'` note and a pull command, documented, never silently pretended-runnable.
 //
 // HOW they load. WebGPU coders reuse the webllm builder (model/webllm.js) bound to an
-// MLC artifact id — same engine, tokenizer, lens port, streaming and cancellation as the
+// MLC artifact id — same engine, streaming and cancellation as the
 // Llama default. GGUF coders reuse loadWllamaModel + the ChatML prompt (model/wllama.js),
 // exactly as the Pleias backends reuse that path. Nothing is fetched until load() runs.
 //

@@ -405,13 +405,13 @@ const summarize = (name, ctx, ms) => {
                               // the arc broadcast rode this turn's window (broadcastArc)
                               ...(ctx.arcBlock ? { arc: true } : {}) };
     case 'llm':      return { ...base, outputLen: ctx.rawOutput?.length || 0, maxTokens: ctx.maxTokens,
-                              // the streaming-answer telemetry: one beat per surfer stop, each with
-                              // its measured site and the forward prediction (docs/streaming-answer.md)
+                              // the paragraph-loop telemetry (write/paragraphs.js): how many
+                              // paragraphs the answer took, and whether the model closed it
+                              // itself (DONE) rather than hitting the cap.
                               ...(ctx.streamed ? { streamed: {
-                                beats: ctx.streamed.beats.length,
-                                sites: ctx.streamed.beats.map(b => b.site),
-                                order: ctx.streamed.order,
-                                flags: ctx.streamed.flags.map(f => f.id),
+                                paragraphs: ctx.streamed.paragraphs.length,
+                                chars: ctx.streamed.draft.length,
+                                done: !!ctx.streamed.done,
                               } } : {}),
                               // the lens-port steering provenance (spec-the-lens-port.md): which
                               // terms fired, suppressed tokens, void-conflicts, per-gated entropy.

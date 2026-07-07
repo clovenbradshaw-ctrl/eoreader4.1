@@ -46,6 +46,10 @@ export { createIdleLoop, seededRng, RESTING, SURFING } from './idle.js';
 export { surfToPlan, stopToCell } from './plan.js';
 export { frameAt, SITES } from './frame.js';
 export { streamAnswer } from './answer.js';
+// The paragraph loop — the answer path's current posture (turn/stages.js llm): the model is
+// trusted with the fold's content and answers one paragraph per call; grounding stays
+// mechanical and downstream (the binder cites, the fact-checker adjudicates, the veto flags).
+export { streamParagraphs, CONTINUE_CUE, firstSentenceOf } from './paragraphs.js';
 export { walkComposition, sentenceRenderer, turnNote } from './composition.js';
 export { foldImpression } from './impression.js';
 // Writing is reading backwards — the demonstrable kernel (the holon above is the
