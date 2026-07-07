@@ -523,23 +523,8 @@
             <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}">
               <div style="{{ chat.statusStyle }}"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
             </sc-if>
-            <!-- THE EMERGENT READOUT (design/chat-redesign/REVISIONS.md) — the route is
-                 read off the ask, never chosen. The chips are a readout, not controls:
-                 intent · depth · register · breadth resolve live as you type, the same
-                 _read(q) derives the turn's config at send time, and every answer stays
-                 badged with the register it ACTUALLY used. The Surface link is a view,
-                 not a mode: the live report panel (src/research/surface.js) over the
-                 session's append-only research log. -->
-            <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:9px;min-height:22px;">
-              <span style="{{ read.dotStyle }}"></span>
-              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);white-space:nowrap;flex:0 0 auto;">{{ read.lead }}</span>
-              <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-width:0;flex:1;">
-                <sc-for list="{{ read.chips }}" as="c" hint-placeholder-count="0">
-                  <span title="{{ c.why }}" style="{{ c.style }}">{{ c.label }}</span>
-                </sc-for>
-                <span style="font-size:11px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">{{ read.gloss }}</span>
-              </div>
-            </div>
+            <!-- The composer is just an input + Ask — no chat-type options to pick. The ask
+                 still routes itself at send time (_read); nothing is chosen up front. -->
             <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
               <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
               <sc-if value="{{ chat.generating }}" hint-placeholder-val="{{ false }}">
@@ -1329,18 +1314,7 @@
           <sc-if value="{{ chat.hasStatus }}" hint-placeholder-val="{{ false }}">
             <div style="{{ chat.statusStyle }}"><span style="width:13px;height:13px;border-radius:50%;border:2px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>{{ chat.modelStatus }}</div>
           </sc-if>
-          <!-- THE EMERGENT READOUT — same readout as the overlay composer above:
-               a readout, not controls (design/chat-redesign/REVISIONS.md). -->
-          <div style="max-width:720px;margin:0 auto 8px;display:flex;align-items:center;gap:9px;min-height:22px;">
-            <span style="{{ read.dotStyle }}"></span>
-            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);white-space:nowrap;flex:0 0 auto;">{{ read.lead }}</span>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;min-width:0;flex:1;">
-              <sc-for list="{{ read.chips }}" as="c" hint-placeholder-count="0">
-                <span title="{{ c.why }}" style="{{ c.style }}">{{ c.label }}</span>
-              </sc-for>
-              <span style="font-size:11px;color:var(--ink3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">{{ read.gloss }}</span>
-            </div>
-          </div>
+          <!-- Just an input + Ask — no chat-type options (mirrors the overlay composer). -->
           <div style="max-width:720px;margin:0 auto;display:flex;gap:9px;align-items:center;background:var(--app);border:1px solid var(--line2);border-radius:14px;padding:3px 4px 3px 15px;" style-focus-within="border-color:var(--accline);background:var(--card)">
             <input value="{{ chatInput }}" oninput="{{ onChatInput }}" onkeydown="{{ onChatKey }}" placeholder="{{ chat.placeholder }}" style="flex:1;min-width:0;font-size:13.5px;color:var(--ink);background:transparent;border:none;outline:none;padding:9px 0;">
             <sc-if value="{{ chat.generating }}" hint-placeholder-val="{{ false }}">
