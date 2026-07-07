@@ -5704,6 +5704,116 @@ class Component extends DCLogic {
   weightOf(e){return e?(Math.log(1+(e.sightings||1))+(this.incident.get(e.id)||0)):0;}
   edgesOf(id){return this.graph.edges.filter(e=>(e.from===id||e.to===id)&&e.from!==e.to);}
   mentionsOf(id){const s=new Set();for(const e of this.master.events){if(e.sentIdx==null)continue;const ids=[e.id,e.src,e.tgt,e.from,e.to].filter(Boolean).map(x=>this.graph.representative(x));if(ids.includes(id))s.add(e.sentIdx);}return [...s].sort((a,b)=>a-b);}
+  // ── The referent WEAVE, over the LIVE document (docs/referent-journey.md) ────
+  // Each recurring referent is a thread — a density pulse across reading position —
+  // and threads group into storylines by temporal co-activity. Reads the engine's own
+  // referentNesting (so a thread carries its holon depth), then clusters the density
+  // vectors. Returns null when nothing is loaded or too few referents recur.
+  _weaveModel(){
+    if(!this.master||!this.graph||!this.master.sentences||!this.master.sentences.length)return null;
+    const g=this.graph,nSent=this.master.sentences.length||1;
+    const mentions=new Map();
+    for(const id of g.entities.keys()){const m=this.mentionsOf(id);if(m.length)mentions.set(id,m);}
+    const nest=(this.E&&this.E.referentNesting)?this.E.referentNesting({mentions,units:nSent},g):null;
+    if(!nest)return null;
+    const STOP=new Set(['french','russian','german','english','austrian','come','go','though','well','yes','no','oh','god']);
+    const isArt=id=>/^(chapter|book|part|volume)\b/i.test(id)||/^[ivxlc]+$/i.test(id)||STOP.has(id);
+    const pop=nest.referents.filter(r=>r.count>=8&&!isArt(r.id)).sort((a,b)=>b.count-a.count).slice(0,60);
+    if(pop.length<3)return null;
+    const bins=120,DARK=['#3987e5','#199e70','#c98500','#008300','#9085e9','#e66767','#d55181','#d95926'],OTHER='#57647e';
+    const threads=pop.map(r=>{
+      const dens=new Array(bins).fill(0);
+      for(const s of r.mentions)dens[Math.min(bins-1,Math.floor((s/nSent)*bins))]++;
+      const sum=r.mentions.reduce((a,s)=>a+s,0);
+      const nb=new Map();
+      for(const e of g.edges){const o=e.from===r.id?e.to:(e.to===r.id?e.from:null);if(o)nb.set(o,(nb.get(o)||0)+1);}
+      const neighbors=[...nb.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5).map(([id,w])=>({id,label:(g.entities.get(id)&&g.entities.get(id).label)||id,w}));
+      return {id:r.id,label:r.label,n:r.count,s0:r.span[0],s1:r.span[1],span:(r.span[1]-r.span[0])/nSent,dens,centroid:r.count?(sum/r.count)/nSent:0,depth:r.depth,neighbors,comm:-1};
+    });
+    const norm=threads.map(t=>{const m=Math.hypot(...t.dens)||1;return t.dens.map(x=>x/m);});
+    const cos=(i,j)=>norm[i].reduce((a,_,k)=>a+norm[i][k]*norm[j][k],0);
+    let clusters=threads.map((_,i)=>[i]);
+    for(;;){let best=-1,bi=-1,bj=-1;
+      for(let i=0;i<clusters.length;i++)for(let j=i+1;j<clusters.length;j++){let s=0;for(const a of clusters[i])for(const b of clusters[j])s+=cos(a,b);s/=clusters[i].length*clusters[j].length;if(s>best){best=s;bi=i;bj=j;}}
+      if(best<0.30||bi<0)break;clusters[bi]=clusters[bi].concat(clusters[bj]);clusters.splice(bj,1);}
+    clusters.sort((a,b)=>b.length-a.length||threads[a[0]].centroid-threads[b[0]].centroid);
+    const communities=clusters.map((cl,ci)=>{const members=cl.slice().sort((a,b)=>threads[b].n-threads[a].n);const colored=ci<DARK.length;for(const m of cl)threads[m].comm=ci;return {id:ci,size:cl.length,colored,color:colored?DARK[ci]:OTHER,label:threads[members[0]].label};});
+    threads.sort((a,b)=>a.comm-b.comm||a.centroid-b.centroid||b.n-a.n);
+    let title='this document';try{title=this.master.title||(this.state&&this.state.viewUrl)||title;}catch(e){}
+    return {nSent,nBins:bins,read:{sentences:this.master.sentences.length,entities:g.entities.size,population:pop.length},threads,communities,title:String(title)};
+  }
+  _weaveEmpty(){
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>html,body{margin:0;height:100%;background:#0a0e1a;color:#7c8aa5;font-family:ui-monospace,monospace;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}div{max-width:420px;line-height:1.6;font-size:13px}b{color:#c3cbdb}</style></head><body><div><b>No weave yet.</b><br>Read a document with a few recurring referents, then reopen — the weave is drawn from whatever is loaded.</div></body></html>`;
+  }
+  _weaveHtml(W){
+    const data=JSON.stringify(W);
+    return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Weave</title><style>
+:root{--void:#0a0e1a;--panel:#0d1320;--void2:#070a13;--line:#1f2a3f;--bone:#e6e9f0;--bone2:#c3cbdb;--dim:#7c8aa5;--dim2:#57647e;--signal:#3fd0c0}
+*{box-sizing:border-box}html,body{margin:0;background:var(--void);color:var(--bone);font-family:"Space Grotesk",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+body{background:radial-gradient(1100px 560px at 85% -10%,rgba(63,208,192,.05),transparent 60%),var(--void);min-height:100vh}
+.wrap{max-width:1180px;margin:0 auto;padding:20px 24px 60px}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.eyebrow{font-family:ui-monospace,monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--signal);margin-bottom:8px}
+h1{font-size:24px;letter-spacing:-.01em;margin:0}
+.sub{color:var(--dim);font-size:13px;margin-top:8px;max-width:660px;line-height:1.55}
+.stat{font-family:ui-monospace,monospace;font-size:11px;color:var(--dim2);margin-top:9px}.stat b{color:var(--bone2)}
+.card{background:linear-gradient(180deg,var(--panel),var(--void2));border:1px solid var(--line);border-radius:12px;padding:15px 17px;margin-top:18px}
+.card h3{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);font-family:ui-monospace,monospace;margin:0 0 11px}
+.card h3 span{color:var(--dim2);letter-spacing:.02em;text-transform:none}
+.legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin:0 0 12px}
+.leg{display:flex;align-items:center;gap:6px;font-family:ui-monospace,monospace;font-size:11px;color:var(--bone2);cursor:pointer;user-select:none}
+.leg .sw{width:11px;height:11px;border-radius:3px}.leg.off{opacity:.32}
+.axis{font-family:ui-monospace,monospace;font-size:10px;fill:var(--dim2)}
+.tlbl{font-family:ui-monospace,monospace;font-size:10.5px;fill:var(--bone2);text-anchor:end}
+.row.off{opacity:.12}.row{cursor:pointer;transition:opacity .12s}
+.tip{position:fixed;pointer-events:none;background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-family:ui-monospace,monospace;font-size:11px;color:var(--bone);z-index:10;opacity:0;transition:opacity .1s;max-width:260px;line-height:1.55}
+.tip b{color:var(--signal)}.tip .rel{color:var(--dim)}
+.cap{font-size:12px;color:var(--dim);line-height:1.6;margin-top:14px;max-width:860px}.cap b{color:var(--bone2)}
+</style></head><body><div class="wrap">
+<div class="eyebrow">eoreader · referent weave</div>
+<h1>The Weave</h1>
+<div class="sub">Every recurring referent is a <b style="color:var(--bone2)">thread</b>, a density pulse across reading position. Threads group into <b style="color:var(--bone2)">storylines</b> by temporal co-activity — who shares the stage. A text is the weaving of these threads together.</div>
+<div class="stat" id="stat"></div>
+<div class="card"><h3>Storylines <span>— hover a thread to trace its relations · click a swatch to isolate</span></h3><div class="legend" id="legend"></div><svg id="threads" width="100%"></svg></div>
+<div class="card"><h3>Story-level weave <span>— each storyline's activity summed across the reading</span></h3><svg id="stream" width="100%" height="150"></svg></div>
+<div class="cap" id="cap"></div>
+</div><div class="tip" id="tip"></div>
+<script>
+const W = ${data};
+const NS='http://www.w3.org/2000/svg';
+const el=(n,a={})=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const commColor=(c)=>{const m=W.communities.find(x=>x.id===c);return m?m.color:'#57647e';};
+document.getElementById('stat').innerHTML='<b>'+W.read.sentences.toLocaleString()+'</b> sentences · <b>'+W.read.entities.toLocaleString()+'</b> entities · <b>'+W.threads.length+'</b> threads · <b>'+W.communities.length+'</b> storylines · '+W.title;
+let isolated=null;const legend=document.getElementById('legend');
+W.communities.filter(c=>c.colored).forEach(c=>{const d=document.createElement('div');d.className='leg';d.dataset.comm=c.id;d.innerHTML='<span class="sw" style="background:'+c.color+'"></span>'+c.label+' <span style="color:var(--dim2)">·'+c.size+'</span>';d.onclick=()=>{isolated=(isolated===c.id)?null:c.id;paint();};legend.appendChild(d);});
+if(W.communities.some(c=>!c.colored)){const d=document.createElement('div');d.className='leg';d.dataset.comm='other';d.innerHTML='<span class="sw" style="background:#57647e"></span>other';d.onclick=()=>{isolated=(isolated==='other')?null:'other';paint();};legend.appendChild(d);}
+const NBIN=W.nBins,ROW=15,PADL=140,PADR=16,PADT=20;
+const svg=document.getElementById('threads');const width=svg.clientWidth||1080,plotW=width-PADL-PADR;const H=PADT+W.threads.length*ROW+16;
+svg.setAttribute('height',H);svg.setAttribute('viewBox','0 0 '+width+' '+H);
+const bx=(b)=>PADL+(b/NBIN)*plotW;
+for(let f=0;f<=1.0001;f+=0.25){const x=PADL+f*plotW;svg.appendChild(el('line',{x1:x,y1:PADT-6,x2:x,y2:H-16,stroke:'#1f2a3f','stroke-width':1}));const tx=el('text',{x:x,y:PADT-9,class:'axis','text-anchor':f===0?'start':(f>0.99?'end':'middle')});tx.textContent=(f*100|0)+'%';svg.appendChild(tx);}
+let prevComm=null;
+W.threads.forEach((t,i)=>{const y=PADT+i*ROW;const col=commColor(t.comm);const maxD=Math.max(1,...t.dens);
+  if(t.comm!==prevComm){svg.appendChild(el('line',{x1:8,y1:y,x2:width-PADR,y2:y,stroke:'#141b2b','stroke-width':1}));prevComm=t.comm;}
+  const gg=el('g',{class:'row'});gg.dataset.comm=t.comm;gg.dataset.id=t.id;
+  const lbl=el('text',{x:PADL-10,y:y+ROW-4,class:'tlbl'});lbl.textContent=t.label.length>18?t.label.slice(0,17)+'…':t.label;gg.appendChild(lbl);
+  gg.appendChild(el('line',{x1:PADL,y1:y+ROW-3,x2:PADL+plotW,y2:y+ROW-3,stroke:'#141b2b','stroke-width':1}));
+  for(let b=0;b<NBIN;b++){if(!t.dens[b])continue;const h=3+(t.dens[b]/maxD)*(ROW-5);const x=bx(b);gg.appendChild(el('rect',{x:x,y:y+ROW-3-h,width:Math.max(1.4,plotW/NBIN-0.6),height:h,rx:1,fill:col,'fill-opacity':0.35+0.55*(t.dens[b]/maxD)}));}
+  gg.addEventListener('mousemove',(e)=>showTip(e,t));gg.addEventListener('mouseleave',hideTip);svg.appendChild(gg);});
+const stream=document.getElementById('stream'),sw=stream.clientWidth||1080,sh=150;stream.setAttribute('viewBox','0 0 '+sw+' '+sh);
+const cols=W.communities.filter(c=>c.colored);
+const series=cols.map(c=>{const arr=new Array(NBIN).fill(0);W.threads.filter(t=>t.comm===c.id).forEach(t=>t.dens.forEach((v,b)=>arr[b]+=v));return{c,arr};});
+const stackTot=new Array(NBIN).fill(0);series.forEach(s=>s.arr.forEach((v,b)=>stackTot[b]+=v));const peak=Math.max(1,...stackTot);const sx=(b)=>(b/(NBIN-1))*(sw-20)+10;const syTop=14,syBot=sh-20;let base=new Array(NBIN).fill(0);
+series.forEach(s=>{const pts=[];for(let b=0;b<NBIN;b++){const y=syBot-((base[b])/peak)*(syBot-syTop);pts.push([sx(b),y]);}for(let b=NBIN-1;b>=0;b--){const y=syBot-((base[b]+s.arr[b])/peak)*(syBot-syTop);pts.push([sx(b),y]);}stream.appendChild(el('polygon',{points:pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' '),fill:s.c.color,'fill-opacity':0.6,stroke:s.c.color,'stroke-width':0.6}));s.arr.forEach((v,b)=>base[b]+=v);});
+for(let f=0;f<=1.0001;f+=0.25){const x=10+f*(sw-20);const tx=el('text',{x:x,y:sh-6,class:'axis','text-anchor':f===0?'start':(f>0.99?'end':'middle')});tx.textContent=(f*100|0)+'%';stream.appendChild(tx);}
+const tip=document.getElementById('tip');
+function showTip(e,t){const nb=t.neighbors.map(n=>n.label+' ·'+n.w).join(', ')||'—';const cm=W.communities.find(c=>c.id===t.comm);tip.innerHTML='<b>'+t.label+'</b> · '+(cm?cm.label:'')+' storyline<br>'+t.n+' mentions · span '+(t.span*100|0)+'% · holon depth '+t.depth+'<br><span class="rel">relates to: '+nb+'</span>';tip.style.opacity=1;tip.style.left=Math.min(e.clientX+14,innerWidth-270)+'px';tip.style.top=(e.clientY+14)+'px';highlight(t);}
+function hideTip(){tip.style.opacity=0;highlight(null);}
+function highlight(t){document.querySelectorAll('.row').forEach(r=>{r.classList.toggle('off',!!t&&r.dataset.comm!=String(t.comm)&&!(t.neighbors.some(n=>n.id===r.dataset.id)));});if(!t)paint();}
+function paint(){document.querySelectorAll('.leg').forEach(l=>l.classList.toggle('off',isolated!=null&&l.dataset.comm!=String(isolated)));document.querySelectorAll('.row').forEach(r=>{const c=W.communities.find(x=>String(x.id)===r.dataset.comm);const oth=c&&c.colored===false;const key=oth?'other':r.dataset.comm;r.classList.toggle('off',isolated!=null&&String(key)!=String(isolated));});}
+document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weave</b>: many threads co-running. Storylines were found from co-activity alone — no character list. Each thread carries the holon depth the parser now computes.';
+</script></body></html>`;
+  }
   aliasesOf(id){const s=new Set();for(const ev of this.master.events){if(ev.op==='INS'&&ev.id&&ev.label&&this.graph.representative(ev.id)===id)s.add(ev.label);}const e=this.graph.entities.get(id);if(e&&e.label)s.add(e.label);return [...s].filter(a=>!this.isURLish(a));}
   // A true alias is another SURFACE FORM of the same referent — not a distinct entity
   // that merely shares a token. "Nashville Downtown Partnership" is not an alias of
@@ -8328,6 +8438,7 @@ class Component extends DCLogic {
       chorus:this._chorusView(),
       templatesOpen:this.state.templatesOpen,onOpenTemplates:()=>this.setState({templatesOpen:true,settingsOpen:false}),onCloseTemplates:()=>this.setState({templatesOpen:false}),templatesStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
       promptFlowOpen:this.state.promptFlowOpen,onOpenPromptFlow:()=>this.setState({promptFlowOpen:true,settingsOpen:false}),onClosePromptFlow:()=>this.setState({promptFlowOpen:false}),promptFlowStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
+      weaveOpen:this.state.weaveOpen,weaveDoc:this.state.weaveDoc||'',onOpenWeave:()=>{let W=null;try{W=this._weaveModel();}catch(e){}if(!W){this.setState({weaveOpen:true,weaveDoc:this._weaveEmpty(),settingsOpen:false});return;}this.setState({weaveOpen:true,weaveDoc:this._weaveHtml(W),settingsOpen:false});},onCloseWeave:()=>this.setState({weaveOpen:false}),weaveStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
       memOpen:this.state.memOpen,onOpenMem:()=>this.setState({memOpen:true,settingsOpen:false}),onCloseMem:()=>this.setState({memOpen:false}),memStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},onExportMem:()=>this.exportMemory(),mem:(this.state.memOpen?this.memoryLog():{rows:[],hasRows:false,statLine:'',empty:true}),
       memTab:this.state.memTab||'sources',memTabSources:(this.state.memTab||'sources')==='sources',memTabLog:this.state.memTab==='log',
       onMemSources:()=>this.setState({memTab:'sources'}),onMemLog:()=>this.setState({memTab:'log'}),

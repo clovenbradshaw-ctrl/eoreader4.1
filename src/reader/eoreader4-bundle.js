@@ -3873,6 +3873,72 @@ var referentMap = (pages) => {
   }
   return { remap, forks };
 };
+// src/perceiver/referent-nesting.js — the holonic containment address a referent earns
+// from its span (docs/referent-journey.md). Pure over (log/mentions, graph); parseHolon
+// and projectGraph are already in scope in this bundle.
+var segmentOf = (id) => String(id).replace(/\./g, "·");
+var strictlyContains = (B, A) =>
+  B.span[0] <= A.span[0] && B.span[1] >= A.span[1] && B.spanLen > A.spanLen;
+var referentNesting = (doc, graph = null) => {
+  const g = graph || projectGraph(doc.log, {});
+  const units = doc.units?.length ?? doc.sentences?.length ?? 0;
+  const mentionsByRoot = /* @__PURE__ */ new Map();
+  for (const [id, idxs] of (doc.mentions || /* @__PURE__ */ new Map())) {
+    const root = g.representative(id);
+    let arr = mentionsByRoot.get(root);
+    if (!arr) mentionsByRoot.set(root, arr = []);
+    for (const i of idxs) if (i != null) arr.push(i);
+  }
+  const degree = /* @__PURE__ */ new Map();
+  for (const e of g.edges) {
+    if (e.from != null) degree.set(e.from, (degree.get(e.from) || 0) + 1);
+    if (e.to != null && e.to !== e.from) degree.set(e.to, (degree.get(e.to) || 0) + 1);
+  }
+  const refs = [];
+  for (const [root, arr] of mentionsByRoot) {
+    if (!arr.length) continue;
+    const sorted = [...new Set(arr)].sort((a, b) => a - b);
+    const first = sorted[0], last = sorted[sorted.length - 1];
+    refs.push({
+      id: root, label: g.entities.get(root)?.label ?? root,
+      mentions: sorted, count: sorted.length, span: [first, last], spanLen: last - first + 1,
+      introFraction: units > 0 ? first / units : 0, connections: degree.get(root) || 0,
+    });
+  }
+  for (const a of refs) {
+    const containers = refs.filter((b) => b !== a && strictlyContains(b, a));
+    a.containedBy = containers.map((b) => b.id);
+    a.containedByCount = containers.length;
+    a.parent = containers.length
+      ? containers.slice().sort((x, y) =>
+          (x.spanLen - y.spanLen) || (y.count - x.count) || (x.id < y.id ? -1 : 1))[0].id
+      : null;
+  }
+  const order = refs.slice().sort((x, y) =>
+    (y.spanLen - x.spanLen) || (y.count - x.count) || (x.id < y.id ? -1 : 1));
+  const addressOf = /* @__PURE__ */ new Map();
+  for (const r of order) {
+    const seg = segmentOf(r.id);
+    const parentAddr = r.parent ? addressOf.get(r.parent) : null;
+    addressOf.set(r.id, parentAddr ? `${parentAddr}.${seg}` : seg);
+  }
+  for (const r of refs) { r.address = addressOf.get(r.id); r.depth = parseHolon(r.address).depth; }
+  refs.sort((a, b) => (a.span[0] - b.span[0]) || (b.count - a.count) || (a.id < b.id ? -1 : 1));
+  return { units, referents: refs };
+};
+var nestingSummary = (nesting) => {
+  const refs = nesting.referents;
+  const depths = refs.map((r) => r.containedByCount).sort((a, b) => a - b);
+  const n = depths.length;
+  return {
+    referents: n,
+    median: n ? depths[Math.floor((n - 1) / 2)] : 0,
+    max: n ? depths[n - 1] : 0,
+    nestedAtLeast3: refs.filter((r) => r.containedByCount >= 3).length,
+    flatDepth1: refs.filter((r) => r.depth === 1).length,
+    maxHolonDepth: refs.reduce((m, r) => Math.max(m, r.depth), 0),
+  };
+};
 export {
   DEFAULT_PROJECTION_RULES,
   createParser,
@@ -3880,5 +3946,7 @@ export {
   projectGraph,
   projectionStats,
   referentMap,
+  referentNesting,
+  nestingSummary,
   segmentClauses
 };
