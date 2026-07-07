@@ -27,6 +27,7 @@ export { replayFrames, loopStats } from './replay.js';
 export { createFrame, snapshotFrame, sameTerms, DEFAULT_STRAIN_LEAK } from '../core/enacted/index.js';
 export { isEnacted, isDepicted, assertSingleRegister } from './register.js';
 export { buildMeaningRead } from './meaning.js';
+export { stanceFold } from './stance-fold.js';
 
 // The cheap surprise provider — now the BAYESIAN γ-mass surprise over the field
 // (docs/bayesian-surprise.md), the only strain honestly computable until the meaning

@@ -187,11 +187,56 @@ about right, and the layer ratio is a structural prior the current single surpri
 cannot supply. That is a grounded, actionable finding about the existing mechanism —
 where the Born swap could only report that a different quantity does not track it.
 
+## Prototype: the stance layer as a fold — recalibration as a REC in the log
+
+The noise-k finding says calibration *can* be grounded in signal-vs-noise, but a
+threshold computed offline (the noise-k probe) is still a seat: it sits outside the log,
+unreplayable, un-RECable — the same objection the directive raises against the causal
+`recalibrate()` window in `loop.js`, which refits the confirm band *every cursor* from a
+rolling `seen[]`, silently. The fix the directive scopes (Step 4) is to make the
+calibration an **enacted act**: a `stance` frame that holds the reading's current sense
+of normal surprise and RECs — discretely, in the log — only when the surprise stream's
+level shifts past the noise line. Recalibration becomes a REC; the fold replays it.
+
+`src/enact/stance-fold.js` prototypes it (behind the flag — not wired into the live
+loop, so flag-off is byte-identical; tests in `tests/stance-fold.test.js`). It differs
+from the directive's letter in one measured way: the break rule is the **signal-from-
+noise** line (the drift beats `z·σ·√((1−λ)/(1+λ))`, derived from the stream's own frozen
+spread), **not** the Born partition Step 0 ruled out. A single anomalous line is clipped
+to the accommodation scale — a shock is the frame layer's impulse, not a shift in the
+normal — so the stance chases sustained drift, not spikes. And because
+`replayFrames` is already layer-agnostic, setting `strainDelta = (1−λ)(surprise − band)`
+makes the folded strain reconstitute the drift detector's own state **with no new replay
+code** — the directive's headline claim, made literal.
+
+Measured on the same corpus (`eoreader4-eval/stance-fold-probe.mjs`):
+
+```
+                     silent seat (recalibrate)     stance fold (α=0.05 / α=0.01)
+metamorphosis-full   band moves on 544/743 (73%)   15 recalibrations / 0   (SETTLING)
+metamorphosis-excerpt  37/40 (93%)                 0 / 0                    (holds one normal)
+esker                  27/32 (84%)                 0 / 0                    (holds one normal)
+replayFrames@445 reconstitutes the stance band = 0.641, matches the module exactly.
+```
+
+The silent seat adjusts the band on 73–93% of cursors, none of it logged. The stance
+fold replaces that with a handful of discrete, replayable recalibration RECs (or none —
+the short texts hold a single normal end to end), and `α` is the one knob dialing the
+rate. This is the seat collapsing into the log: the calibration can be *sourced* from the
+fold. Caveat, honestly: at α=0.05 the turbulent full text shows some `minEpoch`-spaced
+clustering of RECs (a mild re-break in hard stretches) — the hysteresis wants tuning, and
+α=0.01 holds a single normal throughout. The end-to-end falsifier the directive names —
+delete `recalibrate()`/`seen[]`, drive the per-layer break thresholds off the folded
+stance × the noise-derived `k ≈ 8`, and hold parity — is the next gated step. This
+prototype shows the fold is well-formed, replayable, and settles; it does not yet claim
+the seat is gone from the live loop.
+
 ## Reproducing
 
 ```
-NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node eoreader4-eval/born-frame-probe.mjs   # Step 0 (Born partition)
-NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node eoreader4-eval/noise-k-probe.mjs       # follow-on (noise-derived k)
+NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node eoreader4-eval/born-frame-probe.mjs    # Step 0 (Born partition)
+NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node eoreader4-eval/noise-k-probe.mjs        # follow-on (noise-derived k)
+NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node eoreader4-eval/stance-fold-probe.mjs    # prototype (stance as a fold)
 ```
 
 Both require the live MiniLM organ (`@huggingface/transformers`, `Xenova/paraphrase-
