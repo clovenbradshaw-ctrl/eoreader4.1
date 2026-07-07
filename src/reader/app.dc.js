@@ -56,7 +56,7 @@ class Component extends DCLogic {
       hoverSrc:null, pinSrc:null, openSrc:null, mode:'breadth', direction:'', hoverEnt:null, hoverHref:null, hoverAhead:null, hoverXY:{x:0,y:0}, rev:0, sortMode:'updated',
       llm:true, llmAvail:false, svoBusy:false, svoStatus:'', pasteOpen:false, pasteText:'',
       srcWide:false, srcTab:'page', srcDoc:null, srcLoading:false, srcErr:null, linkMode:savedLink==='0'?false:true, linkChoice:null,
-      viewUrl:null, detect:true, pageDoc:null, bookView:false, pageLoading:false, pageErr:null, rightOpen:true, panelSel:null, panelLens:null, panelMode:'overview', previewWiki:null, memOpen:false, memTab:'sources', memExpand:null,
+      viewUrl:null, detect:true, pageDoc:null, bookView:false, pageLoading:false, pageBytes:0, pageTotal:0, pageErr:null, rightOpen:true, panelSel:null, panelLens:null, panelMode:'overview', previewWiki:null, memOpen:false, memTab:'sources', memExpand:null,
       // The "+" new-tab surface: a blank tab with nothing chosen yet, offering the three
       // kinds a tab can be — a chat, a live website, or a page in reader view. Set by newTab()
       // and cleared the moment a destination is picked (a URL, a chat, an entity, a book).
@@ -5814,26 +5814,40 @@ class Component extends DCLogic {
   // entity. Real names ("Thornbank", "Vela") appear mid-sentence or never lowercase.
   capIndex(){
     if(this._capIdx&&this._capIdxRev===this.state.rev)return this._capIdx;
-    const lower=new Set(),capMid=new Set();
+    const lower=new Set(),capMid=new Set(),lc=new Map(),cm=new Map();
+    const bump=(m,k)=>m.set(k,(m.get(k)||0)+1);
     const sents=(this.master&&this.master.sentences)||[];
     for(const s of sents){
       const toks=String(s).split(/\s+/); let pos=0;
       for(const raw of toks){
         const w=raw.replace(/^[^A-Za-z]+|[^A-Za-z]+$/g,''); if(!w){pos++;continue;}
-        if(/^[a-z][a-z]+$/.test(w))lower.add(w);
-        else if(/^[A-Z][a-z]+$/.test(w)&&pos>0)capMid.add(w);
+        // Count each token's CASE, not just presence: a real name is almost always
+        // capitalized, a common word almost always lowercase, and in a long book the
+        // rare mid-sentence capital ("he said, 'Good.'") should not outweigh hundreds of
+        // lowercase uses. strayCapital reads these counts as a signal/noise ratio.
+        if(/^[a-z][a-z]+$/.test(w)){lower.add(w);bump(lc,w);}
+        else if(/^[A-Z][a-z]+$/.test(w)&&pos>0){capMid.add(w);bump(cm,w.toLowerCase());}
         pos++;
       }
     }
-    this._capIdx={lower,capMid};this._capIdxRev=this.state.rev;return this._capIdx;
+    this._capIdx={lower,capMid,lc,cm};this._capIdxRev=this.state.rev;return this._capIdx;
   }
   strayCapital(id){
     const lab=this.labelOf(id); if(!lab||/\s/.test(lab))return false;            // multiword names stand
     const w=lab.replace(/[^A-Za-z]/g,''); if(!w||!/^[A-Z][a-z]+$/.test(w))return false;
-    const {lower,capMid}=this.capIndex();
-    if(capMid.has(w))return false;                                              // seen capitalized mid-sentence → a real name
     const lw=w.toLowerCase();
-    return lower.has(lw)||this.COMMON_OPENER.has(lw);                            // positional capital of a common word → drop
+    if(this.COMMON_OPENER.has(lw))return true;                                  // a known positional adjective → drop
+    const {lc,cm}=this.capIndex();
+    const lowerN=lc.get(lw)||0, capN=cm.get(lw)||0;
+    if(lowerN===0)return false;                                                 // never lowercase in the corpus → a real name
+    // Signal from noise by CASE DOMINANCE. A real name is nearly always capitalized
+    // ("Pierre" is never "pierre"); a common word capitalized only because it opened a
+    // sentence — or landed after a quote — is mostly lowercase ("having", "good", "men").
+    // The old test let ANY single mid-sentence capital rescue such a word, so a 3 MB novel
+    // admitted "Good"/"Men"/"Come" as entities. Now the word is dropped when its lowercase
+    // use dominates (≥2×) its mid-sentence capital use — the threshold that, on War and
+    // Peace, drops the openers while keeping every real character (all of whom are 0× lowercase).
+    return lowerN>=capN*2;
   }
   weightOf(e){return e?(Math.log(1+(e.sightings||1))+(this.incident.get(e.id)||0)):0;}
   edgesOf(id){return this.graph.edges.filter(e=>(e.from===id||e.to===id)&&e.from!==e.to);}
@@ -5856,14 +5870,21 @@ class Component extends DCLogic {
     const nSent=(scoped?hi-lo+1:this.master.sentences.length)||1;
     const inScope=i=>!scoped||(i>=lo&&i<=hi&&ss[i]===url);
     const mentions=new Map();
-    for(const id of g.entities.keys()){const m=this.mentionsOf(id).filter(inScope).map(i=>scoped?i-lo:i);if(m.length)mentions.set(id,m);}
+    // Weave only REAL entities — the storylines panel used to walk every projected id, so a
+    // stray capital ("Good", "Men", "Having") rode in as a thread. Route it through the same
+    // signal/noise gate (showable → strayCapital) the rest of the reader uses.
+    for(const id of g.entities.keys()){if(!this.showable(id))continue;const m=this.mentionsOf(id).filter(inScope).map(i=>scoped?i-lo:i);if(m.length)mentions.set(id,m);}
     const nest=(this.E&&this.E.referentNesting)?this.E.referentNesting({mentions,units:nSent},g):null;
     if(!nest)return null;
     const STOP=new Set(['french','russian','german','english','austrian','come','go','though','well','yes','no','oh','god']);
-    const isArt=id=>/^(chapter|book|part|volume)\b/i.test(id)||/^[ivxlc]+$/i.test(id)||STOP.has(id);
+    // Test the LABEL, not the entity id (a hash) — the old isArt(r.id) compared a hash to
+    // words/roman numerals and so never matched, which is a second reason the STOP list
+    // (demonyms, interjections) never bit. A demonym like "French" is always capitalized so
+    // showable keeps it; the STOP list is what drops it from the storyline weave.
+    const isArt=r=>{const l=String(r.label||'').toLowerCase();return /^(chapter|book|part|volume)\b/i.test(l)||/^[ivxlc]+$/i.test(l)||STOP.has(l);};
     // A single source is shorter than the whole spine, so its recurrence floor is lower.
     const MIN=scoped?4:8;
-    const pop=nest.referents.filter(r=>r.count>=MIN&&!isArt(r.id)).sort((a,b)=>b.count-a.count).slice(0,60);
+    const pop=nest.referents.filter(r=>r.count>=MIN&&!isArt(r)).sort((a,b)=>b.count-a.count).slice(0,60);
     if(pop.length<3)return null;
     const bins=120,DARK=['#3987e5','#199e70','#c98500','#008300','#9085e9','#e66767','#d55181','#d95926'],OTHER='#57647e';
     const threads=pop.map(r=>{
@@ -8021,8 +8042,16 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     // so it always loads native until the read finishes (processPage re-renders it).
     const read=this.pageOf(url);if(this._bookReady(read)&&this.state.viewMode!=='native'){this._renderBook(url,read);return;}
     if(this._pageUrl===url&&this.state.pageDoc&&!this.state.bookView)return;
-    this._pageUrl=url;this.setState({bookView:false,pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false});
-    fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);const ctype=r.headers.get('content-type')||'';return r.text().then(text=>({text,ctype}));}).then(({text,ctype})=>{
+    this._pageUrl=url;this.setState({bookView:false,pageLoading:true,pageBytes:0,pageTotal:0,pageDoc:null,pageErr:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false});
+    let _shown=0;
+    this._fetchProxied(url,(got,total)=>{
+      // Live byte progress so a big book (War and Peace is ~3 MB) shows it is moving, not
+      // hung. Throttled — a re-render per chunk would thrash — and only while this view is
+      // still the one loading, so a fast navigation away never repaints a stale spinner.
+      if(this.state.viewUrl!==url||!this.state.pageLoading||this.state.bookView)return;
+      if(got-_shown<131072&&!(total&&got>=total))return;
+      _shown=got;this.setState({pageBytes:got,pageTotal:total});
+    }).then(({text,ctype})=>{
       if(this.state.viewUrl!==url||this.state.bookView)return;
       // A plain-text body has no markup — render its paragraphs explicitly, else the
       // iframe collapses every newline and the page reads as one run-on blob.
@@ -8041,6 +8070,22 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       this.setState({pageDoc:doc,pageLoading:false});
     }).catch(e=>{ if(this.state.viewUrl===url)this.setState({pageLoading:false,pageErr:String(e&&e.message||e)}); });
   }
+  // Fetch a URL through the feed proxy while reporting bytes-downloaded, so a large document
+  // shows live progress instead of a silent spinner. Streams the response body when the
+  // platform gives a reader; falls back to a one-shot read otherwise. Returns {text,ctype}.
+  async _fetchProxied(url,onBytes){
+    const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(url));
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const ctype=r.headers.get('content-type')||'';
+    const total=Number(r.headers.get('content-length'))||0;
+    if(!r.body||typeof r.body.getReader!=='function'){const text=await r.text();if(onBytes)try{onBytes(text.length,total);}catch(e){}return {text,ctype};}
+    const reader=r.body.getReader();const dec=new TextDecoder('utf-8');let text='',got=0;
+    for(;;){const {done,value}=await reader.read();if(done)break;got+=value.length;text+=dec.decode(value,{stream:true});if(onBytes)try{onBytes(got,total);}catch(e){}}
+    text+=dec.decode();
+    return {text,ctype};
+  }
+  // Human byte count for the loading readout: "812 KB", "3.1 MB".
+  _fmtBytes(n){n=Number(n)||0;if(n<1024)return n+' B';if(n<1048576)return Math.round(n/1024)+' KB';return (n/1048576).toFixed(1)+' MB';}
   navBtnStyle(on){return 'width:27px;height:27px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:7px;font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;'+(on?'color:var(--ink2);cursor:pointer;':'color:#cbced4;cursor:default;');}
   entRow(e,sel){
     const fc=this.frontier(e.id).length,isSel=e.id===sel,lab=this.labelOf(e.id);
@@ -8179,15 +8224,31 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
   // was folded from it, returns the EMPTY set: that source is unabsorbed noumena, so
   // it offers nothing rather than borrowing the rest of the corpus's phenomena.
   // Cached by rev.
+  // The entities a source is ABOUT — its signal, separated from its noise. Every entity is
+  // globally linkable (buildLinkIndex caps nothing), so what keeps a page's links meaningful
+  // is scoped HERE, per source: we count how often each entity is mentioned IN THIS SOURCE
+  // and keep the ones that RECUR. A figure the text returns to is signal; a stray capitalized
+  // token the parser admitted once is noise. A globally strong entity (one the whole corpus
+  // returns to) still links on a page that mentions it only in passing.
   sourceEntities(url){
     if(!url||!this.graph||!this.master||!this.master.events)return null;
     if(this._srcEntsRev!==this.state.rev){
       this._srcEnts=new Map();this._srcEntsRev=this.state.rev;
       const rep=x=>{try{return this.graph.representative(x);}catch(e){return x;}};
+      const counts=new Map();   // url -> Map(entityId -> in-source mention count)
       for(const e of this.master.events){
         if(e.sentIdx==null)continue;const u=this.master.sentenceSource[e.sentIdx];if(!u)continue;
-        let set=this._srcEnts.get(u);if(!set){set=new Set();this._srcEnts.set(u,set);}
-        for(const x of [e.id,e.src,e.tgt,e.from,e.to])if(x)set.add(rep(x));
+        let cm=counts.get(u);if(!cm){cm=new Map();counts.set(u,cm);}
+        for(const x of [e.id,e.src,e.tgt,e.from,e.to]){if(!x)continue;const r=rep(x);cm.set(r,(cm.get(r)||0)+1);}
+      }
+      for(const [u,cm] of counts){
+        const set=new Set();
+        for(const [id,n] of cm){
+          const ge=this.graph.entities.get(id);
+          const strong=ge&&(ge.sightings||0)>=3;   // the whole corpus keeps returning to it
+          if(n>=2||strong)set.add(id);             // recurs here, or is signal elsewhere → link it
+        }
+        this._srcEnts.set(u,set);
       }
     }
     return this._srcEnts.get(url)||(this._noEnts||(this._noEnts=new Set()));
@@ -8223,10 +8284,20 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       }
       for(const [tok,v] of cand){if(v&&!map.has(tok)){map.set(tok,v.id);labels.push(v.disp);}}
     }
+    // NO CAP — every entity the graph holds is globally linkable. Longest-first so the
+    // alternation prefers "Prince Andrew" over "Andrew". The old `.slice(0,600)` kept only
+    // the 600 LONGEST labels, which silently dropped a novel's short, frequent main
+    // characters ("Pierre", "Anna Pávlovna") while a rare long name ("Mademoiselle George")
+    // survived — so a whole book lit up only a handful of names. Signal-from-noise is NOT
+    // decided here by throwing names away; it is scoped PER SOURCE in sourceEntities (only a
+    // page's meaningful, recurring entities actually light up). V8 compiles even a
+    // several-thousand-alternative literal regex in a few ms; a pathological graph that would
+    // overflow the engine degrades to no links rather than crashing the reader.
     labels.sort((a,b)=>b.length-a.length);
     const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    const pat=labels.slice(0,600).map(esc).join('|');
-    this._linkRe=pat?new RegExp('\\b('+pat+')\\b','gi'):null;
+    const pat=labels.map(esc).join('|');
+    try{this._linkRe=pat?new RegExp('\\b('+pat+')\\b','gi'):null;}
+    catch(e){this._linkRe=null;}
     this._linkMap=map;this._linkRev=this.state.rev;return map;
   }
   linkifyNode(text,srcUrl){
@@ -8307,7 +8378,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       // unbind/strip if linkMode off
       if(!this.state.linkMode){d.querySelectorAll('[data-eo-ent]').forEach(s=>{const t=d.createTextNode(s.textContent);s.parentNode.replaceChild(t,s);});d.querySelectorAll('a[data-eo-wiki]').forEach(a=>{a.classList.remove('eo-ent-link');a.removeAttribute('data-eo-wiki');});return;}
       const map=this.buildLinkIndex(),re=this._linkRe;if(!re)return;
-      const local=this.sourceEntities(this.state.viewUrl);   // offer only entities salient to the open source
+      const local=this.sourceEntities(this.state.viewUrl);   // this source's meaningful entities — signal, not noise
       this._frameIds=this._frameIds||[];
       const walker=d.createTreeWalker(d.body,NodeFilter.SHOW_TEXT,{acceptNode:n=>{
         if(!n.nodeValue||!n.nodeValue.trim()||n.nodeValue.length<3)return NodeFilter.FILTER_REJECT;
@@ -8319,10 +8390,17 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
         // "National Academy" + "Sciences" dots. The whole-anchor pass below handles it.
         if(p.closest('a'))return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;}});
-      const targets=[];let nn,cap=0;while((nn=walker.nextNode())&&cap<4000){targets.push(nn);cap++;}
+      // How deep into the open document we lay links. A whole novel renders as one iframe, so
+      // these bound the DOM work per decorate pass. They were 4000 nodes / 1500 wraps — enough
+      // for a first chapter, so links died partway through a book. Raised so a long read stays
+      // linked far deeper, while still capping span creation so a 3 MB book can't freeze the
+      // tab (each wrap splits a text node and inserts a span — several thousand is smooth, a
+      // hundred thousand is not).
+      const NODE_CAP=20000,WRAP_CAP=8000;
+      const targets=[];let nn,cap=0;while((nn=walker.nextNode())&&cap<NODE_CAP){targets.push(nn);cap++;}
       let wraps=0;
       for(const node of targets){
-        if(wraps>1500)break;const text=node.nodeValue;re.lastIndex=0;let m,last=0,frags=null;
+        if(wraps>WRAP_CAP)break;const text=node.nodeValue;re.lastIndex=0;let m,last=0,frags=null;
         const aEl=node.parentElement&&node.parentElement.closest?node.parentElement.closest('a'):null;
         const href=(aEl&&aEl.getAttribute&&aEl.getAttribute('href'))?aEl.href:null;
         while((m=re.exec(text))){
@@ -8337,7 +8415,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
           // span stays plain (no link chrome) and a click still opens the profile, not the link.
           else{const aw=this._entWikiUrl(id);if(aw)span.setAttribute('data-eo-ahead',aw);}
           span.textContent=m[0];frags.push(span);last=m.index+m[0].length;wraps++;
-          if(wraps>1500)break;
+          if(wraps>WRAP_CAP)break;
         }
         if(frags){if(last<text.length)frags.push(d.createTextNode(text.slice(last)));const par=node.parentNode;frags.forEach(f=>par.insertBefore(f,node));par.removeChild(node);}
       }
@@ -8871,7 +8949,9 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     }
     if(vu){
       base.showWeb=true;
+      const _lb=this.state.pageBytes||0,_lt=this.state.pageTotal||0;
       base.web={url:vu,host:/^search:/i.test(vu)?('Search · '+this.norm(vu.slice(7))):(/^text:/i.test(vu)?((this.pageOf(vu)||{}).title||'Imported text'):this.short(vu)),loading:!!this.state.pageLoading&&!this.state.pageDoc,
+        loadingProgress:_lb>0?(this._fmtBytes(_lb)+(_lt>_lb?(' / '+this._fmtBytes(_lt)):'')):'',
         err:(this.state.pageErr&&!this.state.pageDoc)?this.state.pageErr:null,hasDoc:!!this.state.pageDoc,doc:this.state.pageDoc||'',
         onReloadPage:()=>this.loadCenter(vu),detecting:this.state.detect&&this.state.busy};
     }
