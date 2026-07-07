@@ -48,6 +48,7 @@
 // same machinery deepens with no shape change — only a richer `read`.
 
 import { createFrame, snapshotFrame, DEFAULT_STRAIN_LEAK } from './frame.js';
+import { createStance, BORN_FRAME } from './stance.js';
 
 // Higher layers hold harder. A document frame should be harder to break than a
 // proposition frame — its threshold is the size of its protective belt (Lakatos,
@@ -169,6 +170,28 @@ export const createEnactedLoop = ({
   refractoryPeriod = DEFAULT_REFRACTORY, // cursors a just-restructured frame cannot re-break (hysteresis)
   calibrate = null,                  // { mode:'causal', alpha } → band/threshold from PAST surprises only
   read,                              // (cursor) => { surprise ∈ [0,1], terms } — the cheap γ-mass signal
+  // BORN_FRAME (the rev flag). ON, the confirm band and per-line step come from an
+  // ONLINE stance fold (stance.js): recalibration is a logged, replayable stance REC
+  // instead of the silent causal `recalibrate()`/`seen[]` window, and the causal seat is
+  // not used. See docs/born-frame-measurement.md.
+  //
+  // SCOPED, not global. This defaults OFF for EVERY loop — the boundary parser
+  // (boundaries.js), the surfer (surf.js), and the predictor (movelog.js) all run the
+  // enacted loop for other ends where the stance swap was neither designed nor validated
+  // (turning it on globally regressed boundary detection: the Gutenberg boilerplate
+  // stopped being framed). Only the READING paths (enact/index.js) opt in, passing
+  // `bornFrame: BORN_FRAME`, so the rev flag flips the reading and nothing else.
+  bornFrame = false,
+  bornAlpha = 0.05,                  // the stance's one knob — the false-alarm budget for a recalibration
+  // The shock margin (Step 3): under BORN_FRAME a single cursor is an impulse when its
+  // surprise sits K steps above the stance's normal — band + K·step, in the stance's own
+  // units. Sourced from the logged stance (no `seen[]` impulse seat), same signal-from-
+  // noise family as the accumulation. Measured against today's causal tail impulse.
+  bornImpulseK = 4,
+  // Per-layer k (the ratio prior "a document holds ~2.7× harder"): the number of steps
+  // stays a constant here, sourced against the STANCE's step. Grounding the RATIO itself
+  // needs a longer leak on the higher layer (docs) — the remaining seat, kept explicit.
+  bornSteps = { proposition: 3, document: 8 },
 } = {}) => {
   if (typeof read !== 'function') {
     throw new TypeError('createEnactedLoop: `read` must be (cursor) → { surprise, terms }');
@@ -216,8 +239,28 @@ export const createEnactedLoop = ({
       causalImpulse = impulseThreshold;
     }
   };
-  const bandNow = () => (causal ? causalBand : confirmBand);
-  const impulseNow = () => (causal ? causalImpulse : impulseThreshold);
+  // THE STANCE FOLD (BORN_FRAME). An online drift detector that holds the reading's
+  // current sense of normal surprise and RECs — in the log — when the surprise stream's
+  // level shifts past the noise line (stance.js). Seeded at the fixed confirm band so the
+  // opening reads exactly as the fixed path until the first normal is committed. Replaces
+  // the causal band/threshold seat; its DEF/EVA/REC are emitted into THIS log and fold
+  // through replayFrames with the other layers.
+  // Seed at 4 samples (calibrateReader's own minimum) so a short reading becomes live as
+  // fast as the causal path did, rather than staying on the numb fixed fallback for 8
+  // cursors; minEpoch 4 gives the fresh normal the same brief hold before it can re-break.
+  const stance = bornFrame ? createStance({ leak: strainLeak, alpha: bornAlpha, warmup: 4, minEpoch: 4, seedBand: confirmBand, seedStep: 0 }) : null;
+
+  const bandNow = () => (bornFrame ? (stance.seeded ? stance.band : confirmBand)
+                       : causal ? causalBand : confirmBand);
+  // The impulse under BORN_FRAME (Step 3) rides the STANCE's scale: a shock is a single
+  // cursor whose surprise sits K steps above the stance's normal — band + K·step — in the
+  // stance's own units, sourced from the logged calibration (no separate `seen[]` tail).
+  // Until the stance commits its first normal, hold at the fixed fallback. Otherwise the
+  // causal tail impulse (fixed fallback in non-causal mode).
+  const impulseNow = () => {
+    if (bornFrame) return stance.seeded ? stance.band + bornImpulseK * Math.max(stance.step, 0.01) : impulseThreshold;
+    return causal ? causalImpulse : impulseThreshold;
+  };
 
   const emit = (e) => {
     // Every enacted event is tagged with its register and its reader. The reader
@@ -229,9 +272,21 @@ export const createEnactedLoop = ({
     return sealed;
   };
 
-  const thresholdOf = (layer) =>
-    causal ? (causalThresholds[layer] ?? DEFAULT_THRESHOLDS[layer] ?? causalThresholds[base] ?? 1.5)
-           : (thresholds[layer] ?? DEFAULT_THRESHOLDS[layer] ?? thresholds[base] ?? 1.5);
+  const thresholdOf = (layer) => {
+    // BORN_FRAME: the belt is k · step, but `step` is the STANCE's live per-line
+    // accommodation (folded from the log), not a rolling window. Until the stance has
+    // committed its first normal, fall back to the fixed belt so the opening is unchanged.
+    if (bornFrame && stance.seeded && stance.step > 1e-6) {
+      const k = bornSteps[layer] ?? bornSteps[base] ?? 3;
+      return k * stance.step;
+    }
+    // Step not yet measurable (a flat opening with no excess to gauge): fall back to the
+    // fixed belt, exactly as calibrateReader does when it cannot fit a scale — rather than
+    // k·(a floor), which would collapse the belt and break the frame on the first ripple.
+    if (bornFrame) return thresholds[layer] ?? DEFAULT_THRESHOLDS[layer] ?? thresholds[base] ?? 1.5;
+    return causal ? (causalThresholds[layer] ?? DEFAULT_THRESHOLDS[layer] ?? causalThresholds[base] ?? 1.5)
+                  : (thresholds[layer] ?? DEFAULT_THRESHOLDS[layer] ?? thresholds[base] ?? 1.5);
+  };
 
   // Establish a frame at a layer — an enacted DEF. `producedBy` is 'initial' for
   // the opening frame, or { rec: seq } when a REC installs the new terms (§8: a DEF
@@ -374,10 +429,23 @@ export const createEnactedLoop = ({
       // in fixed mode, where thresholdOf is constant).
       else if (frame.strain >= thresholdOf(layer)) { rec(layer, cursor, terms, 'accumulation'); lastRec.set(layer, cursor); }
     }
-    // Refresh the causal scale AFTER the verdicts, so the band/thresholds that judged
-    // this cursor were fit from surprises strictly before it — the arrow, kept inside
-    // the calibrator. (No-op in fixed mode.)
-    if (causal) { seen.push(s); recalibrate(); }
+    // Refresh the scale AFTER the verdicts, so the band/thresholds that judged this
+    // cursor were fit from surprises strictly before it — the arrow, kept inside the
+    // calibrator. Under BORN_FRAME the stance observes the cursor and may RECalibrate —
+    // an enacted, logged, replayable event, emitted into THIS log; the causal window is
+    // not used. Otherwise the causal refit runs (no-op in fixed mode).
+    if (bornFrame) {
+      // The stance drives BAND, STEP, and (via impulseNow) the shock gate — all three
+      // sourced from the logged, replayable calibration. No `seen[]` window: the seat is
+      // gone for the reading, band and impulse alike.
+      const out = stance.observe(cursor, s);
+      if (out.def) emit(out.def);
+      if (out.eva) emit(out.eva);
+      if (out.rec) {
+        const r = emit(out.rec);
+        if (out.recDef) { out.recDef.producedBy = { rec: r.seq }; emit(out.recDef); }
+      }
+    } else if (causal) { seen.push(s); recalibrate(); }
     return { cursor, surprise: round(s) };
   };
 

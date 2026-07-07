@@ -109,3 +109,36 @@ export const topMass = (cells, k = 3) => {
   for (let i = 0; i < Math.min(k, sorted.length); i++) s += sorted[i].weight;
   return s;
 };
+
+// THE BORN PARTITION — split a reading's Born distribution into the mass ON the
+// frame and the mass OFF it (docs "Born-measure frame breaking"). This is the
+// measure that decides frame breaking in the enacted loop: a frame holds while the
+// reading carries most of its squared amplitude on the cells its terms occupy, and
+// breaks when the mass has moved off them — `offMass > onMass`, the self-normalized
+// point where the reading is more about what the frame is NOT standing on than what
+// it is. The 0.5 crossing is not a chosen bar: it is the point where the two shares
+// of the SAME distribution cross, the reading's own mass deciding, not a constant.
+//
+// `readingAmps` is the reading's amplitudes at the cursor — `cubeAmplitudes(qVec,
+// vectors)` after `centeredAmplitudes`, an { key, amp }[]. `frameCellSet` is the set
+// of keys the frame's terms occupy (a Set, or anything iterable of keys). We
+// Born-normalize over ALL the amps first — so `onMass` and `offMass` are shares of
+// one distribution and sum to one — then sum the weights whose key is in the set
+// against the rest.
+//
+// A degenerate all-zero (or empty) input returns { onMass: 0, offMass: 0 } — the
+// honest no-mass, the same rule `bornWeights` keeps against fabricating a uniform
+// reading: with no squared amplitude there is nothing to partition, and a frame
+// cannot be said to hold or break on nothing (it falls out of bornWeights' zeros,
+// no special case). Pure.
+export const frameMassPartition = (readingAmps, frameCellSet) => {
+  const list = Array.isArray(readingAmps) ? readingAmps : [];
+  const inFrame = frameCellSet instanceof Set ? frameCellSet : new Set(frameCellSet || []);
+  const weights = bornWeights(list.map((a) => a?.amp ?? 0));
+  let onMass = 0, offMass = 0;
+  for (let i = 0; i < list.length; i++) {
+    if (inFrame.has(list[i]?.key)) onMass += weights[i];
+    else offMass += weights[i];
+  }
+  return { onMass, offMass };
+};

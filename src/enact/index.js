@@ -18,7 +18,7 @@
 // live (§11).
 
 import { readingAt } from '../perceiver/index.js';
-import { createEnactedLoop } from '../core/enacted/index.js';
+import { createEnactedLoop, BORN_FRAME } from '../core/enacted/index.js';
 import { replayFrames, loopStats } from './replay.js';
 import { buildMeaningRead } from './meaning.js';
 
@@ -27,6 +27,7 @@ export { replayFrames, loopStats } from './replay.js';
 export { createFrame, snapshotFrame, sameTerms, DEFAULT_STRAIN_LEAK } from '../core/enacted/index.js';
 export { isEnacted, isDepicted, assertSingleRegister } from './register.js';
 export { buildMeaningRead } from './meaning.js';
+export { stanceFold, createStance } from './stance-fold.js';
 
 // The cheap surprise provider — now the BAYESIAN γ-mass surprise over the field
 // (docs/bayesian-surprise.md), the only strain honestly computable until the meaning
@@ -63,6 +64,7 @@ const enactedLogOf = (doc, opts) => {
     read: (c) => ({ surprise: readings[c]?.bayes ?? 0, terms: readings[c]?.predicted?.figures || [],
                     contrib: readings[c]?.bayesBy || null }),  // per-dimension strain (vector)
     ...(explicit ? {} : { calibrate: { mode: 'causal' } }),  // band + thresholds from PAST surprises only
+    bornFrame: explicit ? false : BORN_FRAME,   // reading opts into the stance; an explicit hand-pinned scale wins
     ...(opts || {}),
   });
   if (units.length) loop.runTo(units.length - 1);
@@ -150,6 +152,7 @@ export const enactedReadingMeaning = async (doc, cursor, { embedder, confirmBand
                            (calibrate != null && calibrate.mode !== 'causal'));
   const loop = createEnactedLoop({
     read,
+    bornFrame: (numb || pinned) ? false : BORN_FRAME,   // stance sources the scale; a hand-pinned/numb reading wins
     thresholds: thresholds ?? MEANING_THRESHOLDS,   // the meaning scale — seed for causal, belt when pinned
     ...(numb
         ? { confirmBand: medianOf(mr.surprise) }                                       // the numb global-median reader, by request
