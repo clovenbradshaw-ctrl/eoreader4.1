@@ -5645,12 +5645,21 @@ class Component extends DCLogic {
     // USER-side twin of researchDrive — has said this turn is underspecified in a way only the user
     // can close (`clarifyDemand==='clarify'`). This is exactly the loop the read opens when it says
     // it would need to learn something from the user; before now nothing acted on it, so the turn
-    // guessed. Fire ONLY when the world can't close the gap instead (no research current, not an
-    // explicit research ask, the route didn't settle on research/compose) and not in the creative
-    // register (invention answers freely, it never asks) — so a clear ask is never questioned back.
-    // Same soft contract as every fork here: no read / abstained clarify → falls straight through.
-    if(read&&read.clarifyDemand==='clarify'&&!read.researchDrive&&!researchIntent
-        &&read.route!=='research'&&read.route!=='compose'&&amode!=='creative'){
+    // guessed. Fire when the USER-gap dominates the WORLD-gap — the clarify current outweighs the
+    // research current — rather than gating on `!researchDrive`, which any trace of research noise
+    // tripped (the `research` crosstalk null floors near zero, so a bag-of-words overlap admits a
+    // tiny spurious current that then vetoed every clarify): the two "unclosable gap" currents
+    // compete, and we ask THEM only when their gap is the bigger one. An explicit research ask or a
+    // read that settled on `research` still defers to the web (the world genuinely answers those),
+    // and the creative register never asks (invention answers freely). Compose is NOT excluded: an
+    // underspecified make-this ("write me an essay about dolphins" — the read's own words: "I would
+    // need to clarify what specific aspects… the request is quite broad") is exactly a turn to ask
+    // back on, and it was the reported miss. A clear compose ask reads `actionable`, not `clarify`,
+    // so it is never questioned back; a poem already composed above (kind==='poem') before reaching
+    // here. Same soft contract as every fork: no read / abstained clarify → falls straight through.
+    if(read&&read.clarifyDemand==='clarify'&&!researchIntent
+        &&read.route!=='research'&&amode!=='creative'
+        &&(read.clarifyDrive||0)>(read.researchDrive||0)){
       await this._clarifyingTurn(id,q,read,cur);
       return;
     }

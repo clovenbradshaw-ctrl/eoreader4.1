@@ -113,13 +113,35 @@ that gap exactly as the register/length grains do. `clarifyDrive` is the gated `
 turn can be underspecified too), and `clarifyDemand` is the `'clarify' | 'actionable' | ''`
 argmax. When the read comes back `clarify`, the turn poses **one** clarifying question and ends,
 waiting for the reply, instead of answering past the ambiguity (`_clarifyingTurn` in
-`app.dc.js`). The `actionable` contrast keeps a clear ask from ever being questioned back, and the
-consumer fires **only** when the world can't close the gap instead — no research current, not an
-explicit research ask, the route didn't settle on `research`/`compose`, and not the creative
-register (invention answers freely; it never asks). The finished bubble carries no stance, so the
-fold treats the question transparently and the user's next message reads as completing the
-original ask. Fails soft on every edge (cold model → a plain question built from `leadsOf`), so
-the loop closes rather than silently regressing to a guess.
+`app.dc.js`). The `actionable` contrast keeps a clear ask from ever being questioned back.
+
+Two properties of the measurement matter, and both were fixed after the clarify current was
+observed never firing on a real turn ("write me an essay about dolphins" — the read *said* "I
+would need to clarify what specific aspects… the request is quite broad," and nothing asked):
+
+- **The clarify demand is read at the sentence grain, not over the whole paragraph.** Unlike the
+  route/form/length/register — global properties of the read — the clarify need is a *localized
+  caveat*: one closing clause of an otherwise content-full read. `bornSalience` normalizes by the
+  span's term count, so folding that clause into the whole paragraph divides its overlap by every
+  content term the read spent describing the subject, and the signal sinks below a crosstalk null
+  that was derived from single-clause exemplars. `clarifyDemandOf`/`clarifyDrive` therefore measure
+  the **max clarify weight across the read's sentences** (`clarifyWeightOf`, the same per-unit
+  reading `salienceField` runs over a document) — so a read that names the gap in any one sentence
+  clears, and a null calibrated on single clauses meets a single-clause span, not a diluted bag.
+- **The consumer fires on the USER-gap *dominating* the WORLD-gap, not on `!researchDrive`.** The
+  `research` crosstalk null floors near zero (its exemplars share little vocabulary with the other
+  directions), so a bag-of-words overlap admits a tiny spurious research current that then vetoed
+  every clarify. The fork now fires when `clarifyDrive > researchDrive` — the two "unclosable gap"
+  currents compete, and we ask **them** only when their gap is the bigger one. An explicit research
+  ask, a read that settled on `research`, and the creative register still defer (the world answers
+  those; invention answers freely). `compose` is **not** excluded: an underspecified make-this is
+  exactly a turn to ask back on, and a clear make-this reads `actionable`, never `clarify` — a poem
+  has already composed above before reaching the fork.
+
+The finished bubble carries no stance, so the fold treats the question transparently and the
+user's next message reads as completing the original ask. Fails soft on every edge (cold model →
+a plain question built from `leadsOf`), so the loop closes rather than silently regressing to a
+guess.
 
 ## The fallback contract (unchanged, now continuous)
 
@@ -148,7 +170,7 @@ discipline the reading side runs everywhere else.
 
 - the measurement + the prompt: `src/turn/meta-route.js` (`metaRoute`, `speechCurrents`,
   `relaxRoute`, `formKindOf`, `discoursePrompt`, `leadsOf`, `createMetaRouter`,
-  `clarifyDemandOf`, `clarifyDrive`, `CLARIFY_EXEMPLARS`)
+  `clarifyDemandOf`, `clarifyDrive`, `clarifyWeightOf`, `CLARIFY_EXEMPLARS`)
 - the ask-back consumer: `src/reader/app.dc.js` (`_clarifyingTurn`, and the `clarifyDemand` fork
   in `sendChat` before the web/answer path — `_discourseRead` carries the current through)
 - the discourse gap at the proposer: `src/turn/propose.js` (`ctx.discourse.researchDrive`)

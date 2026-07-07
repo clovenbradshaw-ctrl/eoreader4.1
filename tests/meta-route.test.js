@@ -226,6 +226,28 @@ test('clarifyDrive is a graded current, exposed on any route', () => {
   assert.equal(clear.clarifyDrive, 0);
 });
 
+test('clarify survives dilution: a localized caveat in a content-full read is not washed out', () => {
+  // The reported miss ("write me an essay about dolphins doesn't trigger questions"): the read
+  // spends most of its tokens describing the subject and names the clarify need in one closing
+  // clause. Measured over the WHOLE paragraph, bornSalience normalizes by the term count and the
+  // caveat sinks below its (single-clause-calibrated) null → clarifyDemand was ''. Read per
+  // sentence — the grain the caveat is spoken at — it clears on its own clause.
+  const read = 'The user is requesting an essay about dolphins, which implies they want a written '
+    + 'piece covering various aspects such as behavior, habitat, social structures and conservation '
+    + 'status. However, I would need to clarify what specific aspects of dolphins the user is '
+    + 'interested in, as the request is quite broad.';
+  assert.equal(clarifyDemandOf(read), 'clarify', 'the closing caveat is measured at the sentence grain, not diluted away');
+  assert.ok(clarifyDrive(read) > 0, 'the graded clarify current survives the surrounding content');
+  const m = metaRoute(read, null);
+  assert.equal(m.route, 'compose', 'the read still routes compose (an essay is a make-this)');
+  assert.equal(m.clarifyDemand, 'clarify', 'clarify rides out orthogonally to a compose route');
+  // A well-specified compose ask, same length, is NOT questioned back — no caveat clause to clear.
+  const clearCompose = 'The user wants an essay on the causes of the First World War. That is a '
+    + 'clear, self-contained request about a well-defined subject, and I can write it directly '
+    + 'without asking them anything.';
+  assert.notEqual(clarifyDemandOf(clearCompose), 'clarify', 'a definite compose ask reads actionable, never clarify');
+});
+
 test('developDrive is a graded current, exposed on any route', () => {
   // A GROUND turn (a document question) that ALSO asks for a developed treatment: the route
   // settles ground, and the length demand rides out regardless — the longform gate reads it.
