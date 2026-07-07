@@ -29,9 +29,25 @@ provenance that makes the resulting prior self-describing and selectable.
 | `title` | recommended | human label, shown in rankings/diagnostics |
 | `lang` `region` `era` `domain` `register` | recommended | the **facets** — see below. May be given per-document, or once at distil time via CLI flags. |
 
-Facets may instead be nested under a `facets` object; either form is read. No text is
+Facets may instead be nested under a `facets` object. The extractor is **liberal at the
+boundary** — it accepts a small set of common aliases so a Wikipedia / archive dump drops
+in without a bespoke transform: `language` → `lang`, `genre` → `register`. (Source-specific
+*text* cleaning — stripping wiki `== References ==` apparatus, etc. — is **not** the app's
+job; do it in your acquisition step, keeping `parseText` source-agnostic.) No text is
 retained past extraction — the prior holds only operator statistics plus these facet
 labels — so any CC / public-domain source is a clean input.
+
+### Flat registers (encyclopedic / reference)
+
+Born-rule segmentation assumes the text *articulates itself* — parts, mode shifts. Some
+registers don't: encyclopedic reference prose is near-pure INS (introducing facts), with
+no NUL re-groundings and no INS↔SEG alternation, so most documents collapse to a single
+section and can't form a trajectory. The extractor **warns** when >30% of documents
+collapse. The fix is not more tuning (there are no joints to find) but a fixed window:
+
+```
+node tools/flow/eo_trajectory.mjs corpus.jsonl --eoreader . --segment sentences --per-sentences 12
+```
 
 ### The facet vocabulary
 

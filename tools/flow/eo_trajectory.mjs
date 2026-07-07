@@ -78,7 +78,7 @@ if (RESUME && existsSync(OUT)){
 }
 const rl = createInterface({ input: createReadStream(INPUT), crlfDelay: Infinity });
 const out = createWriteStream(OUT, RESUME ? { flags:'a' } : {});
-let n=done.size, skipped=0, t0=Date.now();
+let n=done.size, skipped=0, collapsed=0, t0=Date.now();
 console.log(`trajectory extract · segment=${SEGMENT} · head=${HEAD||'full'} · sample=${SAMPLE||'all'}\n`);
 for await (const line of rl){
   if (!line.trim()) continue;
@@ -91,15 +91,28 @@ for await (const line of rl){
   let tr; try { tr=trajectory(text); } catch { skipped++; continue; }
   if (!tr){ skipped++; continue; }
   const id=String(rec.id||(n+1)).padStart(4,'0');
-  // carry the document's provenance facets (region · era · language · domain · register)
-  const facets = rec.facets || (() => { const f={}; for(const k of ['lang','region','era','domain','register']) if(rec[k]!=null) f[k]=rec[k]; return Object.keys(f).length?f:null; })();
+  // carry the document's provenance facets (region · era · language · domain · register).
+  // Liberal at the boundary: accept a small, documented set of common aliases so a
+  // Wikipedia / archive dump drops in without a bespoke transform (docs/flow-corpus.md).
+  const facets = rec.facets || (() => { const f={};
+    const A={ lang:['lang','language'], region:['region'], era:['era'], domain:['domain'], register:['register','genre'] };
+    for(const [canon,keys] of Object.entries(A)) for(const k of keys) if(rec[k]!=null){ f[canon]=rec[k]; break; }
+    return Object.keys(f).length?f:null; })();
   out.write(JSON.stringify({ id, title: rec.title||`source ${id}`, subjects: rec.subjects||null, facets,
     nSent: tr.nSent, segment: tr.segment, nSteps: tr.steps.length,
     stepDim: tr.steps[0]?.length||109, localDim: 90, graphDim: 12,
     steps: tr.steps, pos: tr.pos, sections: tr.sections, l3summary: tr.l3summary }) + '\n');
   n++;
+  if (SEGMENT==='sections' && tr.steps.length<2) collapsed++;   // born-rule found no joints (a flat register)
   if (n%25===0){ const r=(n/((Date.now()-t0)/1000)).toFixed(1); process.stdout.write(`\r  ${n} books · ${r}/s · ${skipped} skipped`); }
 }
 out.end();
 console.log(`\n\n[done] wrote ${n} trajectories → ${OUT}  (${skipped} skipped)`);
+const written=n-done.size;
+if (collapsed > written*0.3 && written>0){
+  console.log(`\n⚠ ${collapsed}/${written} documents collapsed to a single born-rule section — this register looks`);
+  console.log(`  structurally FLAT (no NUL re-groundings, no operator-mode alternation; e.g. encyclopedic /`);
+  console.log(`  reference prose). The distiller drops <2-section trajectories. Re-run with a fixed window:`);
+  console.log(`    --segment sentences --per-sentences 12`);
+}
 console.log(`  python3 tools/flow/flow_distill.py ${OUT}`);
