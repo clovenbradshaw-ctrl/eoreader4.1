@@ -957,7 +957,7 @@
           <sc-if value="{{ hasEgo }}" hint-placeholder-val="{{ true }}">
             <div style="background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 8px 4px;margin-bottom:8px;">
               <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 6px 6px;">
-                <span style="font-size:10.5px;color:var(--ink3);">Connected records — click any node to open it · dashed = another name for the same thing</span>
+                <span style="font-size:10.5px;color:var(--ink3);">Relations as a directed acyclic graph — arrows run in reading order (whoever is introduced first leads to whom) · click any node to open it</span>
                 <span style="font-size:10.5px;color:var(--ink3);">{{ egoMeta }}</span>
               </div>
               {{ egoViz }}
@@ -1093,7 +1093,6 @@
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;">
             <button onclick="{{ site.onRead }}" title="Open and read the live page" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:#fff;background:var(--acc);border:1px solid var(--acc);border-radius:8px;padding:7px 14px;cursor:pointer;" style-hover="opacity:.9">Read page ↗</button>
             <button onclick="{{ site.onChat }}" title="Start a chat about this source" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:7px 13px;cursor:pointer;" style-hover="background:var(--card)">✦ Chat about this</button>
-            <button onclick="{{ site.onWeave }}" title="The referent weave of this source — its recurring figures as threads, grouped into storylines by temporal co-activity" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:7px 13px;cursor:pointer;" style-hover="background:var(--card)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:0 0 auto;"><path d="M4 5c4 0 4 14 8 14s4-14 8-14"></path><path d="M4 12c4 0 4 7 8 7"></path><path d="M12 5c4 0 4 7 8 7"></path></svg>Weave</button>
             <button onclick="{{ site.onMute }}" title="Mute stops a source feeding the record" style="{{ site.muteBtnStyle }}" style-hover="filter:brightness(.98)">{{ site.muteBtnLabel }}</button>
           </div>
           <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">
@@ -1624,15 +1623,9 @@
                 <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--acc);">The web</span>
                 <span style="font-size:10.5px;color:var(--ink3);">{{ panelProfile.webMeta }}</span>
               </div>
-              <div style="font-size:10.5px;color:var(--ink3);line-height:1.4;margin-bottom:6px;">Drag to pan · ⌘-scroll or +/− to zoom · click a node to open it.</div>
-              <div style="position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px;overflow:hidden;">
+              <div style="font-size:10.5px;color:var(--ink3);line-height:1.4;margin-bottom:6px;">A directed acyclic graph — arrows run in reading order · click a node to open it.</div>
+              <div style="position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px;overflow-x:auto;">
                 {{ panelProfile.webViz }}
-                <div style="position:absolute;top:7px;right:7px;display:flex;align-items:center;gap:2px;background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:8px;padding:2px;box-shadow:0 1px 3px rgba(0,0,0,.06);">
-                  <button onclick="{{ panelProfile.onGzOut }}" title="Zoom out" style="width:22px;height:22px;border:none;background:transparent;color:var(--ink2);border-radius:6px;cursor:pointer;font-size:16px;line-height:1;" style-hover="background:#eef0f3">−</button>
-                  <span style="font-size:9.5px;font-weight:700;color:var(--ink3);min-width:30px;text-align:center;">{{ panelProfile.gzLabel }}</span>
-                  <button onclick="{{ panelProfile.onGzIn }}" title="Zoom in" style="width:22px;height:22px;border:none;background:transparent;color:var(--ink2);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3">+</button>
-                  <button onclick="{{ panelProfile.onGzReset }}" title="Reset view" style="width:22px;height:22px;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3">⟲</button>
-                </div>
               </div>
             </div>
           </sc-if>
@@ -1719,7 +1712,7 @@
           <sc-if value="{{ pageOverview.hasWeb }}" hint-placeholder-val="{{ false }}">
             <div style="display:flex;align-items:baseline;gap:7px;margin:16px 0 4px;flex-wrap:wrap;">
               <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--acc);">The spine</span>
-              <span onclick="{{ pageOverview.onOpenTop }}" style="font-size:10.5px;color:var(--ink3);cursor:pointer;">centred on {{ pageOverview.topLab }} →</span>
+              <span onclick="{{ pageOverview.onOpenTop }}" style="font-size:10.5px;color:var(--ink3);cursor:pointer;">reading-order DAG from {{ pageOverview.topLab }} →</span>
             </div>
             <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px;">{{ pageOverview.webViz }}</div>
           </sc-if>
@@ -7993,150 +7986,105 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     return false;
   }
   truncLabel(s,n){s=this.norm(s);return s.length>n?s.slice(0,n-1)+'…':s;}
-  // The node's neighborhood as a graph: center = the entity, ring = real neighbors
-  // (clickable, edge colored by grain) plus co-referent surface forms the merge folded
-  // in (dashed facet nodes). This is what 'connections' should be — not alias chips.
-  egoGraph(sel,nbrs,facets){
+  // The relations DAG — a referent and its neighbourhood as a LAYERED directed acyclic
+  // graph, not a radial ring. The focus referent is the source; edges run OUT to its
+  // relations, and between two relations by reading order (whoever is introduced first
+  // leads to whom). Every edge respects a strict order (root first, then first-mention),
+  // so the graph is acyclic by construction — a genuine DAG, laid out left→right in
+  // longest-path layers. This is the referent weave read as a partial order
+  // (docs/referent-journey.md: "containment is a partial order (a DAG), not a tree").
+  relDag(sel,nbrs,opts){
+    opts=opts||{};
     const h=React.createElement;
-    const W=900,H=500,cx=W/2,cy=H/2+2;
-    const lab=this.labelOf(sel),hov=this.state.hoverEnt;
+    const compact=!!opts.compact;
+    const lab=this.labelOf(sel), hov=this.state.hoverEnt;
     const GRAINC={Ground:'#2f6f9e',Figure:'#b06f2a',Pattern:'#2f7d54'};
-    const real=nbrs.filter(n=>n&&n.id!=null).slice(0,12).map(n=>({label:this.labelOf(n.id),id:n.id,
-      rel:(n.vias&&n.vias.find(v=>v&&v.length<22))||(n.vias&&n.vias[0])||'related',
-      w:Math.max(0.001,n.w||1),grain:n.grain||'Figure',llm:!!n.llm,real:true}));
-    const fac=(facets||[]).slice(0,5).map(f=>({label:f,id:null,rel:'also called',w:0.3,grain:null,real:false}));
-    const N=Math.max(real.length,1);
-    const wmax=Math.max.apply(null,real.map(n=>n.w).concat([1]));
-    const rx=Math.min(330,210+N*9), ry=Math.min(182,132+N*5);
-    real.forEach((nd,i)=>{const ang=-Math.PI/2+i*(2*Math.PI/N);
-      nd._ca=Math.cos(ang);nd._sa=Math.sin(ang);nd._x=cx+nd._ca*rx;nd._y=cy+nd._sa*ry;
-      nd._r=Math.max(17,Math.min(31,16+Math.sqrt(nd.w/wmax)*15));});
-    fac.forEach((nd,i)=>{const ang=-Math.PI/2+(i+0.5)*(2*Math.PI/Math.max(fac.length,1));
-      nd._ca=Math.cos(ang);nd._sa=Math.sin(ang);nd._x=cx+nd._ca*120;nd._y=cy+nd._sa*92;nd._r=12;});
-    const ring=[...real,...fac];
-    const anyHover=ring.some(n=>n.real&&n.id===hov);
-    const cc=this.hashColor(lab);
-    const layers=[];
-    // soft backdrop guide rings
-    layers.push(h('ellipse',{key:'g1',cx,cy,rx,ry,fill:'none',stroke:'#ecebe6',strokeWidth:1}));
-    layers.push(h('ellipse',{key:'g2',cx,cy,rx:rx*0.6,ry:ry*0.6,fill:'none',stroke:'#f2f1ec',strokeWidth:1}));
-    // curved edges (under nodes)
-    ring.forEach((nd,i)=>{const on=nd.real&&nd.id===hov,faded=anyHover&&!on;
-      const gc=nd.real?(GRAINC[nd.grain]||GRAINC.Figure):'#c7bca4';
-      const dx=nd._x-cx,dy=nd._y-cy,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len;
-      const sx=cx+ux*41,sy=cy+uy*41,ex=nd._x-ux*nd._r,ey=nd._y-uy*nd._r;
-      const mx=(sx+ex)/2,my=(sy+ey)/2,off=nd.real?13:7;
-      layers.push(h('path',{key:'e'+i,d:'M '+sx+' '+sy+' Q '+(mx-uy*off)+' '+(my+ux*off)+' '+ex+' '+ey,fill:'none',
-        stroke:on?'#8a531e':gc,strokeLinecap:'round',
-        strokeWidth:on?3.4:(nd.real?1.2+(nd.w/wmax)*2.6:1),
-        strokeDasharray:nd.real?'none':'2 5',opacity:faded?0.1:(nd.real?0.5:0.42)}));});
-    // nodes + outward labels with white halo for legibility
-    ring.forEach((nd,i)=>{const on=nd.real&&nd.id===hov,faded=anyHover&&!on,c=nd.real?this.hashColor(nd.label):'#b3a585';
-      const side=nd._ca>0.34?1:(nd._ca<-0.34?-1:0);
-      let lx,ly,anchor;
-      if(side===1){lx=nd._x+nd._r+10;ly=nd._y;anchor='start';}
-      else if(side===-1){lx=nd._x-nd._r-10;ly=nd._y;anchor='end';}
-      else {anchor='middle';lx=nd._x;ly=nd._sa>0?nd._y+nd._r+16:nd._y-nd._r-21;}
-      const name=this.truncLabel(nd.label,20),rel=nd.real?this.truncLabel(nd.rel,22):'also called';
-      const tw=Math.max(name.length,rel.length)*5.9+14,hx=anchor==='start'?lx-6:anchor==='end'?lx-tw+6:lx-tw/2;
-      const els=[];
-      if(on)els.push(h('circle',{key:'h',cx:nd._x,cy:nd._y,r:nd._r+6,fill:'none',stroke:c,strokeWidth:1.5,opacity:0.4}));
-      els.push(h('circle',{key:'cf',cx:nd._x,cy:nd._y,r:nd._r,fill:nd.real?c:'#fbfaf7',opacity:nd.real?0.12:1}));
-      els.push(h('circle',{key:'c',cx:nd._x,cy:nd._y,r:nd._r,fill:'none',stroke:nd.real?c:'#beb091',strokeWidth:on?3:(nd.real?2:1.2),strokeDasharray:nd.real?'none':'3 3'}));
-      els.push(h('text',{key:'in',x:nd._x,y:nd._y+4,textAnchor:'middle',style:{fontSize:(nd.real?12:10)+'px',fontWeight:'700',fill:nd.real?c:'#9aa1ab',pointerEvents:'none'}},this.initials(nd.label)));
-      els.push(h('rect',{key:'lh',x:hx,y:ly-12,width:tw,height:nd.real?30:17,rx:6,fill:'#fff',opacity:faded?0:0.8}));
-      els.push(h('text',{key:'ln',x:lx,y:ly,textAnchor:anchor,style:{fontSize:'11.5px',fontWeight:on?'700':'600',fill:nd.real?'#23262b':'#8a8267',pointerEvents:'none'}},name));
-      els.push(h('text',{key:'lr',x:lx,y:ly+13,textAnchor:anchor,style:{fontSize:'9.5px',fontStyle:nd.real?'normal':'italic',fill:nd.real?(GRAINC[nd.grain]||'#9aa1ab'):'#9aa1ab',pointerEvents:'none'}},rel));
-      layers.push(h('g',{key:'n'+i,style:{cursor:nd.real?'pointer':'default',opacity:faded?0.3:1,transition:'opacity .15s ease'},
-        onClick:nd.real?(()=>this.clickEntity(nd.id)):null,
-        onMouseEnter:nd.real?(ev=>this.entHover(nd.id,ev)):null,
-        onMouseLeave:nd.real?(()=>this.entLeave()):null},els));});
-    // center entity on top
-    const nm=this.truncLabel(lab,28),nmw=nm.length*7.2+20;
-    layers.push(h('g',{key:'center'},[
-      h('circle',{key:'cg',cx,cy,r:49,fill:cc,opacity:0.06}),
-      h('circle',{key:'crf',cx,cy,r:40,fill:cc,opacity:0.12}),
-      h('circle',{key:'cr',cx,cy,r:40,fill:'none',stroke:cc,strokeWidth:2.6}),
-      h('text',{key:'ci',x:cx,y:cy+6,textAnchor:'middle',style:{fontSize:'17px',fontWeight:'800',fill:cc,pointerEvents:'none'}},this.initials(lab)),
-      h('rect',{key:'cp',x:cx-nmw/2,y:cy+49,width:nmw,height:24,rx:12,fill:cc,opacity:0.1}),
-      h('text',{key:'cn',x:cx,y:cy+65,textAnchor:'middle',style:{fontSize:'13px',fontWeight:'700',fill:cc,pointerEvents:'none'}},nm)
-    ]));
-    // grain legend
-    const leg=[['Ground',GRAINC.Ground],['Figure',GRAINC.Figure],['Pattern',GRAINC.Pattern]];
-    layers.push(h('g',{key:'legend'},leg.reduce((acc,[t,col],i)=>{const yy=22+i*17;
-      acc.push(h('circle',{key:'ld'+i,cx:13,cy:yy-3,r:4,fill:col}));
-      acc.push(h('text',{key:'lt'+i,x:23,y:yy,style:{fontSize:'10px',fontWeight:'600',fill:'#7a8089'}},t));return acc;},[])));
-    return h('svg',{viewBox:'0 0 '+W+' '+H,preserveAspectRatio:'xMidYMid meet',style:{display:'block',width:'100%',height:'auto',maxHeight:'54vh'}},layers);
-  }
-  // Compact neighbourhood "web" for the side panel — same grammar as egoGraph
-  // (grain-coloured edges, dashed=facet, click to pivot) but tuned for ~300px.
-  egoGraphMini(sel,nbrs){
-    const h=React.createElement;
-    const W=300,H=232,cx=W/2,cy=H/2;
-    const lab=this.labelOf(sel),hov=this.state.hoverEnt;
-    const GRAINC={Ground:'#2f6f9e',Figure:'#b06f2a',Pattern:'#2f7d54'};
+    const firstOf=(id)=>{let f=(this.master&&this.master.entFirstSent&&this.master.entFirstSent[id]);
+      if(f==null){const m=this.mentionsOf(id);f=m.length?Math.min.apply(null,m):1e9;}return f;};
+    const MAXN=compact?8:12;
     const all=(nbrs||[]).filter(n=>n&&n.id!=null&&!this.isURLish(this.labelOf(n.id)));
-    const MAXN=9, extra=Math.max(0,all.length-MAXN);
-    const real=all.slice(0,MAXN)
-      .map(n=>({label:this.labelOf(n.id),id:n.id,w:Math.max(0.001,n.w||1),grain:n.grain||'Figure'}));
+    const extra=Math.max(0,all.length-MAXN);
+    const real=all.slice(0,MAXN).map(n=>({id:n.id,label:this.labelOf(n.id),w:Math.max(0.001,n.w||1),grain:n.grain||'Figure',first:firstOf(n.id)}));
     if(!real.length)return null;
-    const N=real.length, wmax=Math.max.apply(null,real.map(n=>n.w).concat([1]));
-    // Ring radii grow with crowding so neighbours never collide, capped to keep the
-    // centre legible. Labels are free to spill past the ring — the viewBox is grown
-    // at the end to wrap every node and label, so nothing ever clips the card edge.
-    const rx=Math.min(120,76+N*6), ry=Math.min(94,54+N*6);
-    real.forEach((nd,i)=>{const ang=-Math.PI/2+i*(2*Math.PI/N);
-      nd._ca=Math.cos(ang);nd._sa=Math.sin(ang);nd._x=cx+nd._ca*rx;nd._y=cy+nd._sa*ry;
-      nd._r=Math.max(13,Math.min(21,12+Math.sqrt(nd.w/wmax)*9));});
-    const anyHover=real.some(n=>n.id===hov), cc=this.hashColor(lab), layers=[];
-    // Track content bounds as we draw, then fit the viewBox around them.
-    let minX=cx-rx,maxX=cx+rx,minY=cy-ry,maxY=cy+ry;
+    const wmax=Math.max.apply(null,real.map(n=>n.w).concat([1]));
+    // nodes: 0 = focus (root), 1.. = neighbours
+    const nodes=[{id:sel,label:lab,root:true,grain:'Figure',w:wmax,first:firstOf(sel)}]
+      .concat(real.map(n=>({id:n.id,label:n.label,root:false,grain:n.grain,w:n.w,first:n.first})));
+    const nidx=new Map(nodes.map((n,i)=>[n.id,i]));
+    const nodeIds=new Set(real.map(n=>n.id));
+    // bonds among the neighbours themselves, read off the live graph
+    const bond=new Set();
+    try{for(const e of this.graph.edges){const a=e.from,b=e.to;if(a==null||b==null||a===b)continue;
+      if(nodeIds.has(a)&&nodeIds.has(b))bond.add(a<b?a+'|'+b:b+'|'+a);}}catch(_e){}
+    // edges: root→neighbour, plus neighbour→neighbour oriented by first-mention
+    const edges=[];
+    real.forEach(n=>edges.push({a:0,b:nidx.get(n.id),rel:false,grain:n.grain,w:n.w}));
+    for(let i=0;i<real.length;i++)for(let j=i+1;j<real.length;j++){const A=real[i],B=real[j];
+      const key=A.id<B.id?A.id+'|'+B.id:B.id+'|'+A.id;if(!bond.has(key))continue;
+      const u=(A.first<=B.first)?A:B, v=(A.first<=B.first)?B:A;
+      edges.push({a:nidx.get(u.id),b:nidx.get(v.id),rel:true,grain:v.grain,w:1});}
+    // Layer by READING ORDER: the root is column 0; the neighbours fan out left→right in
+    // the order the text introduces them, split into a few columns so the graph reads as a
+    // flow rather than one tall fan. A bond edge (earlier→later) is then always rightward,
+    // and the whole thing stays acyclic.
+    const nbIdx=real.map((_n,i)=>i+1);
+    const byFirst=nbIdx.slice().sort((x,y)=>nodes[x].first-nodes[y].first||x-y);
+    const COLS=Math.min(4,Math.max(1,Math.ceil(byFirst.length/3)));
+    const perCol=Math.max(1,Math.ceil(byFirst.length/COLS));
+    const layer=nodes.map(()=>0);
+    byFirst.forEach((ni,rank)=>{layer[ni]=1+Math.floor(rank/perCol);});
+    for(let pass=0;pass<real.length;pass++){let ch=false;
+      edges.forEach(ed=>{if(ed.rel&&layer[ed.b]<=layer[ed.a]){layer[ed.b]=layer[ed.a]+1;ch=true;}});if(!ch)break;}
+    const nLayers=Math.max.apply(null,layer)+1;
+    const byLayer=[];for(let l=0;l<nLayers;l++)byLayer.push([]);
+    nodes.forEach((n,i)=>byLayer[layer[i]].push(i));
+    byLayer.forEach(arr=>arr.sort((x,y)=>nodes[x].first-nodes[y].first||x-y));
+    // positions: column per layer, rows centred within a layer
+    const xGap=compact?96:158, rowH=compact?44:60, marginX=compact?34:64;
+    const pos=nodes.map(()=>({x:0,y:0,r:0}));
+    byLayer.forEach((arr,l)=>{const cnt=arr.length;arr.forEach((i,slot)=>{const n=nodes[i];
+      pos[i].x=marginX+l*xGap;pos[i].y=(slot-(cnt-1)/2)*rowH;
+      pos[i].r=n.root?(compact?22:32):Math.max(compact?12:15,Math.min(compact?18:26,(compact?11:14)+Math.sqrt((n.w||1)/wmax)*(compact?7:12)));});});
+    const hovInSet=nodes.some(n=>n.id===hov);
+    const layers=[];
+    let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9;
     const fit=(x0,y0,x1,y1)=>{if(x0<minX)minX=x0;if(x1>maxX)maxX=x1;if(y0<minY)minY=y0;if(y1>maxY)maxY=y1;};
-    layers.push(h('ellipse',{key:'g1',cx,cy,rx,ry,fill:'none',stroke:'#ecebe6',strokeWidth:1}));
-    // Edges: grain-coloured, width by bond strength, curvature alternating per spoke
-    // so a dense fan reads as separate arcs instead of one smudge.
-    real.forEach((nd,i)=>{const on=nd.id===hov,faded=anyHover&&!on,gc=GRAINC[nd.grain]||GRAINC.Figure;
-      const dx=nd._x-cx,dy=nd._y-cy,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len;
-      const sx=cx+ux*28,sy=cy+uy*28,ex=nd._x-ux*nd._r,ey=nd._y-uy*nd._r;
-      const mx=(sx+ex)/2,my=(sy+ey)/2,off=(i%2?9:-9);
-      layers.push(h('path',{key:'e'+i,d:'M '+sx+' '+sy+' Q '+(mx-uy*off)+' '+(my+ux*off)+' '+ex+' '+ey,fill:'none',
-        stroke:on?'#8a531e':gc,strokeLinecap:'round',strokeWidth:on?2.6:(1+(nd.w/wmax)*1.8),opacity:faded?0.12:0.5}));});
-    real.forEach((nd,i)=>{const on=nd.id===hov,faded=anyHover&&!on,c=this.hashColor(nd.label);
-      const side=nd._ca>0.3?1:(nd._ca<-0.3?-1:0);let lx,ly,anchor;
-      if(side===1){lx=nd._x+nd._r+5;ly=nd._y+3;anchor='start';}
-      else if(side===-1){lx=nd._x-nd._r-5;ly=nd._y+3;anchor='end';}
-      else{anchor='middle';lx=nd._x;ly=nd._sa>0?nd._y+nd._r+11:nd._y-nd._r-6;}
-      const name=this.truncLabel(nd.label,16),tw=name.length*5.3+8;
-      const hx=anchor==='start'?lx-4:anchor==='end'?lx-tw+4:lx-tw/2;
-      fit(nd._x-nd._r,nd._y-nd._r,nd._x+nd._r,nd._y+nd._r);
-      fit(hx,ly-9,hx+tw,ly+4);
+    // edges (under the nodes), each with a drawn arrowhead at the target
+    edges.forEach((ed,i)=>{const A=pos[ed.a],B=pos[ed.b];
+      const dx=B.x-A.x,dy=B.y-A.y,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,gap=(compact?5:7);
+      const sx=A.x+ux*A.r,sy=A.y+uy*A.r,ex=B.x-ux*(B.r+gap),ey=B.y-uy*(B.r+gap);
+      const mx=(sx+ex)/2,my=(sy+ey)/2,curv=((ed.b%2)?1:-1)*(compact?7:12);
+      const cxp=mx-uy*curv,cyp=my+ux*curv;
+      const col=ed.rel?'#b9c0ca':(GRAINC[nodes[ed.b].grain]||GRAINC.Figure);
+      const on=(nodes[ed.a].id===hov)||(nodes[ed.b].id===hov),faded=hovInSet&&!on;
+      const w=on?(compact?2.4:3):(ed.rel?(compact?1:1.2):(compact?1.3:1.5)+(ed.w/wmax)*(compact?1.3:2.2));
+      layers.push(h('path',{key:'e'+i,d:'M '+sx+' '+sy+' Q '+cxp+' '+cyp+' '+ex+' '+ey,fill:'none',
+        stroke:on?'#8a531e':col,strokeLinecap:'round',strokeWidth:w,opacity:faded?0.12:0.6}));
+      const tdx=ex-cxp,tdy=ey-cyp,tl=Math.hypot(tdx,tdy)||1,tux=tdx/tl,tuy=tdy/tl;
+      const ah=compact?5:7,aw=compact?3:4,bxp=ex-tux*ah,byp=ey-tuy*ah,px=-tuy,py=tux;
+      layers.push(h('polygon',{key:'a'+i,points:ex+','+ey+' '+(bxp+px*aw)+','+(byp+py*aw)+' '+(bxp-px*aw)+','+(byp-py*aw),
+        fill:on?'#8a531e':col,opacity:faded?0.12:0.72}));});
+    // nodes (root emphasised); labels sit below so columns never collide
+    nodes.forEach((n,i)=>{const p=pos[i],on=n.id===hov,faded=hovInSet&&!on,c=this.hashColor(n.label);
+      fit(p.x-p.r,p.y-p.r,p.x+p.r,p.y+p.r);
+      const name=this.truncLabel(n.label,compact?14:20),ly=p.y+p.r+(compact?11:14),tw=name.length*(compact?5.2:6)+8;
+      fit(p.x-tw/2,ly-(compact?9:11),p.x+tw/2,ly+4);
       const els=[];
-      if(on)els.push(h('circle',{key:'h',cx:nd._x,cy:nd._y,r:nd._r+4,fill:'none',stroke:c,strokeWidth:1.4,opacity:0.4}));
-      els.push(h('circle',{key:'cf',cx:nd._x,cy:nd._y,r:nd._r,fill:c,opacity:0.12}));
-      els.push(h('circle',{key:'c',cx:nd._x,cy:nd._y,r:nd._r,fill:'none',stroke:c,strokeWidth:on?2.4:1.6}));
-      els.push(h('text',{key:'in',x:nd._x,y:nd._y+3.5,textAnchor:'middle',style:{fontSize:'10px',fontWeight:'700',fill:c,pointerEvents:'none'}},this.initials(nd.label)));
-      els.push(h('rect',{key:'lh',x:hx,y:ly-9,width:tw,height:13,rx:4,fill:'#fff',opacity:faded?0:0.82}));
-      els.push(h('text',{key:'ln',x:lx,y:ly,textAnchor:anchor,style:{fontSize:'9.5px',fontWeight:on?'700':'600',fill:'#33373d',pointerEvents:'none'}},name));
+      if(on)els.push(h('circle',{key:'h',cx:p.x,cy:p.y,r:p.r+(compact?4:5),fill:'none',stroke:c,strokeWidth:1.4,opacity:0.4}));
+      els.push(h('circle',{key:'cf',cx:p.x,cy:p.y,r:p.r,fill:c,opacity:n.root?0.14:0.1}));
+      els.push(h('circle',{key:'c',cx:p.x,cy:p.y,r:p.r,fill:'none',stroke:c,strokeWidth:n.root?(compact?2.4:2.8):(on?2.2:1.6)}));
+      els.push(h('text',{key:'in',x:p.x,y:p.y+(compact?3.5:4),textAnchor:'middle',style:{fontSize:(n.root?(compact?12:15):(compact?9.5:12))+'px',fontWeight:'800',fill:c,pointerEvents:'none'}},this.initials(n.label)));
+      els.push(h('rect',{key:'lh',x:p.x-tw/2,y:ly-(compact?9:11),width:tw,height:compact?13:15,rx:4,fill:'#fff',opacity:faded?0:0.82}));
+      els.push(h('text',{key:'ln',x:p.x,y:ly,textAnchor:'middle',style:{fontSize:(compact?9:11)+'px',fontWeight:(n.root||on)?'700':'600',fill:n.root?c:'#33373d',pointerEvents:'none'}},name));
+      const onEnter=compact?((ev)=>this.panelNodeHover(n.id,ev)):((ev)=>this.entHover(n.id,ev));
+      const onLeave=compact?(()=>this.panelNodeLeave()):(()=>this.entLeave());
       layers.push(h('g',{key:'n'+i,style:{cursor:'pointer',opacity:faded?0.32:1,transition:'opacity .15s ease'},
-        onClick:()=>this.clickEntity(nd.id),onMouseEnter:(ev)=>this.panelNodeHover(nd.id,ev),onMouseLeave:()=>this.panelNodeLeave()},els));});
-    layers.push(h('g',{key:'center'},[
-      h('circle',{key:'cf',cx,cy,r:27,fill:cc,opacity:0.1}),
-      h('circle',{key:'cr',cx,cy,r:27,fill:'none',stroke:cc,strokeWidth:2.2}),
-      h('text',{key:'ci',x:cx,y:cy+5,textAnchor:'middle',style:{fontSize:'13px',fontWeight:'800',fill:cc,pointerEvents:'none'}},this.initials(lab))
-    ]));
-    // The ring is capped at MAXN; the remainder lives in the full explorer below.
-    if(extra>0){layers.push(h('text',{key:'more',x:cx,y:maxY+13,textAnchor:'middle',
-      style:{fontSize:'9px',fontWeight:'700',fill:'#9aa1ab',letterSpacing:'.03em',pointerEvents:'none'}},'+'+extra+' more'));maxY+=16;}
-    // Grow the viewBox to wrap all content with a small margin, so rim labels never
-    // clip no matter how long they are. Handlers read this._gvb to stay consistent.
-    const pad=8,vbx=minX-pad,vby=minY-pad,vbw=(maxX-minX)+pad*2,vbh=(maxY-minY)+pad*2;
-    this._gvb={x:vbx,y:vby,w:vbw,h:vbh};
-    const gz=this.state.gz||{k:1,x:0,y:0};
-    const stage=h('g',{key:'stage',transform:'translate('+gz.x+' '+gz.y+') scale('+gz.k+')'},layers);
+        onClick:()=>this.clickEntity(n.id),onMouseEnter:onEnter,onMouseLeave:onLeave},els));});
+    if(extra>0){const ey2=maxY+(compact?12:15);layers.push(h('text',{key:'more',x:(minX+maxX)/2,y:ey2,textAnchor:'middle',
+      style:{fontSize:(compact?9:10)+'px',fontWeight:'700',fill:'#9aa1ab',letterSpacing:'.03em',pointerEvents:'none'}},'+'+extra+' more in the record'));maxY=ey2+4;}
+    const pad=compact?9:12,vbx=minX-pad,vby=minY-pad,vbw=(maxX-minX)+pad*2,vbh=(maxY-minY)+pad*2;
     return h('svg',{viewBox:vbx+' '+vby+' '+vbw+' '+vbh,preserveAspectRatio:'xMidYMid meet',
-      onPointerDown:e=>this.gzDown(e),
-      ref:el=>{if(el&&!el.__wb){el.__wb=true;el.addEventListener('wheel',this._gzWheel,{passive:false});}},
-      style:{display:'block',width:'100%',height:'auto',cursor:this._gzDrag?'grabbing':'grab',touchAction:'none'}},[stage]);
+      style:{display:'block',width:'100%',height:'auto',maxHeight:compact?'none':'56vh'}},layers);
   }
   setLens(l){this.setState({panelLens:l});}
   panelNodeHover(id,ev){clearTimeout(this._pivotT);this._hovEnt=id;const st={hoverEnt:id,hoverHref:null,hoverAhead:null};const x=(ev&&ev.clientX!=null)?ev.clientX:null,y=(ev&&ev.clientY!=null)?ev.clientY:null;if(x!=null)st.hoverXY={x,y};this.setState(st);if(x!=null)this._startCardWatch(x,y);}
@@ -8428,7 +8376,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
         barStyle:'height:3px;border-radius:2px;margin-top:4px;background:'+this.hashColor(nl)+';width:'+Math.max(8,Math.round(n/maxN*100))+'%;',
         onSelect:()=>this.clickEntity(eid),onEnter:ev=>this.entHover(eid,ev),onLeave:()=>this.entLeave()};});
     const topId=ranked.length?ranked[0].eid:null;
-    const webViz=topId?this.egoGraphMini(topId,this.neighbors(topId),{}):null;
+    const webViz=topId?this.relDag(topId,this.neighbors(topId),{compact:true}):null;
     const c=this.hashColor(this.short(url)),fmtDate=ts=>{try{return new Date(ts).toLocaleDateString([],{month:'short',day:'numeric'});}catch(e){return '';}};
     return {title:p.title,host:this.short(url),url,when:fmtDate(p.ts),
       av:this.short(url).slice(0,2).toUpperCase(),
@@ -8511,7 +8459,6 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       muteBtnLabel:muted?'Unmute source':'Mute source',
       muteBtnStyle:'display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:8px;padding:7px 13px;cursor:pointer;'+(muted?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
       onRead:()=>this.goWeb(url), onChat:()=>this.newChat(url), onMute:()=>this.muteSrc(url),
-      onWeave:()=>this._openWeave(url),
       onBackDir:()=>this.openSitesDir()
     };
   }
@@ -9639,7 +9586,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     const linksMore=Math.max(0,nbrs.filter(n=>!this.isURLish(this.labelOf(n.id))).length-nbrShown.length);
     const lr=this.state.liveResearch||{},researching=!!(lr.on&&lr.focal===id),justDone=(!lr.on&&lr.focal===id&&lr.phase==='done');
     const researchMsg=researching?(lr.phase==='read'?('Reading '+(lr.host||'a new source')+'…'):('Searching the web for more on '+lab+'…')):(justDone?((lr.addedFocal>0)?('Added '+lr.addedFocal+' new line'+(lr.addedFocal!==1?'s':'')+' about '+lab+(lr.srcFocal>0?(' · +'+lr.srcFocal+' source'+(lr.srcFocal!==1?'s':'')):'')+'.'):('Read '+(lr.added||0)+' lines into memory — but nothing new about '+lab+' yet. The new sources were about something else.')):'');
-    const webViz=this.egoGraphMini(id,nbrs);
+    const webViz=this.relDag(id,nbrs,{compact:true});
     const lens=this.lensBlock(id,vu,leadDef,leadCites);
     return {name:lab,av:this.initials(lab),avStyle:this.avatar(lab,40),avStyleSm:this.avatar(lab,30),
       webViz:webViz, hasWeb:!!webViz, webMeta:nbrs.filter(n=>!this.isURLish(this.labelOf(n.id))).length+' connected', lens:lens,
@@ -11164,7 +11111,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       voidNote:'I have not read anything that defines '+lab+'. It has been named, never described. This is the edge of what I have read — not a claim that nothing is there.'
     };
 
-    base.egoViz=this.egoGraph(sel,nbrs,facets);base.hasEgo=(nbrs.length>0||facets.length>0);base.egoMeta=nbrs.length+' connected'+(facets.length?' · '+facets.length+' also-called':'');
+    base.egoViz=this.relDag(sel,nbrs,{});base.hasEgo=!!base.egoViz;base.egoMeta=nbrs.length+' connected'+(facets.length?' · '+facets.length+' also-called':'');
 
     const enter=u=>()=>this.setHover(u),leave=()=>()=>this.setHover(null),openC=u=>()=>this.openSource(u);
     const dimOf=u=>(active&&active!==u)?'opacity:.24;transition:opacity .14s;':'opacity:1;transition:opacity .14s;';
