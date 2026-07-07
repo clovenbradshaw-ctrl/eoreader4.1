@@ -61,6 +61,19 @@ const STOP = new Set([
 // separately as the effect sign, not as construct qualifiers.
 const DIRECTION = new Set(['higher', 'lower', 'more', 'less', 'greater', 'fewer', 'increased', 'decreased', 'reduced', 'raised']);
 
+// Reporting / speech verbs — "the council CLAIMED", "critics ARGUED", "the study FOUND".
+// A node is a noun, never a verb, so these (and the causal/association verbs) are rejected as
+// heads: when NP extraction lands on one it has mistaken a clause verb for a noun.
+const REPORTING = new Set([
+  'argued', 'argue', 'argues', 'claimed', 'claim', 'claims', 'said', 'says', 'say',
+  'found', 'find', 'finds', 'showed', 'show', 'shows', 'suggested', 'suggest', 'suggests',
+  'concluded', 'conclude', 'concludes', 'noted', 'note', 'notes', 'stated', 'state', 'states',
+  'thought', 'think', 'thinks', 'believed', 'believe', 'believes', 'contended', 'reported',
+  'commissioned', 'gathered', 'opened', 'mattered', 'told', 'tells', 'tell', 'wrote',
+  'fell', 'rose', 'ran', 'grew', 'came', 'went', 'did', 'was', 'were', 'is', 'are',
+]);
+const REPORTING_RE = /\b(?:argued|claimed|said|found|showed|suggested|concluded|noted|stated|thought|believed|contended|reported|wrote)\b/i;
+
 // A causal-verb token right after one of these is an adjective/noun-modifier, not a verb.
 const PRE_NOUN = new Set([
   'with', 'of', 'to', 'in', 'on', 'at', 'from', 'by', 'for', 'as', 'than', 'about',
@@ -111,6 +124,9 @@ const readNP = (phrase, side = 'lead') => {
     let vb = -1;
     for (let i = 0; i < lead.length; i++) if (looksVerb(lead[i], i)) { vb = i; break; }
     if (vb >= 1) run = lead.slice(0, vb);
+    else if (lead.length >= 2) run = lead.slice(0, -1);   // no aux/-ed verb found → the trailing
+                                                          // token is the intransitive verb ("crime FELL",
+                                                          // "foot traffic ROSE"); the head is before it.
     else { const first = lead.find((t) => !STOP.has(t)); return first ? finishNP([first], phrase) : null; }
   } else if (side === 'lead') {
     run = [];
@@ -130,6 +146,9 @@ const finishNP = (run, phrase) => {
   if (hi < 0) return null;
   const head = singular(run[hi]);
   if (head.length < 2 || STOP.has(head)) return null;
+  // A node is a noun, never a verb: reject a head that is a causal, association, or reporting
+  // verb (NP extraction mistook a clause verb for a noun — "argued", "found", "drove").
+  if (ESSENTIAL_VERBS.has(head) || ASSOCIATION_VERBS.has(head) || REPORTING.has(head)) return null;
   const pre = run.slice(0, hi).filter((w) => !STOP.has(w));
   const qualifiers = pre.filter((w) => !DIRECTION.has(w));
   const sign = pre.some((w) => ['higher', 'more', 'greater', 'increased', 'raised'].includes(w)) ? '+'
@@ -197,6 +216,10 @@ const findCausalClauses = (sentence) => {
     while (idx >= 0) {
       const causePart = s.slice(idx + cue.length).split(/[,;:.!?]/)[0];
       const effectPart = s.slice(0, idx).split(/[,;:]/).pop();
+      // A reporting matrix ("The council CLAIMED the library reduced crime because …") attaches
+      // the 'because' to the REPORTED content, not the reporting subject — the subject-read would
+      // wrongly make "council" the effect. Too ambiguous to place at the noun grain, so skip it.
+      if (REPORTING_RE.test(effectPart)) { idx = lower.indexOf(cue, idx + cue.length); continue; }
       // A subordinator clause is a full clause on each side ("the library opened",
       // "crime fell") — read the SUBJECT noun, not the clause verb.
       const cause = readNP(causePart, 'subject');

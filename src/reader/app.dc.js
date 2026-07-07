@@ -925,6 +925,7 @@ class Component extends DCLogic {
     this.graph=PG.projectGraph(shim,{cursor:Math.max(0,m.sentences.length-1),rules:PG.DEFAULT_PROJECTION_RULES});
     this.incident=new Map();for(const e of this.graph.edges){for(const id of [e.from,e.to])this.incident.set(id,(this.incident.get(id)||0)+(e.weight||0));}
     if(this._graphDock)this._renderGraphDock();   // keep the docked panel live as sources change
+    if(this._dagDock)this._renderDagDock();       // and the causal-DAG panel likewise
     // A source was added/removed/muted — the sentence list just changed under the semantic
     // index. Vectors are cached by TEXT (stable across the reshuffle), so this only ever
     // has NEW sentences left to embed; restarting the loop finds them via the fresh scan
@@ -2131,6 +2132,73 @@ class Component extends DCLogic {
     if(this._graphDockReposition){window.removeEventListener('resize',this._graphDockReposition);this._graphDockReposition=null;}
     if(this._graphDockRO){try{this._graphDockRO.disconnect();}catch(e){}this._graphDockRO=null;}
     if(this._graphDock){this._graphDock.remove();this._graphDock=null;}
+  }
+  // ── CAUSAL DAG PANEL — the two cursors (src/dag, docs/dag-corpus.md), docked the
+  // same way the Graph panel is (plain DOM over the right panel, surviving re-renders).
+  // The dag holon owns its rendering (mountDagSurface, the sibling of the research and
+  // doc surfaces); the app only hands it the parsed sources. Cursor 2 (the causal DAG
+  // the sources are READ as asserting) runs over ALL sources so cross-source confounders
+  // and disagreements surface; cursor 1 (the reading flow) reads the source now in view.
+  async onOpenDag(){
+    if(this._dagDock){this._dagDock.style.display='';this._positionDagDock();this._renderDagDock();return;}
+    if(!this.state.rightShow)this.setState({rightShow:true});
+    const dock=document.createElement('div');
+    dock.style.cssText='position:fixed;z-index:20;background:var(--card,#fff);border-left:1px solid var(--line,#e5e7eb);overflow:auto;';
+    document.body.appendChild(dock);
+    this._dagDock=dock;
+    this._positionDagDock();
+    this._dagDockReposition=()=>this._positionDagDock();
+    window.addEventListener('resize',this._dagDockReposition,{passive:true});
+    if(typeof ResizeObserver!=='undefined'){this._dagDockRO=new ResizeObserver(this._dagDockReposition);const panel=document.getElementById('eo-panel-scroll');if(panel)this._dagDockRO.observe(panel);this._dagDockRO.observe(document.body);}
+    await this._renderDagDock();
+  }
+  _positionDagDock(){
+    const dock=this._dagDock;if(!dock)return;
+    const panel=document.getElementById('eo-panel-scroll');
+    const r=(panel&&panel.offsetParent!==null)?panel.getBoundingClientRect():null;
+    if(r&&r.width>60){dock.style.top=r.top+'px';dock.style.left=r.left+'px';dock.style.right='auto';dock.style.width=r.width+'px';dock.style.height=r.height+'px';}
+    else{const pw=Math.min(this.state.panelW||380,Math.round((window.innerWidth||420)*0.94));dock.style.top='0';dock.style.right='0';dock.style.left='auto';dock.style.width=pw+'px';dock.style.height='100%';}
+  }
+  closeDagPanel(){
+    if(this._dagDockReposition){window.removeEventListener('resize',this._dagDockReposition);this._dagDockReposition=null;}
+    if(this._dagDockRO){try{this._dagDockRO.disconnect();}catch(e){}this._dagDockRO=null;}
+    if(this._dagSurface&&this._dagSurface.destroy){try{this._dagSurface.destroy();}catch(e){}this._dagSurface=null;}
+    if(this._dagDock){this._dagDock.remove();this._dagDock=null;}
+  }
+  // Build the per-source corpus from master.pages (each imported source keeps its own
+  // sentences), pick the source now in view as cursor 1's document, and hand both to the
+  // holon surface. Safe to call repeatedly — destroys the old surface and remounts.
+  async _renderDagDock(){
+    const dock=this._dagDock;if(!dock)return;
+    dock.innerHTML='';
+    const head=document.createElement('div');
+    head.style.cssText='display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line,#e5e7eb);position:sticky;top:0;background:var(--card,#fff);z-index:1;';
+    const title=document.createElement('span');title.textContent='Causal DAG';
+    title.style.cssText='font-size:12px;font-weight:600;color:var(--ink2,#555);';
+    const close=document.createElement('button');close.textContent='›';close.title='Hide panel';
+    close.style.cssText='margin-left:auto;width:24px;height:24px;border:none;background:transparent;color:var(--ink3,#999);border-radius:6px;cursor:pointer;font-size:14px;line-height:1;';
+    close.onclick=()=>this.closeDagPanel();
+    head.appendChild(title);head.appendChild(close);dock.appendChild(head);
+    const body=document.createElement('div');dock.appendChild(body);
+
+    const m=this.master;
+    const pages=(m&&m.pages&&m.pages.length)?m.pages:(m&&m.sentences&&m.sentences.length?[{url:'source',title:'source',sentences:m.sentences}]:[]);
+    const sources=pages.filter(p=>p.sentences&&p.sentences.length).map(p=>({docId:p.title||p.url||'source',sentences:p.sentences.map(s=>this.norm(s))}));
+    if(!sources.length){
+      const pmsg=document.createElement('div');pmsg.textContent='No source read yet — read a URL or import a document first.';
+      pmsg.style.cssText='padding:16px 13px;font-size:12.5px;color:var(--ink3,#999);';body.appendChild(pmsg);return;
+    }
+    const viewUrl=this.state.viewUrl;
+    const primary=pages.find(p=>p.url===viewUrl);
+    const primaryId=primary?(primary.title||primary.url):sources[0].docId;
+    try{
+      const DAG=this._DAG||(this._DAG=await import(new URL('src/dag/index.js',document.baseURI).href));
+      if(this._dagSurface&&this._dagSurface.destroy){try{this._dagSurface.destroy();}catch(e){}}
+      this._dagSurface=DAG.mountDagSurface(body,{sources,primaryId});
+    }catch(e){
+      const err=document.createElement('div');err.textContent='DAG view failed to load: '+((e&&e.message)||e);
+      err.style.cssText='padding:16px 13px;font-size:12.5px;color:#c0344d;';body.appendChild(err);
+    }
   }
   // Repaints the docked panel from the live graph: the open identity questions
   // first, then the figure itself (the limner organ — the same primitive /svg
@@ -8565,6 +8633,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       onOpenDeepResearch:()=>this.onOpenDeepResearch(),
       onOpenDoc:()=>this.onOpenDoc(),
       onOpenGraph:()=>this.onOpenGraph(),
+      onOpenDag:()=>this.onOpenDag(),
       surfaceTitle:this.state.drHasLog?'Open the live research surface \u2014 the report keeps populating as you research in chat':'Open the research surface \u2014 run grounded deep research in a live panel',
       surfaceStyle:'margin-left:auto;flex:0 0 auto;font-size:11px;font-weight:600;border:none;background:transparent;cursor:pointer;white-space:nowrap;padding:2px 0 2px 9px;'+(this.state.drHasLog?'color:var(--acc);':'color:var(--ink3);'),
       backend:this.state.backend||'webllm',
