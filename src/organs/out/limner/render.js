@@ -22,9 +22,9 @@ const OP_COLOR = Object.freeze({
   REC: '#d6618f',  // learned rule
 });
 const opColor = (op) => OP_COLOR[op] || 'var(--limner-edge, #8a93a6)';
-// Operator → glyph (docs/eot-surface-syntax.md, Appendix A) — the edge wears
+// Operator → canonical helix glyph (experientialontology.org) — the edge wears
 // the mark of the operator that wrote it.
-const OP_GLYPH = Object.freeze({ CON: '⋈', SIG: '⊡', SYN: '∨', DEF: '⊢', SEG: '｜', REC: '⊛' });
+const OP_GLYPH = Object.freeze({ CON: '⋈', SIG: '○', SYN: '△', DEF: '⊢', SEG: '｜', REC: '⊛' });
 
 // role → node fill
 const ROLE_FILL = Object.freeze({
