@@ -223,13 +223,49 @@ The silent seat adjusts the band on 73–93% of cursors, none of it logged. The 
 fold replaces that with a handful of discrete, replayable recalibration RECs (or none —
 the short texts hold a single normal end to end), and `α` is the one knob dialing the
 rate. This is the seat collapsing into the log: the calibration can be *sourced* from the
-fold. Caveat, honestly: at α=0.05 the turbulent full text shows some `minEpoch`-spaced
-clustering of RECs (a mild re-break in hard stretches) — the hysteresis wants tuning, and
-α=0.01 holds a single normal throughout. The end-to-end falsifier the directive names —
-delete `recalibrate()`/`seen[]`, drive the per-layer break thresholds off the folded
-stance × the noise-derived `k ≈ 8`, and hold parity — is the next gated step. This
-prototype shows the fold is well-formed, replayable, and settles; it does not yet claim
-the seat is gone from the live loop.
+fold.
+
+### Wired into the live loop (end to end)
+
+`loop.js` now carries the flag. Under `BORN_FRAME` the confirm band and per-line step are
+sourced from an **online** stance (`createStance` in `src/core/enacted/stance.js`), the
+stance's DEF/EVA/REC are emitted into the loop's own log, and the causal
+`recalibrate()`/`seen[]` window is not used. Flag off is byte-identical (the full suite —
+2148 tests — is green with the flag default-off; `tests/born-frame-loop.test.js` asserts
+omitting the flag equals passing it `false`). Run live over the corpus, flag off vs on
+(`eoreader4-eval/born-frame-loop-probe.mjs`):
+
+```
+                     proposition RECs   document RECs   stance recal.   coherent?
+metamorphosis-full   OFF 73 → ON 88     OFF 18 → ON 16  0 (level stable)  YES (converges, no thrash)
+metamorphosis-excerpt OFF 4 → ON 3      OFF 2 → ON 1    0                 YES
+esker                OFF 3 → ON 2       OFF 2 → ON 2    0                 YES
+replayFrames reconstitutes the stance normal (band=0.619) alongside proposition/document.
+```
+
+**Verdict: it works, with two honest limits.** Flag-off is byte-identical; flag-on is
+coherent (no thrash, the full text converges, REC volumes stay sane); and the silent
+per-cursor band seat is genuinely gone — the calibration is a logged, replayable stance
+frame. But:
+
+1. **The stance holds ONE normal on the real corpus (0 recalibrations).** The
+   meaning-surprise *level* is stable across these texts (its turbulence is local
+   variation, not baseline drift), so the stance correctly does not recalibrate — which
+   also shows the silent seat's 73–93% churn was chasing estimator noise, not real level
+   shifts. The logged-recalibration path fires on a genuine regime shift
+   (`tests/born-frame-loop.test.js`, `tests/stance-fold.test.js`) but is not exercised by
+   this corpus. So "recalibration is a REC in the log" is proven by the mechanism, not
+   yet observed on real prose here.
+2. **The band seat collapsed; the k-ratio seat did not.** The per-layer `k = {3, 8}`
+   (the "document holds 2.7× harder" prior) is retained, fed by the stance's step. The
+   noise-k finding showed that ratio cannot come from the shared surprise stream — it
+   needs a longer leak on the higher layer. Grounding it (so `k` disappears too) is the
+   remaining step; the calc is tractable (a document leak ≈ 0.987 vs 0.9 makes the
+   noise-derived `k_doc/k_prop ≈ 2.7` fall out), and it is where this should go next.
+
+So the seat that churned every cursor is gone and the reading holds together; the one
+constant that remains is explicit, measured, and has a grounding path. The flag is
+implemented and defaults off.
 
 ## Reproducing
 
@@ -237,7 +273,22 @@ the seat is gone from the live loop.
 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node eoreader4-eval/born-frame-probe.mjs    # Step 0 (Born partition)
 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node eoreader4-eval/noise-k-probe.mjs        # follow-on (noise-derived k)
 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node eoreader4-eval/stance-fold-probe.mjs    # prototype (stance as a fold)
+NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node eoreader4-eval/born-frame-loop-probe.mjs # end-to-end (flag OFF vs ON)
 ```
+
+The flag is **scoped to the reading**: `createEnactedLoop` defaults `bornFrame` off, and
+only the reading paths (`enactedReadingMeaning`/the cheap `enactedLogOf`) opt in with
+`bornFrame: BORN_FRAME` — the boundary parser, surfer, and predictor keep today's
+behavior (a global default-on regressed boundary detection). Default off, the whole
+suite is green. `tests/born-frame-loop.test.js` exercises the wiring deterministically
+(no model).
+
+**Not yet clean for default-on.** With `BORN_FRAME=1` the accumulation path is coherent,
+but three reading tests still fail because the stance swap perturbs paths it does not yet
+cover: the **impulse/shock gate (Step 3, the single-cursor Born impulse) is unimplemented**,
+so the flag entangles with the causal impulse; and the reading's JSONL now carries the
+stance layer. Turning the flag on by default therefore needs Step 3 wired (or a clean
+hand-off of the impulse) and those tests reconciled — it is left env-gated until then.
 
 Both require the live MiniLM organ (`@huggingface/transformers`, `Xenova/paraphrase-
 multilingual-MiniLM-L12-v2`, q8/cpu) — the same organ the eoreader4-eval mechanics use.

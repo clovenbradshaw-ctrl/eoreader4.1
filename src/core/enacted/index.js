@@ -21,3 +21,4 @@ export {
   DEFAULT_IMPULSE_QUANTILE, DEFAULT_REFRACTORY,
 } from './loop.js';
 export { createFrame, snapshotFrame, sameTerms, DEFAULT_STRAIN_LEAK } from './frame.js';
+export { stanceFold, createStance, BORN_FRAME } from './stance.js';
