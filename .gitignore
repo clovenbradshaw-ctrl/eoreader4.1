@@ -9,3 +9,9 @@ _site/
 .env.*
 .vscode/
 .idea/
+
+# flow-prior pipeline artifacts (regenerated from a corpus; the distilled prior
+# lives at data/flow-prior.json, which IS tracked)
+/corpus.jsonl
+/trajectories.jsonl
+/flow-prior.json

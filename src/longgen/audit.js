@@ -5,11 +5,31 @@
 // plain verdict. Export the JSON, hand it back, and the checks say what fired and what did
 // not — no need to re-run to tell if it is working.
 
+import { trajectoryFromDoc, scoreTrajectory } from '../flow/index.js';
+
 const r3 = (x) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(x * 1000) / 1000 : x);
+
+// The FLOW REPORT for a finished piece (src/flow). Given the flow prior and the
+// re-parsed doc of the whole draft, score its trajectory against the corpus and
+// return a compact report to ship beside diagnose(). A structural read of the
+// artifact — how it moved — not a health gate. Off by default: no prior/doc ⇒ null.
+const flowReport = (flow) => {
+  if (!flow) return null;
+  if (typeof flow.flowScore === 'number') return flow;          // already-scored report
+  if (!flow.prior || !flow.doc) return null;
+  const { steps } = trajectoryFromDoc(flow.doc, flow.steps ?? 40);
+  const r = scoreTrajectory(flow.prior, steps);
+  return {
+    flowScore: r.flowScore, flowPercentile: r.flowPercentile,
+    meanResidual: r.meanResidual, meanArcAdherence: r.meanArcAdherence,
+    lurches: r.steps.filter((s) => s.deltaPercentile >= 90).map((s) => s.step),
+    offManifold: r.steps.filter((s) => s.residualPercentile >= 95).map((s) => s.step),
+  };
+};
 
 // Assemble the exportable audit from a runContinuation result. Everything needed to tell if
 // the run worked, self-contained and serialisable (no functions, no cycles).
-export const exportAudit = (result = {}, { config = {}, label = '', question = '' } = {}) => {
+export const exportAudit = (result = {}, { config = {}, label = '', question = '', flow = null } = {}) => {
   const units = result.units || [];
   const trace = result.trace || [];
   const appends = trace.filter((t) => t.kind === 'append');
@@ -74,6 +94,8 @@ export const exportAudit = (result = {}, { config = {}, label = '', question = '
     answer: result.answer ?? '',
   };
   audit.checks = diagnose(audit);
+  const fr = flowReport(flow);
+  if (fr) audit.flow = fr;   // the whole-piece flow report, beside the health checks
   return audit;
 };
 
