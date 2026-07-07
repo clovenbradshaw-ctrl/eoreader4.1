@@ -36,14 +36,15 @@
 
 import { DEFAULT_STRAIN_LEAK } from './frame.js';
 
-// BORN_FRAME — the rev flag (RULES_REV-style) gating the stance-as-a-fold path in the
-// enacted loop. OFF by default, so the live reading is byte-identical to today: the
-// causal `recalibrate()`/`seen[]` seat runs exactly as before. ON, the loop sources its
-// confirm band and per-line step from the online stance (recalibration becomes a logged,
-// replayable REC) and the causal window is not used. A bench flips it with BORN_FRAME=1
-// without touching code. Golden-gated: every difference under the flag is measured.
+// BORN_FRAME — ON by default. The reading's calibration (confirm band, per-line step,
+// AND the shock gate) comes from the online stance fold: recalibration is a logged,
+// replayable stance REC, and the silent causal `recalibrate()`/`seen[]` window is not
+// used. Set `BORN_FRAME=0` (or false/off) to restore the causal path for comparison.
+// SCOPED to the reading — the boundary parser, surfer, and predictor keep the causal
+// calibration (they default `bornFrame` off at the loop; only the reading opts in). The
+// swap holds the whole suite green either way; see docs/born-frame-measurement.md.
 export const BORN_FRAME =
-  (typeof process !== 'undefined' && process.env && /^(1|true|on)$/i.test(process.env.BORN_FRAME || '')) || false;
+  !(typeof process !== 'undefined' && process.env && /^(0|false|off)$/i.test(process.env.BORN_FRAME || ''));
 
 const median = (xs) => {
   if (!xs.length) return 0;
@@ -221,12 +222,19 @@ export const createStance = ({
   let seeded = false;
   let band = seedBand, step = seedStep, sigma0 = MIN_SCALE, scale = Math.max(seedStep, MIN_SCALE);
   let g = 0, epochStart = 0;
+  // The step is the accommodation SCALE (typical per-line excess over the normal), not a
+  // commitment — it tracks WITHIN an epoch as surprises arrive, running so a scale fit
+  // from a flat opening does not stay stuck at zero (which would collapse the k·step belt
+  // that reads off it). The BAND is the commitment (RECs on drift); the step is a gauge.
+  let exSum = 0, exN = 0;
+  const refitScale = () => { step = exN ? exSum / exN : 0; scale = Math.max(step, sigma0); };
 
   const fit = (win) => {
     band = median(win);
-    step = meanExcess(win, band);
+    const ex = win.map((x) => Math.max(0, x - band)).filter((e) => e > 0);
+    exSum = ex.reduce((a, b) => a + b, 0); exN = ex.length;
     sigma0 = Math.max(stdOf(win), globalStd() * 0.25, MIN_SCALE);
-    scale = Math.max(step, sigma0);
+    refitScale();
   };
   const frameOf = (cursor) => Object.freeze({
     layer: 'stance', cursor, terms: signature(band, step), threshold: null, leak, band: round(band), step: round(step),
@@ -251,6 +259,8 @@ export const createStance = ({
         return out;   // opening: no EVA until the first normal is committed
       }
       const raw = s - band;
+      const excess = Math.max(0, raw);                            // this line's accommodation over the normal
+      if (excess > 0) { exSum += excess; exN += 1; refitScale(); } // step tracks the epoch's live scale
       const departure = Math.max(-scale, Math.min(scale, raw));   // spike-robust (a shock is the frame layer's, not a shift)
       const strainDelta = round((1 - leak) * departure);
       g = round(leak * g + strainDelta);                          // == replayFrames' folded strain

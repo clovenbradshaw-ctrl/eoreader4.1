@@ -64,7 +64,7 @@ const enactedLogOf = (doc, opts) => {
     read: (c) => ({ surprise: readings[c]?.bayes ?? 0, terms: readings[c]?.predicted?.figures || [],
                     contrib: readings[c]?.bayesBy || null }),  // per-dimension strain (vector)
     ...(explicit ? {} : { calibrate: { mode: 'causal' } }),  // band + thresholds from PAST surprises only
-    bornFrame: BORN_FRAME,   // the reading opts into the stance fold; parse/surf/predict do not
+    bornFrame: explicit ? false : BORN_FRAME,   // reading opts into the stance; an explicit hand-pinned scale wins
     ...(opts || {}),
   });
   if (units.length) loop.runTo(units.length - 1);
@@ -152,7 +152,7 @@ export const enactedReadingMeaning = async (doc, cursor, { embedder, confirmBand
                            (calibrate != null && calibrate.mode !== 'causal'));
   const loop = createEnactedLoop({
     read,
-    bornFrame: BORN_FRAME,   // the reading opts into the stance fold; parse/surf/predict do not
+    bornFrame: (numb || pinned) ? false : BORN_FRAME,   // stance sources the scale; a hand-pinned/numb reading wins
     thresholds: thresholds ?? MEANING_THRESHOLDS,   // the meaning scale — seed for causal, belt when pinned
     ...(numb
         ? { confirmBand: medianOf(mr.surprise) }                                       // the numb global-median reader, by request

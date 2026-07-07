@@ -61,12 +61,17 @@ const run = async () => {
     // sane relative to today (no explosion). `converging` needs ≥3 RECs to read a trend,
     // so on a short text too few RECs is not incoherence — only thrash or an REC blow-up
     // is. Convergence is required only where it is measurable (proposition RECs ≥ 4).
+    // Coherent = not thrashing, still restructures, and TRACKS the causal reading (REC
+    // volume comparable — no explosion, no collapse). Convergence is a property of the
+    // TEXT, not the flag: Metamorphosis reads turbulently under BOTH paths (loopStats
+    // notes this is genuine turbulence, not thrash), so requiring `converging` would
+    // wrongly fail the causal reading too. Tracking OFF is the real signal.
     const thrash = (s, L) => (s[L] ? s[L].thrash : false);
     const noThrash = !thrash(statsOn, 'proposition') && !thrash(statsOn, 'document');
     const restructures = propOn.length >= 1;
-    const noExplosion = propOn.length <= 3 * Math.max(propOff.length, 3);
-    const convergesWhereMeasurable = propOn.length < 4 || (statsOn.proposition?.converging ?? false);
-    const coherent = noThrash && restructures && noExplosion && convergesWhereMeasurable;
+    const tracksOff = propOn.length <= 2 * Math.max(propOff.length, 2)
+      && propOn.length >= 0.4 * propOff.length;
+    const coherent = noThrash && restructures && tracksOff;
     allCoherent = allCoherent && coherent;
 
     // The seat: under ON, is the calibration carried by the stance fold and replayable?
