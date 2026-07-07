@@ -8754,7 +8754,6 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       provMode:'hover',
       onOpenDeepResearch:()=>this.onOpenDeepResearch(),
       onOpenDoc:()=>this.onOpenDoc(),
-      onOpenDag:()=>this.onOpenDag(),
       surfaceTitle:this.state.drHasLog?'Open the live research surface \u2014 the report keeps populating as you research in chat':'Open the research surface \u2014 run grounded deep research in a live panel',
       surfaceStyle:'margin-left:auto;flex:0 0 auto;font-size:11px;font-weight:600;border:none;background:transparent;cursor:pointer;white-space:nowrap;padding:2px 0 2px 9px;'+(this.state.drHasLog?'color:var(--acc);':'color:var(--ink3);'),
       backend:this.state.backend||'webllm',
