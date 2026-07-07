@@ -231,6 +231,32 @@ const gatherCorpus = async (q, subject, seed, search, { targetSources, maxRounds
   return corpus;
 };
 
+// ── Extractable span guard (the mis-split-fragment gate) ────────────────────
+// A span is only a proposition if it is a WELL-FORMED sentence. The prose parser
+// splits on sentence punctuation, and a period inside an abbreviation or a
+// taxonomic initial ("I. g. geoffrensis (Amazon river dolphin), I. g.
+// boliviensis …") splinters one line into head-less fragments — "geoffrensis
+// (Amazon river dolphin), I. g.", "boliviensis (Bolivian river dolphin) and
+// I. g." Those fragments still carry the subject term ("dolphin") so they bind
+// and, unguarded, surfaced as the run's top "propositions" — the dolphin-mating
+// audit (2026-07-07): the panel's findings read as noise. A real claim starts
+// like a sentence (capital / digit / quote / open-paren), carries enough words
+// to state something, and does not trail off on an orphaned initial. This gates
+// only what is EXTRACTED (the visible propositions); the bind/void measurement
+// upstream is untouched, so a source of only fragments still reads as present,
+// and if that is all it has, the frame voids honestly instead of quoting rubble.
+const SPAN_WORD = /[A-Za-z0-9][A-Za-z0-9'’-]*/g;
+export const isWellFormedSpan = (text) => {
+  const t = String(text || '').trim();
+  if (t.length < 24) return false;                 // too short to carry a claim
+  const words = t.match(SPAN_WORD) || [];
+  if (words.length < 4) return false;              // a label or a fragment, not a statement
+  if (/^[a-z]/.test(t)) return false;              // a mid-sentence continuation from a mis-split
+  const last = words[words.length - 1];            // trails off on an orphaned initial ("… I. g.")
+  if (last.length === 1 && /[a-z]/.test(last) && /\s[A-Za-z]\.\s*[a-z]\.?$/.test(t)) return false;
+  return true;
+};
+
 // ── The run ──────────────────────────────────────────────────────────────────
 //
 // runGroundedResearch(question, opts) → { log, report }
@@ -429,7 +455,7 @@ export const runGroundedResearch = async (question, opts = {}) => {
         continue;
       }
       anyBind = true;
-      const strong = scored.filter((x) => x.overlap >= 2 || x.score >= 0.5)
+      const strong = scored.filter((x) => (x.overlap >= 2 || x.score >= 0.5) && isWellFormedSpan(x.sentence))
         .sort((a, b) => b.overlap - a.overlap).slice(0, perSourceCap);
       for (const hit of strong) {
         const span = locateSpan(p.text, hit.sentence);

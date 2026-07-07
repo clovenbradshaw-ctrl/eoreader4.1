@@ -6545,6 +6545,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       muteBtnLabel:muted?'Unmute source':'Mute source',
       muteBtnStyle:'display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:8px;padding:7px 13px;cursor:pointer;'+(muted?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
       onRead:()=>this.goWeb(url), onChat:()=>this.newChat(url), onMute:()=>this.muteSrc(url), onDag:()=>this.onOpenDag(url),
+      onWeave:()=>this._openWeave(url),
       onBackDir:()=>this.openSitesDir()
     };
   }
@@ -8677,7 +8678,6 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     const _acc=this.curAccent();
     const base={accentVar:_acc,accbgVar:this.mixWhite(_acc,.90),acclineVar:this.mixWhite(_acc,.70),
       settingsOpen:this.state.settingsOpen,onToggleSettings:()=>this.toggleSettings(),onCloseSettings:()=>this.closeSettings(),
-      chorus:this._chorusView(),
       templatesOpen:this.state.templatesOpen,onOpenTemplates:()=>this.setState({templatesOpen:true,settingsOpen:false}),onCloseTemplates:()=>this.setState({templatesOpen:false}),templatesStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
       promptFlowOpen:this.state.promptFlowOpen,onOpenPromptFlow:()=>this.setState({promptFlowOpen:true,settingsOpen:false}),onClosePromptFlow:()=>this.setState({promptFlowOpen:false}),promptFlowStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
       weaveOpen:this.state.weaveOpen,weaveDoc:this.state.weaveDoc||'',onOpenWeave:()=>this._openWeave(null),onCloseWeave:()=>this.setState({weaveOpen:false}),weaveStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
@@ -8725,7 +8725,6 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       provMode:'hover',
       onOpenDeepResearch:()=>this.onOpenDeepResearch(),
       onOpenDoc:()=>this.onOpenDoc(),
-      onOpenGraph:()=>this.onOpenGraph(),
       surfaceTitle:this.state.drHasLog?'Open the live research surface \u2014 the report keeps populating as you research in chat':'Open the research surface \u2014 run grounded deep research in a live panel',
       surfaceStyle:'margin-left:auto;flex:0 0 auto;font-size:11px;font-weight:600;border:none;background:transparent;cursor:pointer;white-space:nowrap;padding:2px 0 2px 9px;'+(this.state.drHasLog?'color:var(--acc);':'color:var(--ink3);'),
       backend:this.state.backend||'webllm',
