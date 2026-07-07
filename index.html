@@ -393,6 +393,7 @@
               <button onclick="{{ s.onToggleCollapse }}" title="{{ s.collapseTitle }}" style="{{ s.caretStyle }}" style-hover="background:#eef0f3;color:var(--ink)">{{ s.caret }}</button>
             </sc-if>
             <button onclick="{{ s.onRead }}" title="Read the page" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">↗</button>
+            <button onclick="{{ s.onWeave }}" title="The referent weave of this source — its recurring figures as threads, grouped into storylines" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;" style-hover="background:var(--accbg);color:var(--acc)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5c4 0 4 14 8 14s4-14 8-14"></path><path d="M4 12c4 0 4 7 8 7"></path><path d="M12 5c4 0 4 7 8 7"></path></svg></button>
             <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
           </div>
         </sc-for>
@@ -7793,16 +7794,27 @@ class Component extends DCLogic {
   // and threads group into storylines by temporal co-activity. Reads the engine's own
   // referentNesting (so a thread carries its holon depth), then clusters the density
   // vectors. Returns null when nothing is loaded or too few referents recur.
-  _weaveModel(){
+  _weaveModel(url){
     if(!this.master||!this.graph||!this.master.sentences||!this.master.sentences.length)return null;
-    const g=this.graph,nSent=this.master.sentences.length||1;
+    const g=this.graph;
+    // Scope to ONE source when a url is given: take that source's sentence range and
+    // re-base every mention to it, so the weave is of THAT source's own reading, not the
+    // whole spine. No url → the whole reading (every source woven together).
+    const ss=this.master.sentenceSource||null;
+    let lo=0,hi=this.master.sentences.length-1,scoped=false;
+    if(url&&ss){const idx=[];for(let i=0;i<ss.length;i++)if(ss[i]===url)idx.push(i);
+      if(idx.length){lo=idx[0];hi=idx[idx.length-1];scoped=true;}}
+    const nSent=(scoped?hi-lo+1:this.master.sentences.length)||1;
+    const inScope=i=>!scoped||(i>=lo&&i<=hi&&ss[i]===url);
     const mentions=new Map();
-    for(const id of g.entities.keys()){const m=this.mentionsOf(id);if(m.length)mentions.set(id,m);}
+    for(const id of g.entities.keys()){const m=this.mentionsOf(id).filter(inScope).map(i=>scoped?i-lo:i);if(m.length)mentions.set(id,m);}
     const nest=(this.E&&this.E.referentNesting)?this.E.referentNesting({mentions,units:nSent},g):null;
     if(!nest)return null;
     const STOP=new Set(['french','russian','german','english','austrian','come','go','though','well','yes','no','oh','god']);
     const isArt=id=>/^(chapter|book|part|volume)\b/i.test(id)||/^[ivxlc]+$/i.test(id)||STOP.has(id);
-    const pop=nest.referents.filter(r=>r.count>=8&&!isArt(r.id)).sort((a,b)=>b.count-a.count).slice(0,60);
+    // A single source is shorter than the whole spine, so its recurrence floor is lower.
+    const MIN=scoped?4:8;
+    const pop=nest.referents.filter(r=>r.count>=MIN&&!isArt(r.id)).sort((a,b)=>b.count-a.count).slice(0,60);
     if(pop.length<3)return null;
     const bins=120,DARK=['#3987e5','#199e70','#c98500','#008300','#9085e9','#e66767','#d55181','#d95926'],OTHER='#57647e';
     const threads=pop.map(r=>{
@@ -7823,9 +7835,11 @@ class Component extends DCLogic {
     clusters.sort((a,b)=>b.length-a.length||threads[a[0]].centroid-threads[b[0]].centroid);
     const communities=clusters.map((cl,ci)=>{const members=cl.slice().sort((a,b)=>threads[b].n-threads[a].n);const colored=ci<DARK.length;for(const m of cl)threads[m].comm=ci;return {id:ci,size:cl.length,colored,color:colored?DARK[ci]:OTHER,label:threads[members[0]].label};});
     threads.sort((a,b)=>a.comm-b.comm||a.centroid-b.centroid||b.n-a.n);
-    let title='this document';try{title=this.master.title||(this.state&&this.state.viewUrl)||title;}catch(e){}
-    return {nSent,nBins:bins,read:{sentences:this.master.sentences.length,entities:g.entities.size,population:pop.length},threads,communities,title:String(title)};
+    let title='this document';try{title=scoped?(((this.pageOf(url)||{}).title)||this.short(url)||title):(this.master.title||(this.state&&this.state.viewUrl)||title);}catch(e){}
+    return {nSent,nBins:bins,read:{sentences:nSent,entities:scoped?mentions.size:g.entities.size,population:pop.length},threads,communities,title:String(title)};
   }
+  // Open the weave modal, scoped to one source (url) or the whole reading (url null/absent).
+  _openWeave(url){let W=null;try{W=this._weaveModel(url||null);}catch(e){}this.setState({weaveOpen:true,weaveDoc:W?this._weaveHtml(W):this._weaveEmpty(),settingsOpen:false});}
   _weaveEmpty(){
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>html,body{margin:0;height:100%;background:#0a0e1a;color:#7c8aa5;font-family:ui-monospace,monospace;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}div{max-width:420px;line-height:1.6;font-size:13px}b{color:#c3cbdb}</style></head><body><div><b>No weave yet.</b><br>Read a document with a few recurring referents, then reopen — the weave is drawn from whatever is loaded.</div></body></html>`;
   }
@@ -10549,7 +10563,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       chorus:this._chorusView(),
       templatesOpen:this.state.templatesOpen,onOpenTemplates:()=>this.setState({templatesOpen:true,settingsOpen:false}),onCloseTemplates:()=>this.setState({templatesOpen:false}),templatesStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
       promptFlowOpen:this.state.promptFlowOpen,onOpenPromptFlow:()=>this.setState({promptFlowOpen:true,settingsOpen:false}),onClosePromptFlow:()=>this.setState({promptFlowOpen:false}),promptFlowStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
-      weaveOpen:this.state.weaveOpen,weaveDoc:this.state.weaveDoc||'',onOpenWeave:()=>{let W=null;try{W=this._weaveModel();}catch(e){}if(!W){this.setState({weaveOpen:true,weaveDoc:this._weaveEmpty(),settingsOpen:false});return;}this.setState({weaveOpen:true,weaveDoc:this._weaveHtml(W),settingsOpen:false});},onCloseWeave:()=>this.setState({weaveOpen:false}),weaveStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
+      weaveOpen:this.state.weaveOpen,weaveDoc:this.state.weaveDoc||'',onOpenWeave:()=>this._openWeave(null),onCloseWeave:()=>this.setState({weaveOpen:false}),weaveStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
       memOpen:this.state.memOpen,onOpenMem:()=>this.setState({memOpen:true,settingsOpen:false}),onCloseMem:()=>this.setState({memOpen:false}),memStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},onExportMem:()=>this.exportMemory(),mem:(this.state.memOpen?this.memoryLog():{rows:[],hasRows:false,statLine:'',empty:true}),
       memTab:this.state.memTab||'sources',memTabSources:(this.state.memTab||'sources')==='sources',memTabLog:this.state.memTab==='log',
       onMemSources:()=>this.setState({memTab:'sources'}),onMemLog:()=>this.setState({memTab:'log'}),
@@ -10853,7 +10867,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     pagesByRecency.filter(p=>!inSet(p.parent)).forEach(p=>pushP(p,0));
     pagesByRecency.forEach(p=>{if(!seenP.has(p.url))pushP(p,0);});
     base.sources=orderedP.map(({p,depth,kids,collapsed:col})=>{const c=this.hashColor(this.short(p.url)),isA=(vu===p.url)||(this.state.siteView===p.url),cnt=entInSrc.get(p.url)||0;
-      return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.openSite(p.url),onRead:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.goWeb(p.url);},onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},
+      return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.openSite(p.url),onRead:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.goWeb(p.url);},onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},onWeave:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this._openWeave(p.url);},
         hasKids:kids>0,collapsed:col,caret:col?'▸':'▾',collapseTitle:(col?'Show':'Hide')+' the '+kids+' source'+(kids!==1?'s':'')+' found from this one',
         onToggleCollapse:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.toggleSrcCollapse(p.url);},
         caretStyle:'width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:11px;line-height:1;',
