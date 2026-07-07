@@ -158,12 +158,20 @@ export const groundSpans = (spans, { passages = [], doc = null, minOverlap = 0.3
     const wit = docWitness(text, doc);
 
     if (lex) {
-      // A lexical hit on a retrieved passage. If the doc is available and judges the span's
-      // meaning UNwitnessed AND the overlap is not near-verbatim, the shared words are a salad,
-      // not a lift — hold it to the void (the provenance.js discipline). A near-verbatim overlap
-      // is a genuine lift and stands even where the parser read no relation.
-      if (wit === 'void' && lex.score < 0.6) return llm(text, 'assertion');
-      return sourced(text, { ...lex.passage, score: lex.score });
+      // A lexical hit is a CANDIDATE, not a verdict. A near-verbatim overlap is a genuine lift and
+      // stands even where the parser read no relation. Below that floor the shared words must
+      // actually WITNESS the claim, or they are the topic's own vocabulary — the salad the whole
+      // answer shares with passages that are ABOUT the subject (a conservation answer over
+      // conservation passages: every sentence touches "conservation / species / international", so
+      // raw overlap marked fabricated IUCN/WWF/right-whale claims "sourced" and the badge read
+      // "matched"). Three witnesses, strongest first: the doc's coref-intact reading ('void' is a
+      // definitive deny, 'witnessed' a definitive pass); else whether the CITED PASSAGE itself
+      // witnesses the claim (citationHolds — the SAME propositional gate the render binder reads,
+      // one rule for the inline citation and the badge alike). A parse fault degrades to the lift.
+      if (wit === 'void' && lex.score < CITE_VERBATIM) return llm(text, 'assertion');
+      if (lex.score >= CITE_VERBATIM || wit === 'witnessed') return sourced(text, { ...lex.passage, score: lex.score });
+      if (citationHolds(text, lex.passage.text, lex.score)) return sourced(text, { ...lex.passage, score: lex.score });
+      return llm(text, 'assertion');
     }
 
     // No passage carried it, but the graph witnesses the meaning (a coref-grounded claim, not
