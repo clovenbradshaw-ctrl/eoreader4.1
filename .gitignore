@@ -15,3 +15,6 @@ _site/
 /corpus.jsonl
 /trajectories.jsonl
 /flow-prior.json
+
+# referent-journey tool cache (a fetched Gutenberg book — regenerated, never tracked)
+/tools/referent/.cache/

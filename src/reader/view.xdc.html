@@ -151,6 +151,8 @@
             <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:8px;">Prompts</div>
             <button onclick="{{ onOpenPromptFlow }}" title="Visualize the flow of every prompt the engine builds — read live off the source, so it changes when the code does" style="width:100%;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:12px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:9px;cursor:pointer;" style-hover="background:var(--card)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:0 0 auto;"><line x1="6" y1="3" x2="6" y2="15"></line><circle cx="18" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><path d="M18 9a9 9 0 0 1-9 9"></path></svg>Open prompt flow</button>
             <div style="font-size:11px;color:var(--ink3);line-height:1.45;margin-top:6px;">Every register, cue, and the live prompt assembly — built from the real source. Change a prompt in the code and this follows.</div>
+            <button onclick="{{ onOpenWeave }}" title="The referent weave of what you've read — each recurring figure as a thread, grouped into storylines by temporal co-activity" style="width:100%;margin-top:10px;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:12px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:9px;cursor:pointer;" style-hover="background:var(--card)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:0 0 auto;"><path d="M4 5c4 0 4 14 8 14s4-14 8-14"></path><path d="M4 12c4 0 4 7 8 7"></path><path d="M12 5c4 0 4 7 8 7"></path></svg>Open the weave</button>
+            <div style="font-size:11px;color:var(--ink3);line-height:1.45;margin-top:6px;">Threads of the document you're reading, grouped into storylines from co-activity alone — each carrying the holon depth the parser now computes.</div>
           </div>
         </sc-if>
       </div>
@@ -1811,6 +1813,19 @@
           <button onclick="{{ onClosePromptFlow }}" title="Close" style="width:28px;height:28px;border:none;background:transparent;color:var(--ink3);border-radius:7px;cursor:pointer;font-size:18px;line-height:1;flex:0 0 auto;" style-hover="background:#eef0f3;color:var(--ink)">×</button>
         </div>
         <iframe src="prompt-flow.html" title="Prompt flow" style="flex:1;min-height:0;width:100%;border:none;"></iframe>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ weaveOpen }}" hint-placeholder-val="{{ false }}">
+    <div onclick="{{ onCloseWeave }}" style="position:fixed;inset:0;background:rgba(20,24,30,.34);z-index:60;display:flex;align-items:center;justify-content:center;padding:32px;">
+      <div onclick="{{ weaveStop }}" style="width:1180px;max-width:100%;height:90vh;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 24px 60px rgba(20,24,30,.3);overflow:hidden;animation:eopop .14s ease-out;">
+        <div style="padding:16px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex:0 0 auto;">
+          <div style="width:24px;height:24px;border-radius:7px;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex:0 0 auto;">EO</div>
+          <div style="flex:1;min-width:0;"><div style="font-size:15px;font-weight:700;line-height:1.2;">The weave</div><div style="font-size:11px;color:var(--ink3);margin-top:1px;">every recurring referent as a thread — storylines found from co-activity in what you've read</div></div>
+          <button onclick="{{ onCloseWeave }}" title="Close" style="width:28px;height:28px;border:none;background:transparent;color:var(--ink3);border-radius:7px;cursor:pointer;font-size:18px;line-height:1;flex:0 0 auto;" style-hover="background:#eef0f3;color:var(--ink)">×</button>
+        </div>
+        <iframe srcdoc="{{ weaveDoc }}" title="The weave" sandbox="allow-scripts allow-popups" referrerpolicy="no-referrer" style="flex:1;min-height:0;width:100%;border:none;background:#0a0e1a;"></iframe>
       </div>
     </div>
   </sc-if>
