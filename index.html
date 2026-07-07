@@ -5042,6 +5042,31 @@ class Component extends DCLogic {
       commit(this.norm(raw)||fallback);
     }catch(e){guard.clear();commit(fallback);}
   }
+  // How many clarifying questions we've asked in the CURRENT unbroken run — the trailing clarify
+  // bubbles (groundKind==='clarify') at the tail of the thread, before any real answer. `cur` is
+  // the pre-turn snapshot (captured before this turn's own pending bubble is appended), so its last
+  // message is the previous completed turn; we step over the user answers between the questions. The
+  // count RESETS to 0 the moment a non-clarify assistant answer intervenes: a fresh underspecified
+  // ask later in the chat starts its own run and is questioned on its own merits, not the last run's.
+  _consecutiveClarify(cur){
+    const msgs=(cur&&cur.messages)||[];
+    let k=0;
+    for(let i=msgs.length-1;i>=0;i--){
+      const m=msgs[i];
+      if(!m||m.role!=='asst')continue;         // step over the user answers between the questions
+      if(m.groundKind==='clarify'){k++;continue;}
+      break;                                    // a real assistant answer ends the run
+    }
+    return k;
+  }
+  // A PUNT — the user answering a clarifying question by DECLINING to narrow: "anywhere", "any",
+  // "whatever", "either", "you choose", "doesn't matter", "up to you", "surprise me", "no
+  // preference". Anchored to the whole (short) reply so a substantive answer that merely CONTAINS
+  // one of these words ("any coastal region with a rescue program") is not caught. When the user has
+  // explicitly refused to pin it down, re-asking is pointless — answer with what we already have.
+  _clarifyPunt(q){
+    return /^(?:any(?:thing|where|one|time)?|all(?:\s+of\s+them)?|both|everything|whatever|whichever|either|doesn'?t\s+matter|no\s+preference|no\s+idea|i\s+don'?t\s+(?:know|mind|care)|you\s+(?:choose|decide|pick|tell\s+me)|your\s+(?:choice|call)|up\s+to\s+you|surprise\s+me)\b[\s.!?]*$/i.test(this.norm(q||''));
+  }
   // THE ZERO-MASS ANCHOR (model-free) — a multi-anchor question with one anchor the reading holds
   // and one it never mentions ("the difference between it and harry potter" over a Golden Compass
   // corpus). The covered anchor grounds the turn while the missing one gets confabulated from
@@ -5657,9 +5682,27 @@ class Component extends DCLogic {
     // back on, and it was the reported miss. A clear compose ask reads `actionable`, not `clarify`,
     // so it is never questioned back; a poem already composed above (kind==='poem') before reaching
     // here. Same soft contract as every fork: no read / abstained clarify → falls straight through.
+    //
+    // NOT ENDLESS, WITHOUT A HARD CAP. Once we started asking, every follow-up ("conservation
+    // efforts", then "anywhere") got re-read as "still broad" and re-clarified, forever — there is
+    // always SOME residual ambiguity if you go looking for it, so a pure "is it still
+    // underspecified?" gate never converges. Convergence is made PHYSICS, not a counter (the same
+    // resting-potential move relaxRoute runs): the "just answer" stance gains a resting potential
+    // that GROWS with each clarifying question already asked in this unbroken run
+    // (_consecutiveClarify · REST_CLARIFY), so a re-ask must out-compete an ever-higher bar. The
+    // first question is free; a second needs a strongly-voiced ambiguity; a third almost never
+    // clears (the clarify current is bounded, the bar is not — so the run terminates on its own).
+    // It is NOT a fixed limit: a genuinely escalating ambiguity can still earn another ask, and the
+    // count RESETS the moment a real answer lands, so a fresh underspecified ask later in the chat
+    // is questioned anew. A PUNT — the user declining to narrow ("anywhere", "any", "whatever",
+    // "you choose") — ends it outright: re-asking someone who just said "anywhere" is the exact
+    // annoyance this guard exists to prevent.
+    const REST_CLARIFY=0.2;   // the resting potential each prior clarify adds to "just answer" (raw clarify-drive scale, ~0.06–0.31)
+    const kClar=this._consecutiveClarify(cur);
+    const clarifyGap=read?((read.clarifyDrive||0)-(read.researchDrive||0)):0;
     if(read&&read.clarifyDemand==='clarify'&&!researchIntent
         &&read.route!=='research'&&amode!=='creative'
-        &&(read.clarifyDrive||0)>(read.researchDrive||0)){
+        &&clarifyGap>REST_CLARIFY*kClar&&!this._clarifyPunt(q)){
       await this._clarifyingTurn(id,q,read,cur);
       return;
     }
