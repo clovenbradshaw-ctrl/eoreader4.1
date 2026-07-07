@@ -21,5 +21,14 @@ node tools/flow/flow_scorer.mjs --prior data/flow-prior.json --trajectories traj
 node tools/flow/flow_scorer.mjs --prior data/flow-prior.json --text draft.txt --eoreader .
 ```
 
-`corpus.jsonl` is one `{ id, title, text }` per line. `flow_distill.py` needs
-`numpy`. Full write-up, wiring, and caveats: **`docs/flow-prior.md`**.
+```
+# 4. install into the facet-keyed registry, then diagnose a READING against it
+python3 tools/flow/flow_distill.py trajectories.jsonl --lang en --domain science --register expository --out sci.json
+node tools/flow/install_prior.mjs sci.json --name expository-en-science
+node tools/flow/flow_diagnose.mjs --text article.txt --select '{"lang":"en","domain":"science"}'
+```
+
+`corpus.jsonl` is one `{ id, title, text, lang?, region?, era?, domain?, register? }`
+per line (facets optional but recommended). `flow_distill.py` needs `numpy`. Corpus /
+prior / registry format: **`docs/flow-corpus.md`**. Prior + wiring: **`docs/flow-prior.md`**.
+Reading diagnostic + omnimodal framing: **`docs/flow-reading.md`**. Validity: **`docs/flow-validity.md`**.

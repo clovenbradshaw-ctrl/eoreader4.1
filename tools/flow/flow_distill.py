@@ -60,6 +60,8 @@ def main():
     ap.add_argument("--pcs", type=int, default=10)
     ap.add_argument("--grid", type=int, default=24,
                     help="canonical position resolution the per-position stats resample onto")
+    for k in ("lang","region","era","domain","register"):
+        ap.add_argument(f"--{k}", default=None, help=f"stamp meta.facets.{k} (else the modal value from the corpus)")
     a=ap.parse_args()
 
     T=load(a.trajectories, a.min_sent)
@@ -131,10 +133,21 @@ def main():
           "opTransition":[[round(float(x),3) for x in row] for row in trans],
         }
 
+    # facets: region · era · language · domain · register — from CLI, else the modal
+    # value across the corpus. Makes the prior self-describing and selectable.
+    from collections import Counter
+    facets={}
+    for k in ("lang","region","era","domain","register"):
+        v=getattr(a,k)
+        if v is None:
+            vals=[t["facets"][k] for t in T if isinstance(t.get("facets"),dict) and t["facets"].get(k)]
+            if vals: v=Counter(vals).most_common(1)[0][0]
+        if v is not None: facets[k]=v
+
     prior={
       "kind":"eo-flow-prior","version":"2",
       "meta":{"books":len(books),"segment":seg,"grid":G,"steps":G,"stepDim":D,"localDim":L,
-              "minSent":a.min_sent,
+              "minSent":a.min_sent, "facets":facets,
               "sourceSha256":hashlib.sha256(open(a.trajectories,'rb').read()).hexdigest()[:16],
               "generated":__import__("datetime").datetime.utcnow().isoformat()+"Z"},
       "manifold":{"mean":[round(float(x),5) for x in mu],

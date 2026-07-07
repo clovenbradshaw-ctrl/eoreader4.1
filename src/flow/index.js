@@ -332,3 +332,59 @@ export function arcTarget(prior, t){
 }
 // 3) longgen/audit.js — whole-piece report: scoreTrajectory(prior,
 //    ...trajectoryFromDoc(doc)) in the export audit, alongside diagnose().
+
+// ── READING SELF-DIAGNOSIS (docs/flow-reading.md) ────────────────────────────
+// The reading-side companion to flowVerdict. A section that lies OFF the manifold of
+// competent readings is more likely a FAILED reading — missed relations, fragmented
+// coreference, dropped entities — than a strange text. Validated by
+// tools/flow/reading_probe.mjs: corrupting the parse raises the residual and it
+// localizes to the corrupted region (dose-response, ~190× inside/outside at 80%).
+// Returns per-section residual with the likely-under-read sections flagged, so the
+// reader can re-read them. opts.residualPct (default 95) is the flag threshold; scored
+// against a REGISTER-MATCHED prior (see selectPrior) — the residual is deviation from
+// competent readings of that register.
+export function diagnoseReading(prior, doc, opts={}){
+  if(!prior||!doc) return null;
+  const { steps, pos, sections }=trajectoryFromDoc(doc, opts.segment||{segment:'sections'});
+  const r=scoreTrajectory(prior, steps, pos);
+  const thr=opts.residualPct??95;
+  const per=r.steps.map((s,i)=>({
+    i, pos:s.pos,
+    from: sections?.[i]?.lo ?? null, to: sections?.[i]?.hi ?? null, dom: sections?.[i]?.op ?? null,
+    residual:s.manifoldResidual, residualPercentile:s.residualPercentile, arcAdherence:s.arcAdherence,
+    underRead: s.residualPercentile>=thr,
+  }));
+  const flagged=per.filter(s=>s.underRead);
+  return { meanResidual:r.meanResidual, meanArcAdherence:r.meanArcAdherence,
+    flaggedCount:flagged.length, flagged, sections:per, prior:prior.meta?.facets||null };
+}
+
+// ── INSTALLABLE PRIORS — a facet-keyed registry (region · era · language · domain) ──
+// A prior is a modality-register grammar; the right one depends on the target. These
+// pure helpers do the SELECTION; file/fetch I/O is the caller's (tools/flow read files,
+// the browser fetches). `entries` is a manifest list, each with a `facets` block:
+//   { name, file, facets:{ lang, region, era, domain, register }, books }
+// selectPrior returns the best match. Language is a hard filter when both sides declare
+// it (a different language is a different operator grammar); domain/register/era/region
+// are scored; a larger corpus breaks ties.
+export function selectPrior(entries, query={}){
+  const W={ domain:4, register:3, era:2, region:1 };
+  let best=null, bestScore=-Infinity;
+  for(const e of entries||[]){
+    const f=e.facets||{};
+    if(query.lang && f.lang && f.lang!==query.lang) continue;   // hard filter: language
+    let score=0;
+    if(query.lang && f.lang===query.lang) score+=8;
+    for(const k of Object.keys(W)) if(query[k] && f[k] && String(f[k]).toLowerCase()===String(query[k]).toLowerCase()) score+=W[k];
+    score += Math.min(1,(e.books||0)/500);                      // tie-break: reliability
+    if(score>bestScore){ bestScore=score; best=e; }
+  }
+  return best;
+}
+// A short, human-readable provenance line for an installed prior.
+export function describePrior(prior){
+  const m=prior?.meta||{}, f=m.facets||{};
+  const facet=['lang','domain','register','era','region'].map(k=>f[k]).filter(Boolean).join(' · ')||'unlabelled';
+  return { facets:f, books:m.books, segment:m.segment, grid:m.grid,
+    generated:m.generated, sourceSha:m.sourceSha256, label:`${facet} (${m.books||'?'} docs)` };
+}

@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 
 import {
   OPERATORS, loadPrior, trajectoryFromDoc, scoreTrajectory, flowVerdict, arcTarget, sectionize,
+  diagnoseReading, selectPrior, describePrior,
 } from '../src/flow/index.js';
 import { parseText } from '../src/perceiver/parse/index.js';
 import { witness } from '../src/write/witness.js';
@@ -140,6 +141,35 @@ test('the committed exemplar spec loads as a prior and re-centers the arc', () =
   assert.notDeepEqual(spec.arcMean[12], prior.arcMean[12]);
   // but borrowed the corpus spread (sd) as the tolerance
   assert.deepEqual(spec.arcSd[12], prior.arcSd[12]);
+});
+
+test('diagnoseReading returns per-section residual with under-read flags', () => {
+  const d = diagnoseReading(prior, doc);
+  assert.ok(Number.isFinite(d.meanResidual));
+  assert.equal(d.sections.length, trajectoryFromDoc(doc, { segment: 'sections' }).steps.length);
+  assert.ok(d.sections.every(s => typeof s.residual === 'number' && typeof s.underRead === 'boolean'));
+  assert.equal(d.flaggedCount, d.flagged.length);
+  assert.ok(d.flagged.every(s => s.residualPercentile >= 95));   // flagged = off-manifold
+  assert.equal(diagnoseReading(null, doc), null);                // null-safe
+});
+
+test('selectPrior routes by facets, with language as a hard filter', () => {
+  const reg = JSON.parse(readFileSync(join(root, 'data/flow-priors/index.json'), 'utf8')).priors;
+  assert.ok(reg.length >= 1 && reg.every(p => p.facets));
+  assert.equal(selectPrior(reg, { lang: 'en', domain: 'science' }).facets.domain, 'science');
+  assert.equal(selectPrior(reg, { lang: 'en', register: 'narrative' }).facets.register, 'narrative');
+  assert.equal(selectPrior(reg, { lang: 'fr' }), null);          // no French prior installed
+  assert.ok(selectPrior(reg, {}) !== null);                      // empty query still returns something
+});
+
+test('describePrior surfaces the facet label and provenance', () => {
+  const info = describePrior(prior);
+  assert.ok(typeof info.label === 'string' && info.label.length > 0);
+  assert.equal(typeof info.books, 'number');
+});
+
+test('the shipped default prior is facet-stamped (self-describing)', () => {
+  assert.ok(prior.meta.facets && prior.meta.facets.lang, 'prior declares its language');
 });
 
 test('OPERATORS is the 9-operator alphabet the prior was built on', () => {

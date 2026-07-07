@@ -91,7 +91,9 @@ for await (const line of rl){
   let tr; try { tr=trajectory(text); } catch { skipped++; continue; }
   if (!tr){ skipped++; continue; }
   const id=String(rec.id||(n+1)).padStart(4,'0');
-  out.write(JSON.stringify({ id, title: rec.title||`source ${id}`, subjects: rec.subjects||null,
+  // carry the document's provenance facets (region · era · language · domain · register)
+  const facets = rec.facets || (() => { const f={}; for(const k of ['lang','region','era','domain','register']) if(rec[k]!=null) f[k]=rec[k]; return Object.keys(f).length?f:null; })();
+  out.write(JSON.stringify({ id, title: rec.title||`source ${id}`, subjects: rec.subjects||null, facets,
     nSent: tr.nSent, segment: tr.segment, nSteps: tr.steps.length,
     stepDim: tr.steps[0]?.length||109, localDim: 90, graphDim: 12,
     steps: tr.steps, pos: tr.pos, sections: tr.sections, l3summary: tr.l3summary }) + '\n');
