@@ -2426,6 +2426,17 @@ class Component extends DCLogic {
     this.setState(s=>({...patch,histRev:(s.histRev||0)+1}),()=>this._syncDocDock());
     this._scrollMainTop();
   }
+  // Fork a document at a chosen revision (from the History view): the surface
+  // hands us the state at that point as a seed; we register it as a brand-new
+  // document and open it in its own tab. The original is untouched — forking only
+  // ever adds a document, never edits the one you forked from.
+  _forkDoc(seedDoc,meta){
+    if(!seedDoc)return;
+    const docs=this._docsMap();
+    const id='doc:fork:'+(this._forkN=(this._forkN||0)+1)+':'+(Date.now?Date.now():0);
+    docs.set(id,{id,title:seedDoc.title||'Untitled document (fork)',log:null,seed:seedDoc});
+    this.openDoc(id);
+  }
   // Keep the doc dock showing the active document; hide it when another tab is up.
   // Cheap on every update — only (re)mounts when the active doc id actually changes.
   _syncDocDock(){
@@ -2457,6 +2468,7 @@ class Component extends DCLogic {
       author:'you',
       onChange:(log)=>{ const rec=this._docsMap().get(id); if(rec)rec.log=log; this._onDocChanged(id); },
       onTitle:(t)=>{ const rec=this._docsMap().get(id); if(rec)rec.title=t; this.setState(s=>({histRev:(s.histRev||0)+1})); },
+      onFork:(seedDoc,meta)=>this._forkDoc(seedDoc,meta),
       onClose:()=>this.closeDocTab(id),
     });
     this._docMountedId=id;

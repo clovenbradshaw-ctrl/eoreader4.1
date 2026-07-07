@@ -82,9 +82,10 @@ const changeCard = (ch) => {
   </div>`;
 };
 
-// The document body: paper (blocks + ghosts) on the left, the suggestions margin
-// on the right. mode ∈ 'suggesting' | 'editing' | 'viewing'.
-export const renderDocFragment = (doc, mode = 'suggesting') => {
+// The paper's inner HTML: committed blocks in order, with pending inserts shown
+// as ghost lines at their anchor (suggesting mode only). Shared by the live
+// document and the history view (which renders a past projection read-only).
+const paperInner = (doc, mode) => {
   const changes = mode === 'suggesting' ? doc.changes : [];
   const replaceOf = new Map(), delOf = new Set(), insAfter = new Map();
   for (const ch of changes) {
@@ -92,24 +93,104 @@ export const renderDocFragment = (doc, mode = 'suggesting') => {
     else if (ch.kind === 'delete' && ch.targetId) delOf.add(ch.targetId);
     else if (ch.kind === 'insert') { const k = ch.afterId || '__end__'; (insAfter.get(k) || insAfter.set(k, []).get(k)).push(ch); }
   }
-
   const rows = [];
   for (const b of doc.blocks) {
     rows.push(committedBlock(b, { mode, replace: replaceOf.get(b.id), del: delOf.has(b.id) }));
     for (const ch of (insAfter.get(b.id) || [])) rows.push(insertGhost(ch));
   }
   for (const ch of (insAfter.get('__end__') || [])) rows.push(insertGhost(ch));
-
   const empty = doc.blocks.length === 0
     ? `<p class="doc-empty">An empty page. Everything you write here is grounded to the Record — or marked as your own.</p>` : '';
+  return rows.join('') || empty;
+};
 
+// The document body: paper (blocks + ghosts) on the left, the suggestions margin
+// on the right. mode ∈ 'suggesting' | 'editing' | 'viewing'.
+export const renderDocFragment = (doc, mode = 'suggesting') => {
+  const changes = mode === 'suggesting' ? doc.changes : [];
   const cards = changes.length
     ? changes.map(changeCard).join('')
     : (mode === 'suggesting' ? `<div class="doc-card-none">No pending changes. Every line is committed and grounded.</div>` : '');
 
   return `<div class="doc-canvas">
-    <div class="doc-paper" data-mode="${esc(mode)}">${rows.join('') || empty}</div>
+    <div class="doc-paper" data-mode="${esc(mode)}">${paperInner(doc, mode)}</div>
     <div class="doc-margin">${cards}</div>
+  </div>`;
+};
+
+// ── version history (the log view) ──────────────────────────────────────────
+// A relative time label, deterministic given (ts, now). When ts is 0 (a log with
+// no wall clock — e.g. a replay in tests) there is no time to show.
+const agoLabel = (ts, now) => {
+  if (!ts || !now) return '';
+  const s = Math.max(0, Math.round((now - ts) / 1000));
+  if (s < 8) return 'just now';
+  if (s < 60) return s + 's ago';
+  const m = Math.round(s / 60); if (m < 60) return m + 'm ago';
+  const h = Math.round(m / 60); if (h < 24) return h + 'h ago';
+  const d = Math.round(h / 24); return d + 'd ago';
+};
+const clipL = (s, n) => (s || '').length > n ? '…' + s.slice(s.length - n) : (s || '');
+const clipR = (s, n) => (s || '').length > n ? s.slice(0, n) + '…' : (s || '');
+
+// The inline glyph of one revision — for a fine edit, the EXACT characters that
+// went in (green) and came out (struck): this is the "by character" grain. Older,
+// coalesced revisions read as a tinted line or a session count.
+const revInline = (rev) => {
+  if (rev.kind === 'create') return `<span class="doc-rev-orig">Original · ${rev.lines} line${rev.lines === 1 ? '' : 's'}</span>`;
+  if (rev.kind === 'revert') return `<span class="doc-rev-restore">⤺ restored${rev.label ? ' to “' + esc(clipR(rev.label, 40)) + '”' : ''}</span>`;
+  if (rev.kind === 'session') {
+    const parts = []; if (rev.insN) parts.push('+' + rev.insN); if (rev.delN) parts.push('−' + rev.delN);
+    return `<span class="doc-rev-sess">${rev.count} edits · ${rev.blocks} line${rev.blocks === 1 ? '' : 's'}${parts.length ? ' · ' + parts.join('/') + ' chars' : ''}</span>`;
+  }
+  if (rev.kind === 'add') return `<span class="doc-rev-ctx doc-rev-plus">＋</span><span class="doc-ins doc-ins-src">${esc(clipR(rev.snippet, 72))}</span>`;
+  if (rev.kind === 'delete') return `<span class="doc-rev-ctx doc-rev-minus">－</span><span class="doc-strike">${esc(clipR(rev.snippet, 72))}</span>`;
+  const d = rev.diff;
+  if (!d) return `<span>${esc(clipR(rev.snippet, 72))}</span>`;
+  return `<span class="doc-rev-ctx">${esc(clipL(d.pre, 20))}</span>` +
+    (d.del ? `<span class="doc-strike">${esc(clipR(d.del, 44))}</span>` : '') +
+    (d.ins ? `<span class="doc-ins doc-ins-src">${esc(clipR(d.ins, 44))}</span>` : '') +
+    `<span class="doc-rev-ctx">${esc(clipR(d.suf, 20))}</span>`;
+};
+
+const revRow = (rev, sel, now) => {
+  const selected = rev.anchorIdx === sel;
+  const when = rev.current ? 'Current version' : (agoLabel(rev.ts, now) || ('step ' + rev.anchorIdx));
+  const cls = 'doc-rev' + (selected ? ' sel' : '') + (rev.current ? ' current' : '') + (rev.kind === 'revert' ? ' revert' : '') + (rev.kind === 'create' ? ' orig' : '');
+  const actions = selected ? `<div class="doc-rev-actions">
+      <button class="doc-rev-btn doc-rev-restore-btn" data-restore="${rev.anchorIdx}"${rev.current ? ' disabled title="This is already the current version"' : ' title="Roll the document back to this version — kept on the log, so you can undo it"'}>⤺ Restore</button>
+      <button class="doc-rev-btn doc-rev-fork-btn" data-fork="${rev.anchorIdx}" title="Open a new document that starts from this version">⑂ Fork</button>
+    </div>` : '';
+  return `<button class="${cls}" data-rev="${rev.anchorIdx}">
+    <div class="doc-rev-top"><span class="doc-rev-dot"></span><span class="doc-rev-when">${esc(when)}</span><span class="doc-rev-by">${esc(rev.author || 'you')}</span></div>
+    <div class="doc-rev-body">${revInline(rev)}</div>${actions}</button>`;
+};
+
+// The history view: the document AS OF the selected revision (read-only) beside a
+// newest-first timeline. `histDoc` is projectDoc(log.slice(0, sel+1)); `history`
+// is projectHistory(log); `sel` is the selected anchor index; `now` a wall clock
+// for the "ago" labels. Selecting a revision re-projects the paper to that point.
+export const renderHistoryFragment = (histDoc, history, sel, now = 0) => {
+  const revs = history.revisions || [];
+  const current = revs.length ? revs[0].anchorIdx : sel;
+  const viewingOld = sel !== current;
+  const selRev = revs.find((r) => r.anchorIdx === sel);
+  const banner = viewingOld ? `<div class="doc-hist-banner">
+      <span class="doc-hist-banner-txt">⏳ Viewing a past version${selRev && agoLabel(selRev.ts, now) ? ' · ' + esc(agoLabel(selRev.ts, now)) : ''} — read only</span>
+      <span class="doc-hist-banner-acts">
+        <button class="doc-hist-b" data-restore="${sel}">⤺ Restore this version</button>
+        <button class="doc-hist-b" data-fork="${sel}">⑂ Fork from here</button>
+        <button class="doc-hist-b doc-hist-b-ghost" data-histlive="1">Back to latest</button>
+      </span></div>` : '';
+  const list = revs.length
+    ? revs.map((r) => revRow(r, sel, now)).join('')
+    : `<div class="doc-card-none">No edits yet — the timeline fills as you write.</div>`;
+  return `${banner}<div class="doc-canvas doc-canvas-hist">
+    <div class="doc-paper doc-paper-hist" data-mode="viewing">${paperInner(histDoc, 'viewing')}</div>
+    <div class="doc-margin doc-timeline">
+      <div class="doc-tl-head">Version history <span class="doc-tl-sub">${history.count} edit${history.count === 1 ? '' : 's'} · finest first, oldest coalesced</span></div>
+      <div class="doc-tl-list">${list}</div>
+    </div>
   </div>`;
 };
 
@@ -209,5 +290,44 @@ export const DOC_CSS = `
 .doc-compose button{flex:0 0 auto;font-size:12.5px;font-weight:600;color:#fff;background:#5b34d6;border:none;border-radius:10px;padding:9px 15px;cursor:pointer}
 .doc-compose button:hover{background:#4c29b8}
 .doc-live{font-size:11px;color:#9aa1ab;padding:0 2px}
-@media (max-width:900px){.doc-canvas{flex-direction:column}.doc-margin{flex:1 0 auto;width:100%}.doc-paper{padding:40px 28px 60px}}
+/* ── version history (the log view) ── */
+.doc-hist-banner{flex:0 0 auto;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 16px;background:#fff7e8;border-bottom:1px solid #f2e2bf;font-size:12px;color:#8a5a00}
+.doc-hist-banner-txt{font-weight:600}
+.doc-hist-banner-acts{margin-left:auto;display:flex;gap:6px}
+.doc-hist-b{font-size:11.5px;font-weight:600;color:#fff;background:#5b34d6;border:none;border-radius:8px;padding:6px 11px;cursor:pointer}
+.doc-hist-b:hover{background:#4c29b8}
+.doc-hist-b-ghost{color:#5a626d;background:#fff;border:1px solid #dde0e5}
+.doc-hist-b-ghost:hover{color:#1b1f24;background:#f7f8fa}
+.doc-paper-hist{cursor:default}
+.doc-timeline{flex:0 0 300px;position:relative}
+.doc-tl-head{font-size:12px;font-weight:800;color:#1b1f24;padding:2px 2px 10px;letter-spacing:-.01em}
+.doc-tl-sub{display:block;font-size:10.5px;font-weight:500;color:#9aa1ab;margin-top:2px}
+.doc-tl-list{position:relative;padding-left:14px}
+.doc-tl-list::before{content:'';position:absolute;left:4px;top:6px;bottom:6px;width:2px;background:linear-gradient(#e6e8ec,#eef0f3)}
+.doc-rev{display:block;width:100%;text-align:left;position:relative;background:#fff;border:1px solid #e6e8ec;border-radius:10px;box-shadow:0 1px 2px rgba(20,24,30,.05);padding:9px 11px;margin:0 0 9px;cursor:pointer;font:inherit;transition:box-shadow .12s,border-color .12s,transform .08s}
+.doc-rev:hover{box-shadow:0 4px 14px rgba(20,24,30,.12);border-color:#d8ccf7}
+.doc-rev.sel{border-color:#5b34d6;box-shadow:0 4px 16px rgba(91,52,214,.18)}
+.doc-rev-dot{position:absolute;left:-14px;top:13px;width:9px;height:9px;border-radius:50%;background:#c9ced6;border:2px solid #fff;box-shadow:0 0 0 1px #e6e8ec}
+.doc-rev.sel .doc-rev-dot{background:#5b34d6;box-shadow:0 0 0 1px #5b34d6}
+.doc-rev.current .doc-rev-dot{background:#15803d;box-shadow:0 0 0 1px #15803d}
+.doc-rev.revert .doc-rev-dot{background:#b45309;box-shadow:0 0 0 1px #b45309}
+.doc-rev.orig .doc-rev-dot{background:#5a626d}
+.doc-rev-top{display:flex;align-items:baseline;gap:7px;margin-bottom:4px}
+.doc-rev-when{font-size:11.5px;font-weight:700;color:#1b1f24}
+.doc-rev.current .doc-rev-when{color:#15803d}
+.doc-rev-by{font-size:10.5px;color:#9aa1ab;margin-left:auto}
+.doc-rev-body{font-size:11.5px;line-height:1.5;color:#5a626d;word-break:break-word;max-height:3.2em;overflow:hidden}
+.doc-rev-ctx{color:#b6bcc6}
+.doc-rev-plus{color:#15803d;font-weight:800;margin-right:3px}
+.doc-rev-minus{color:#c0392b;font-weight:800;margin-right:3px}
+.doc-rev-orig,.doc-rev-sess{color:#5a626d;font-weight:600}
+.doc-rev-restore{color:#b45309;font-weight:600}
+.doc-rev-actions{display:flex;gap:6px;margin-top:9px}
+.doc-rev-btn{flex:1;font-size:11px;font-weight:600;border-radius:7px;padding:6px 4px;cursor:pointer;border:1px solid transparent}
+.doc-rev-restore-btn{color:#fff;background:#5b34d6;border-color:#5b34d6}
+.doc-rev-restore-btn:hover{background:#4c29b8}
+.doc-rev-restore-btn:disabled{background:#eef0f3;color:#b6bcc6;border-color:#e6e8ec;cursor:default}
+.doc-rev-fork-btn{color:#5b34d6;background:#f1edfc;border-color:#e3d9fa}
+.doc-rev-fork-btn:hover{background:#e6ddfa}
+@media (max-width:900px){.doc-canvas{flex-direction:column}.doc-margin{flex:1 0 auto;width:100%}.doc-paper{padding:40px 28px 60px}.doc-timeline{flex:1 0 auto}}
 `;

@@ -12,10 +12,11 @@
 // The only writer is this surface; the only truth is the log. Chat can drive it
 // through proposeFromText (the "add a closing recommendation" path).
 
-import { docCreate, blockAdd, changePropose, changeAccept, changeReject } from './events.js';
+import { docCreate, blockAdd, blockEdit, changePropose, changeAccept, changeReject, docRevert } from './events.js';
 import { groundText } from './ground.js';
 import { projectDoc } from './project.js';
-import { renderDocFragment, docStatLine, DOC_CSS } from './render.js';
+import { projectHistory } from './history.js';
+import { renderDocFragment, renderHistoryFragment, docStatLine, DOC_CSS } from './render.js';
 
 let _cssInjected = false;
 const injectCss = (doc) => {
@@ -34,7 +35,9 @@ export const mountDocSurface = (el, opts = {}) => {
   const record = opts.record || [];
   let mode = opts.mode || 'suggesting';
   let seq = 0;
-  const nid = (p) => p + (++seq) + '_' + (opts.stamp ? opts.stamp() : (Date.now ? Date.now() : 0));
+  const now = () => (opts.stamp ? opts.stamp() : (typeof Date !== 'undefined' && Date.now ? Date.now() : 0));
+  const nid = (p) => p + (++seq) + '_' + now();
+  let histSel = null;     // selected revision anchor (history view); null = latest
 
   // ── the log, and the writer ────────────────────────────────────────────────
   // The host may hand in an existing log (a document reopened from a tab); else
@@ -42,7 +45,11 @@ export const mountDocSurface = (el, opts = {}) => {
   // host persists it — the document survives tab switches and reloads.
   const log = [];
   const notify = () => { try { opts.onChange && opts.onChange(log.slice()); } catch (e) {} };
-  const append = (e) => { log.push(e); notify(); render(); };
+  // Append an event. `silent` persists + notifies but skips the re-render — used
+  // for burst edits while a block is focused, so replacing the paper's innerHTML
+  // never yanks the caret out from under the typist (the DOM already shows the text).
+  const appendEv = (e, silent) => { log.push(e); notify(); if (!silent) render(); };
+  const append = (e) => appendEv(e, false);
   const project = () => projectDoc(log);
 
   // ground a candidate line against the Record (the reader's recorded reads)
@@ -52,10 +59,11 @@ export const mountDocSurface = (el, opts = {}) => {
   if (opts.log && opts.log.length) {
     for (const e of opts.log) log.push(e);
   } else {
-    log.push(docCreate({ id: nid('doc'), title: seed.title || 'Untitled document', author, t: seq }));
+    const ts0 = now();
+    log.push(docCreate({ id: nid('doc'), title: seed.title || 'Untitled document', author, t: seq, ts: ts0 }));
     for (const b of (seed.blocks || [])) {
       const g = b.grounding || (() => { const r = ground(b.text); return r.grounded ? { kind: 'source', span: r.span, srcId: r.srcId, host: r.host, overlap: r.overlap } : { kind: 'void' }; })();
-      log.push(blockAdd({ id: nid('e'), docId: 'doc', blockId: nid('b'), text: b.text, grounding: g, author, t: seq }));
+      log.push(blockAdd({ id: nid('e'), docId: 'doc', blockId: nid('b'), text: b.text, grounding: g, author, t: seq, ts: ts0 }));
     }
     notify();
   }
@@ -64,12 +72,78 @@ export const mountDocSurface = (el, opts = {}) => {
   // (Editing mode / a direct edit). Returns the changeId.
   const propose = ({ kind = 'insert', text = '', html = '', type = 'p', targetId = null, afterId = null, before = '', who = author, accept = false }) => {
     const cid = nid('c');
+    const ts = now();
     const grounding = kind === 'delete' ? { grounded: false } : ground(text);
-    log.push(changePropose({ id: cid, docId: 'doc', changeId: cid, kind, text, html, type, targetId, afterId, blockId: nid('b'), before, grounding, author: who, when: 'now', t: seq }));
-    if (accept) log.push(changeAccept({ id: nid('a'), docId: 'doc', changeId: cid, t: seq }));
+    log.push(changePropose({ id: cid, docId: 'doc', changeId: cid, kind, text, html, type, targetId, afterId, blockId: nid('b'), before, grounding, author: who, when: 'now', t: seq, ts }));
+    if (accept) log.push(changeAccept({ id: nid('a'), docId: 'doc', changeId: cid, t: seq, ts }));
     notify();
     render();
     return cid;
+  };
+
+  // ── fine edit capture: one committed BLOCK_EDIT per typing burst ────────────
+  // A burst is a run of keystrokes to one block that hasn't yet been committed.
+  // We keep the text the burst STARTED from (`base`) so the committed edit carries
+  // an honest before/after the history view diffs character by character. Bursts
+  // close on: an idle pause, a word boundary (a typed space), crossing a size
+  // threshold, a block switch, blur, or leaving Editing mode — whichever first.
+  // The result: recent history is nearly keystroke-fine; it coalesces with age.
+  const IDLE_MS = 550, BURST_CHARS = 24;
+  let burst = null;         // { blockId, base, baseHtml }
+  let burstTimer = null;
+  const clearBurstTimer = () => { if (burstTimer) { try { D.defaultView.clearTimeout(burstTimer); } catch (e) {} burstTimer = null; } };
+  // Commit the open burst if the block's text actually moved. `silent` skips the
+  // re-render (true while the block is still focused — the caret must survive).
+  const commitBurst = (silent) => {
+    clearBurstTimer();
+    if (!burst) return;
+    const b = burst; burst = null;
+    const bl = el.querySelector('.doc-paper .doc-block[data-block="' + CSS.escape(b.blockId) + '"]');
+    const cap = bl ? captureBlock(bl) : null;
+    const proj = project().blocks.find((x) => x.id === b.blockId);
+    if (!cap || !proj) return;
+    if (cap.text === b.base && cap.html === (b.baseHtml || '')) return;   // nothing net
+    if (!cap.text) return;   // emptied → let blur record it as a single delete, not an edit-to-empty
+    const grounding = ground(cap.text);
+    appendEv(blockEdit({ id: nid('e'), docId: 'doc', blockId: b.blockId, text: cap.text, html: cap.html, type: proj.type || 'p', before: b.base, beforeHtml: b.baseHtml || '', grounding, author, t: seq, ts: now() }), silent);
+  };
+  // Note a keystroke in `bl`. Opens a burst against the committed text if none is
+  // open, then schedules/forces the commit per the burst rules.
+  const noteEdit = (bl, ev) => {
+    const id = bl.dataset.block;
+    if (!burst || burst.blockId !== id) {
+      commitBurst(true);
+      const proj = project().blocks.find((x) => x.id === id);
+      burst = { blockId: id, base: proj ? proj.text : '', baseHtml: proj ? (proj.html || '') : '' };
+    }
+    const cap = captureBlock(bl);
+    const delta = Math.abs(cap.text.length - burst.base.length);
+    const boundary = ev && (ev.data === ' ' || ev.inputType === 'insertParagraph' || ev.inputType === 'insertLineBreak');
+    if (delta >= BURST_CHARS || boundary) {
+      commitBurst(true);                                          // close this burst…
+      burst = { blockId: id, base: cap.text, baseHtml: cap.html }; // …and reopen from the committed text
+    } else {
+      clearBurstTimer();
+      try { burstTimer = D.defaultView.setTimeout(() => commitBurst(true), IDLE_MS); } catch (e) {}
+    }
+  };
+
+  // ── restore & fork (the history view) ──────────────────────────────────────
+  const revertTo = (idx) => {
+    commitBurst(true);
+    const h = projectHistory(log);
+    const rev = (h.revisions || []).find((r) => r.anchorIdx === idx);
+    const label = rev ? (rev.snippet || rev.kind) : '';
+    append(docRevert({ id: nid('rv'), docId: 'doc', toIndex: idx, label: String(label).slice(0, 60), author, t: seq, ts: now() }));
+    histSel = null;
+    setMode('editing');
+  };
+  const forkAt = (idx) => {
+    commitBurst(true);
+    const at = projectDoc(log.slice(0, idx + 1));
+    const seedDoc = { title: (at.title || 'Untitled document') + ' (fork)', blocks: at.blocks.map((b) => ({ text: b.text, html: b.html, type: b.type, grounding: b.grounding })) };
+    if (opts.onFork) { try { opts.onFork(seedDoc, { fromTitle: at.title, fromIdx: idx }); } catch (e) {} }
+    return seedDoc;
   };
 
   // ── chrome (built once) ────────────────────────────────────────────────────
@@ -82,6 +156,7 @@ export const mountDocSurface = (el, opts = {}) => {
         <button data-mode="suggesting" title="Edits become tracked suggestions, reviewed in the margin">✎ Suggesting</button>
         <button data-mode="editing" title="Edits commit immediately — still recorded and grounding-checked">✐ Editing</button>
         <button data-mode="viewing" title="The clean committed page">👁 Viewing</button>
+        <button data-mode="history" title="Every edit, newest first — restore or fork any version">🕘 History</button>
       </div>
       ${opts.onClose ? '<button class="doc-x" title="Close">✕</button>' : ''}
     </div>
@@ -128,12 +203,24 @@ export const mountDocSurface = (el, opts = {}) => {
   // ── render + margin-card anchoring (Google Docs vertical alignment) ────────
   const render = () => {
     const doc = project();
-    body.innerHTML = renderDocFragment(doc, mode);
-    statEl.textContent = docStatLine(doc);
+    if (mode === 'history') {
+      const history = projectHistory(log);
+      const revs = history.revisions || [];
+      const latest = revs.length ? revs[0].anchorIdx : (log.length - 1);
+      if (histSel == null) histSel = latest;
+      // the document as of the selected revision, read-only
+      const histDoc = projectDoc(log.slice(0, histSel + 1));
+      body.innerHTML = renderHistoryFragment(histDoc, history, histSel, now());
+      statEl.textContent = `${history.count} edit${history.count === 1 ? '' : 's'} on the log`;
+    } else {
+      body.innerHTML = renderDocFragment(doc, mode);
+      statEl.textContent = docStatLine(doc);
+    }
     for (const b of el.querySelectorAll('.doc-modes button')) b.classList.toggle('on', b.dataset.mode === mode);
-    // compose bar only makes sense off Viewing
-    $('.doc-compose').style.display = mode === 'viewing' ? 'none' : 'flex';
-    layoutCards();
+    // the compose bar makes sense only while writing (Suggesting / Editing)
+    $('.doc-compose').style.display = (mode === 'viewing' || mode === 'history') ? 'none' : 'flex';
+    $('.doc-toolbar').style.display = mode === 'history' ? 'none' : 'flex';
+    if (mode !== 'history') layoutCards();
   };
 
   // Place each margin card next to the block it annotates, pushing overlaps down.
@@ -160,17 +247,24 @@ export const mountDocSurface = (el, opts = {}) => {
   };
 
   // ── interaction (delegated, wired once) ────────────────────────────────────
-  const setMode = (m) => { mode = m; render(); };
+  // Switching mode always flushes any open burst first (so the latest keystrokes
+  // are on the log before we re-render); leaving History clears the selection.
+  const setMode = (m) => { commitBurst(true); if (m !== 'history') histSel = null; mode = m; render(); };
 
   el.addEventListener('click', (e) => {
-    const t = e.target.closest('[data-mode],[data-accept],[data-reject],[data-del],.doc-pm-src,.doc-x,.doc-add');
+    const t = e.target.closest('[data-mode],[data-accept],[data-reject],[data-del],[data-restore],[data-fork],[data-histlive],[data-rev],.doc-pm-src,.doc-x,.doc-add');
     if (!t) return;
     if (t.classList.contains('doc-x')) { opts.onClose && opts.onClose(); return; }
     if (t.classList.contains('doc-add')) { submitLine(); return; }
     if (t.dataset.mode) { setMode(t.dataset.mode); return; }
-    if (t.dataset.accept) { append(changeAccept({ id: nid('a'), docId: 'doc', changeId: t.dataset.accept, t: seq })); return; }
-    if (t.dataset.reject) { append(changeReject({ id: nid('r'), docId: 'doc', changeId: t.dataset.reject, t: seq })); return; }
+    if (t.dataset.accept) { append(changeAccept({ id: nid('a'), docId: 'doc', changeId: t.dataset.accept, t: seq, ts: now() })); return; }
+    if (t.dataset.reject) { append(changeReject({ id: nid('r'), docId: 'doc', changeId: t.dataset.reject, t: seq, ts: now() })); return; }
     if (t.dataset.del) { propose({ kind: 'delete', targetId: t.dataset.del, before: blockText(t.dataset.del), accept: mode === 'editing' }); return; }
+    // ── history view ──
+    if (t.dataset.restore != null) { revertTo(parseInt(t.dataset.restore, 10)); return; }
+    if (t.dataset.fork != null) { forkAt(parseInt(t.dataset.fork, 10)); return; }
+    if (t.dataset.histlive != null) { const h = projectHistory(log); histSel = h.revisions.length ? h.revisions[0].anchorIdx : (log.length - 1); render(); return; }
+    if (t.dataset.rev != null) { histSel = parseInt(t.dataset.rev, 10); render(); return; }
     if (t.classList.contains('doc-pm-src')) { showSpan(t); return; }
   });
 
@@ -200,21 +294,29 @@ export const mountDocSurface = (el, opts = {}) => {
     const bl = e.target.closest('.doc-block[contenteditable="true"]');
     if (bl && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); bl.blur(); }
   });
-  // Commit on blur — DEFERRED to the next tick so we never replace the paper's
-  // innerHTML from inside the blur event (that would detach the node the browser
-  // is mid-operating on). We capture the block's sanitised rich HTML + its text.
+  // Every keystroke in an editable block feeds the burst tracker — which commits a
+  // fine BLOCK_EDIT per burst (see noteEdit). Guarded to Editing mode; suggesting/
+  // viewing blocks are not contenteditable, so this never fires there.
+  body.addEventListener('input', (e) => {
+    if (mode !== 'editing') return;
+    const bl = e.target.closest && e.target.closest('.doc-block[contenteditable="true"]');
+    if (bl) noteEdit(bl, e);
+  });
+  // On blur: flush the block's open burst (its net keystrokes land on the log),
+  // then — DEFERRED to the next tick so we never replace the paper's innerHTML from
+  // inside the blur event — reconcile an emptied line to a delete and re-render the
+  // clean paper (committed marks, fresh stats).
   body.addEventListener('blur', (e) => {
     const bl = e.target.closest && e.target.closest('.doc-block[contenteditable="true"]');
     if (!bl) return;
     const id = bl.dataset.block;
     const cap = captureBlock(bl);
+    if (burst && burst.blockId === id) commitBurst(true);
     setTimeout(() => {
       const b = project().blocks.find((x) => x.id === id);
-      if (!b) return;
-      if (!cap.text) { if (b.text) propose({ kind: 'delete', targetId: id, before: b.text, accept: true }); return; } // emptied → delete
-      if (cap.text !== b.text || cap.html !== (b.html || '')) {
-        propose({ kind: 'replace', targetId: id, text: cap.text, html: cap.html, type: b.type || 'p', before: b.text, accept: true });
-      }
+      if (!b) { render(); return; }
+      if (!cap.text) { propose({ kind: 'delete', targetId: id, before: b.text, accept: true }); return; } // emptied → delete (renders)
+      render();
     }, 0);
   }, true);
 
@@ -259,6 +361,7 @@ export const mountDocSurface = (el, opts = {}) => {
     if (focusedBlock) setBlockType(focusedBlock.dataset.block, e.target.value);
   });
   const setBlockType = (id, type) => {
+    commitBurst(true);   // fold any pending keystrokes before the structural change
     const bl = el.querySelector('.doc-paper .doc-block[data-block="' + CSS.escape(id) + '"]');
     const b = project().blocks.find((x) => x.id === id);
     if (!b) return;
@@ -325,13 +428,16 @@ export const mountDocSurface = (el, opts = {}) => {
     el,
     getLog: () => log.slice(),
     project,
+    history: () => projectHistory(log),
     setMode,
+    revertTo,
+    forkAt,
     // "add a closing recommendation" → a grounded, tracked change the user reviews
     proposeFromText: (text, o = {}) => {
       const doc = project();
       const afterId = o.afterId || (doc.blocks.length ? doc.blocks[doc.blocks.length - 1].id : null);
       return propose({ kind: o.kind || 'insert', text, afterId, targetId: o.targetId || null, who: o.author || 'eo', accept: !!o.accept });
     },
-    destroy: () => { closeSpan(); window.removeEventListener && window.removeEventListener('resize', layoutCards); el.innerHTML = ''; el.classList.remove('doc-surface'); },
+    destroy: () => { clearBurstTimer(); closeSpan(); window.removeEventListener && window.removeEventListener('resize', layoutCards); el.innerHTML = ''; el.classList.remove('doc-surface'); },
   };
 };

@@ -10,7 +10,12 @@
 import { DKIND } from './events.js';
 import { blockGrounding } from './ground.js';
 
-export const projectDoc = (log) => {
+// Fold the events [0 .. limit) into working state. Split out from projectDoc so
+// a DOC_REVERT can re-fold its own prefix: a revert at position p with toIndex=k
+// (k < p) rebuilds the state from foldTo(events, k+1), which — because k < p —
+// never re-enters this same revert, so the recursion always terminates. Logs are
+// short (one document's edits), so the re-fold on revert is cheap.
+const foldTo = (events, limit) => {
   let id = null, title = 'Untitled document', author = 'you';
   const blocks = [];                 // committed blocks, in document order
   const changeMap = new Map();       // changeId → pending change
@@ -33,12 +38,21 @@ export const projectDoc = (log) => {
     }
   };
 
-  for (const e of log || []) {
+  const n = Math.max(0, Math.min(limit | 0, events.length));
+  for (let i = 0; i < n; i++) {
+    const e = events[i];
     switch (e.kind) {
       case DKIND.CREATE:
         id = e.docId; title = e.title; author = e.author; break;
       case DKIND.BLOCK:
         blocks.push({ id: e.blockId, text: e.text, html: e.html || '', type: e.type || 'p', grounding: e.grounding || { kind: 'void' }, author: e.author }); break;
+      case DKIND.EDIT: {
+        // A fine committed edit (one typing burst). Fold it exactly like an
+        // accepted replace: the block's text/html/type change and it re-grounds.
+        const b = blocks.find((x) => x.id === e.blockId);
+        if (b) { b.text = e.text; b.html = e.html || ''; b.type = e.type || b.type || 'p'; b.grounding = blockGrounding(e.grounding); }
+        break;
+      }
       case DKIND.PROPOSE:
         changeMap.set(e.changeId, {
           id: e.changeId, kind: e.op, targetId: e.targetId, afterId: e.afterId, blockId: e.blockId,
@@ -49,15 +63,33 @@ export const projectDoc = (log) => {
         break;
       case DKIND.ACCEPT: {
         const ch = changeMap.get(e.changeId);
-        if (ch) { foldAccept(ch); changeMap.delete(e.changeId); }
+        if (ch) { foldAccept(ch); changeMap.delete(e.changeId); const k = order.indexOf(e.changeId); if (k >= 0) order.splice(k, 1); }
         break;
       }
-      case DKIND.REJECT:
+      case DKIND.REJECT: {
         changeMap.delete(e.changeId);
+        const k = order.indexOf(e.changeId); if (k >= 0) order.splice(k, 1);
         break;
+      }
+      case DKIND.REVERT: {
+        // Restore to an earlier point: rebuild state from the prefix it names,
+        // then keep folding whatever follows this revert onto the restored state.
+        const sub = foldTo(events, (e.toIndex | 0) + 1);
+        id = sub.id; title = sub.title; author = sub.author;
+        blocks.length = 0; for (const b of sub.blocks) blocks.push(b);
+        changeMap.clear(); for (const [k, v] of sub.changeMap) changeMap.set(k, v);
+        order.length = 0; for (const k of sub.order) order.push(k);
+        break;
+      }
       default: break;
     }
   }
+  return { id, title, author, blocks, changeMap, order };
+};
+
+export const projectDoc = (log) => {
+  const events = log || [];
+  const { id, title, author, blocks, changeMap, order } = foldTo(events, events.length);
 
   const changes = order.map((cid) => changeMap.get(cid)).filter(Boolean);
   const grounded = blocks.filter((b) => b.grounding && b.grounding.kind === 'source').length;
