@@ -180,6 +180,210 @@ const bar = (r, units) => {
   return '·'.repeat(a) + '█'.repeat(Math.min(W, b) - a) + '·'.repeat(Math.max(0, W - b));
 };
 
+// ── The WEAVE visualization data + a self-contained page ────────────────────
+// Each recurring referent is a THREAD: a density pulse across reading position (where
+// it is active, not merely present). Threads are grouped into STORYLINES by temporal
+// co-activity — cosine similarity of their density vectors, agglomerated — because the
+// characters who share the stage in the same stretch of the book ARE a storyline. The
+// text is the weaving of these threads together; the picture is that weave.
+const DARK_CAT = ['#3987e5', '#199e70', '#c98500', '#008300', '#9085e9', '#e66767', '#d55181', '#d95926'];
+const OTHER_COL = '#57647e';
+
+// Structural artifacts that clear the event floor but name no character/place: chapter
+// headings ("CHAPTER II"), demonyms read as nouns, and a few bare-verb false figures. The
+// weave is a character/place picture, so they are dropped from IT (the numeric read in
+// docs/referent-journey.md still counts them, and names them as a caveat). A light, explicit
+// stoplist — mechanism, not a curated cast list.
+const WEAVE_STOP = new Set(['french', 'russian', 'german', 'english', 'austrian', 'come', 'go',
+  'though', 'well', 'yes', 'no', 'oh', 'god']);
+const isArtifact = (id) => /^(chapter|book|part|volume)\b/i.test(id) || /^[ivxlc]+$/i.test(id) || WEAVE_STOP.has(id);
+
+const computeWeave = (pop, doc, g, { bins = 120, top = 60 } = {}) => {
+  const nSent = doc.sentences.length || 1;
+  const threads = pop.filter((r) => !isArtifact(r.id)).slice(0, top).map((r) => {
+    const dens = new Array(bins).fill(0);
+    for (const s of r.mentions) dens[Math.min(bins - 1, Math.floor((s / nSent) * bins))]++;
+    const sum = r.mentions.reduce((a, s) => a + s, 0);
+    // Top relation partners (the "trace its relations" hover), read off the merged edges.
+    const nb = new Map();
+    for (const e of g.edges) {
+      const other = e.from === r.id ? e.to : (e.to === r.id ? e.from : null);
+      if (other) nb.set(other, (nb.get(other) || 0) + 1);
+    }
+    const neighbors = [...nb.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5)
+      .map(([id, w]) => ({ id, label: g.entities.get(id)?.label ?? id, w }));
+    return { id: r.id, label: r.label, n: r.count, s0: r.span[0], s1: r.span[1],
+             span: (r.span[1] - r.span[0]) / nSent, dens,
+             centroid: r.count ? (sum / r.count) / nSent : 0, neighbors, comm: -1 };
+  });
+
+  // Unit-normalise each density vector; cosine is then a dot product.
+  const norm = threads.map((t) => { const m = Math.hypot(...t.dens) || 1; return t.dens.map((x) => x / m); });
+  const cos = (i, j) => norm[i].reduce((a, _, k) => a + norm[i][k] * norm[j][k], 0);
+
+  // Average-linkage agglomeration: merge the most co-active clusters until no pair
+  // clears the floor. Deterministic — ties break on the lower indices.
+  let clusters = threads.map((_, i) => [i]);
+  const FLOOR = 0.30;
+  for (;;) {
+    let best = -1, bi = -1, bj = -1;
+    for (let i = 0; i < clusters.length; i++)
+      for (let j = i + 1; j < clusters.length; j++) {
+        let s = 0; for (const a of clusters[i]) for (const b of clusters[j]) s += cos(a, b);
+        s /= clusters[i].length * clusters[j].length;
+        if (s > best) { best = s; bi = i; bj = j; }
+      }
+    if (best < FLOOR || bi < 0) break;
+    clusters[bi] = clusters[bi].concat(clusters[bj]);
+    clusters.splice(bj, 1);
+  }
+
+  // Rank storylines by size; the top eight take a colour slot, the rest fold into a
+  // neutral "other" — never cycle a categorical hue past the validated eight.
+  clusters.sort((a, b) => b.length - a.length ||
+    threads[a[0]].centroid - threads[b[0]].centroid);
+  const communities = clusters.map((cl, ci) => {
+    const members = cl.slice().sort((a, b) => threads[b].n - threads[a].n);
+    const colored = ci < DARK_CAT.length;
+    for (const m of cl) threads[m].comm = ci;
+    return { id: ci, size: cl.length, colored, color: colored ? DARK_CAT[ci] : OTHER_COL,
+             label: threads[members[0]].label };
+  });
+
+  // Display order: by storyline, then by temporal centroid within it, so each band
+  // reads left-to-right through the book.
+  threads.sort((a, b) => a.comm - b.comm || a.centroid - b.centroid || b.n - a.n);
+  return { nSent, nBins: bins,
+           book: textFlag ? String(textFlag) : URL,
+           read: { chars: text.length, sentences: doc.sentences.length, entities: g.entities.size, population: pop.length },
+           threads, communities };
+};
+
+const colorFor = (t, comms) => comms[t.comm]?.color ?? OTHER_COL;
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+const renderWeaveHtml = (W) => {
+  const comms = W.communities;
+  const bandOf = new Map();
+  W.threads.forEach((t) => { if (!bandOf.has(t.comm)) bandOf.set(t.comm, []); bandOf.get(t.comm).push(t); });
+  const data = JSON.stringify({ ...W, colorFor: undefined });
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Weave · referent-journey</title>
+<style>
+:root{--void:#0a0e1a;--panel:#0d1320;--void2:#070a13;--line:#1f2a3f;--bone:#e6e9f0;--bone2:#c3cbdb;--dim:#7c8aa5;--dim2:#57647e;--signal:#3fd0c0}
+*{box-sizing:border-box}html,body{margin:0;background:var(--void);color:var(--bone);font-family:"Space Grotesk",system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+body{background:radial-gradient(1100px 560px at 85% -10%,rgba(63,208,192,.05),transparent 60%),var(--void);min-height:100vh}
+.mono{font-family:ui-monospace,"SF Mono",Menlo,monospace}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 26px 70px}
+.eyebrow{font-family:ui-monospace,monospace;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--signal);margin-bottom:8px}
+h1{font-size:26px;letter-spacing:-.01em;margin:0}
+.sub{color:var(--dim);font-size:13.5px;margin-top:9px;max-width:660px;line-height:1.55}
+.stat{font-family:ui-monospace,monospace;font-size:11px;color:var(--dim2);margin-top:10px}.stat b{color:var(--bone2)}
+.card{background:linear-gradient(180deg,var(--panel),var(--void2));border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-top:20px}
+.card h3{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--dim);font-family:ui-monospace,monospace;margin:0 0 12px}
+.card h3 span{color:var(--dim2);letter-spacing:.02em;text-transform:none}
+.legend{display:flex;flex-wrap:wrap;gap:8px 14px;margin:0 0 14px}
+.leg{display:flex;align-items:center;gap:6px;font-family:ui-monospace,monospace;font-size:11px;color:var(--bone2);cursor:pointer;user-select:none}
+.leg .sw{width:11px;height:11px;border-radius:3px}.leg.off{opacity:.32}
+.axis{font-family:ui-monospace,monospace;font-size:10px;fill:var(--dim2)}
+.tlbl{font-family:ui-monospace,monospace;font-size:10.5px;fill:var(--bone2);text-anchor:end}
+.tlbl.dim{fill:var(--dim2)}
+.row.off{opacity:.12}.row{cursor:pointer;transition:opacity .12s}
+.tip{position:fixed;pointer-events:none;background:#0b1220;border:1px solid var(--line);border-radius:8px;padding:9px 11px;font-family:ui-monospace,monospace;font-size:11px;color:var(--bone);z-index:10;opacity:0;transition:opacity .1s;max-width:260px;line-height:1.55}
+.tip b{color:var(--signal)}.tip .rel{color:var(--dim)}
+.cap{font-size:12.5px;color:var(--dim);line-height:1.6;margin-top:16px;max-width:860px}.cap b{color:var(--bone2)}
+</style></head><body><div class="wrap">
+<div class="eyebrow">eoreader · referent weave</div>
+<h1>The Weave — referent-journey</h1>
+<div class="sub">Every recurring referent is a <b style="color:var(--bone2)">thread</b>, drawn as a density pulse across reading position — where it is active, not merely present. Threads are grouped into <b style="color:var(--bone2)">storylines</b> by temporal co-activity: who shares the stage. A text is the weaving of these threads together.</div>
+<div class="stat" id="stat"></div>
+<div class="card"><h3>Storylines <span>— hover a thread to trace its relations · click a swatch to isolate a storyline</span></h3>
+<div class="legend" id="legend"></div>
+<svg id="threads" width="100%"></svg></div>
+<div class="card"><h3>Story-level weave <span>— each storyline's activity summed across the reading</span></h3>
+<svg id="stream" width="100%" height="150"></svg></div>
+<div class="cap" id="cap"></div>
+</div><div class="tip" id="tip"></div>
+<script>
+const W = ${data};
+const SVGNS='http://www.w3.org/2000/svg';
+const el=(n,a={})=>{const e=document.createElementNS(SVGNS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const commColor=(c)=>{const m=W.communities.find(x=>x.id===c);return m?m.color:'#57647e';};
+const labelById=(id)=>{const t=W.threads.find(x=>x.id===id);return t?t.label:id;};
+const R=W.read;
+document.getElementById('stat').innerHTML='<b>'+R.sentences.toLocaleString()+'</b> sentences · <b>'+R.entities.toLocaleString()+'</b> entities · <b>'+W.threads.length+'</b> threads drawn · <b>'+W.communities.length+'</b> storylines';
+
+// Legend — top colored storylines + an "other" bucket; click to isolate.
+let isolated=null;
+const legend=document.getElementById('legend');
+W.communities.filter(c=>c.colored).forEach(c=>{
+  const d=document.createElement('div');d.className='leg';d.dataset.comm=c.id;
+  d.innerHTML='<span class="sw" style="background:'+c.color+'"></span>'+c.label+' <span style="color:var(--dim2)">·'+c.size+'</span>';
+  d.onclick=()=>{isolated=(isolated===c.id)?null:c.id;paint();};
+  legend.appendChild(d);
+});
+if(W.communities.some(c=>!c.colored)){const d=document.createElement('div');d.className='leg';d.dataset.comm='other';d.innerHTML='<span class="sw" style="background:#57647e"></span>other';d.onclick=()=>{isolated=(isolated==='other')?null:'other';paint();};legend.appendChild(d);}
+
+// Threads panel — one row per thread; density pulse across reading position.
+const NBIN=W.nBins, ROW=15, PADL=140, PADR=16, PADT=20;
+const svg=document.getElementById('threads');
+const width=svg.clientWidth||1120, plotW=width-PADL-PADR;
+const H=PADT+W.threads.length*ROW+16;
+svg.setAttribute('height',H);svg.setAttribute('viewBox','0 0 '+width+' '+H);
+const bx=(b)=>PADL+(b/NBIN)*plotW;
+// reading-position axis
+for(let f=0;f<=1.0001;f+=0.25){const x=PADL+f*plotW;svg.appendChild(el('line',{x1:x,y1:PADT-6,x2:x,y2:H-16,stroke:'#1f2a3f','stroke-width':1}));const tx=el('text',{x:x,y:PADT-9,class:'axis','text-anchor':f===0?'start':(f>0.99?'end':'middle')});tx.textContent=(f*100|0)+'%';svg.appendChild(tx);}
+let prevComm=null;
+W.threads.forEach((t,i)=>{
+  const y=PADT+i*ROW;const col=commColor(t.comm);const maxD=Math.max(1,...t.dens);
+  // band separator + storyline label at its first row
+  if(t.comm!==prevComm){svg.appendChild(el('line',{x1:8,y1:y,x2:width-PADR,y2:y,stroke:'#141b2b','stroke-width':1}));prevComm=t.comm;}
+  const g=el('g',{class:'row'});g.dataset.comm=t.comm;g.dataset.id=t.id;
+  const lbl=el('text',{x:PADL-10,y:y+ROW-4,class:'tlbl'});lbl.textContent=t.label.length>18?t.label.slice(0,17)+'…':t.label;g.appendChild(lbl);
+  // baseline
+  g.appendChild(el('line',{x1:PADL,y1:y+ROW-3,x2:PADL+plotW,y2:y+ROW-3,stroke:'#141b2b','stroke-width':1}));
+  // density bars
+  for(let b=0;b<NBIN;b++){if(!t.dens[b])continue;const h=3+(t.dens[b]/maxD)*(ROW-5);const x=bx(b);g.appendChild(el('rect',{x:x,y:y+ROW-3-h,width:Math.max(1.4,plotW/NBIN-0.6),height:h,rx:1,fill:col,'fill-opacity':0.35+0.55*(t.dens[b]/maxD)}));}
+  g.addEventListener('mousemove',(e)=>showTip(e,t));
+  g.addEventListener('mouseleave',hideTip);
+  svg.appendChild(g);
+});
+
+// Story-level stream — summed density per colored storyline, stacked.
+const stream=document.getElementById('stream'),sw=stream.clientWidth||1120,sh=150;
+stream.setAttribute('viewBox','0 0 '+sw+' '+sh);
+const cols=W.communities.filter(c=>c.colored);
+const series=cols.map(c=>{const arr=new Array(NBIN).fill(0);W.threads.filter(t=>t.comm===c.id).forEach(t=>t.dens.forEach((v,b)=>arr[b]+=v));return{c,arr};});
+const stackTot=new Array(NBIN).fill(0);series.forEach(s=>s.arr.forEach((v,b)=>stackTot[b]+=v));
+const peak=Math.max(1,...stackTot);const sx=(b)=>(b/(NBIN-1))*(sw-20)+10;const syTop=14,syBot=sh-20;
+let base=new Array(NBIN).fill(0);
+series.forEach(s=>{const pts=[];for(let b=0;b<NBIN;b++){const y=syBot-((base[b])/peak)*(syBot-syTop);pts.push([sx(b),y]);}for(let b=NBIN-1;b>=0;b--){const y=syBot-((base[b]+s.arr[b])/peak)*(syBot-syTop);pts.push([sx(b),y]);}stream.appendChild(el('polygon',{points:pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' '),fill:s.c.color,'fill-opacity':0.6,stroke:s.c.color,'stroke-width':0.6}));s.arr.forEach((v,b)=>base[b]+=v);});
+for(let f=0;f<=1.0001;f+=0.25){const x=10+f*(sw-20);const tx=el('text',{x:x,y:sh-6,class:'axis','text-anchor':f===0?'start':(f>0.99?'end':'middle')});tx.textContent=(f*100|0)+'%';stream.appendChild(tx);}
+
+const tip=document.getElementById('tip');
+function showTip(e,t){
+  const nb=t.neighbors.map(n=>n.label+' ·'+n.w).join(', ')||'—';
+  tip.innerHTML='<b>'+t.label+'</b> · '+W.communities.find(c=>c.id===t.comm).label+' storyline<br>'+
+    t.n+' mentions · span '+(t.span*100|0)+'% of the read<br><span class="rel">relates to: '+nb+'</span>';
+  tip.style.opacity=1;tip.style.left=Math.min(e.clientX+14,innerWidth-270)+'px';tip.style.top=(e.clientY+14)+'px';
+  highlight(t);
+}
+function hideTip(){tip.style.opacity=0;highlight(null);}
+function highlight(t){document.querySelectorAll('.row').forEach(r=>{r.classList.toggle('off',!!t&&r.dataset.comm!=String(t.comm)&&!(t.neighbors.some(n=>n.id===r.dataset.id)));});if(!t)paint();}
+function paint(){document.querySelectorAll('.leg').forEach(l=>l.classList.toggle('off',isolated!=null&&l.dataset.comm!=String(isolated)));document.querySelectorAll('.row').forEach(r=>{const oth=W.communities.find(c=>String(c.id)===r.dataset.comm)?.colored===false;const key=oth?'other':r.dataset.comm;r.classList.toggle('off',isolated!=null&&String(key)!=String(isolated));});}
+document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weave</b>: many threads co-running, woven in and out. Storylines are groups of referents active in the same stretch — the parser found them from co-activity alone, no character list. Reproduce with <span class="mono">node tools/referent/journey.mjs --weave-html referent-weave.html</span>. See <span class="mono">docs/referent-journey.md</span>.';
+</script></body></html>`;
+};
+
+const weaveHtmlPath = flag('--weave-html', null);
+const weaveJsonPath = flag('--weave-json', null);
+if (weaveHtmlPath || weaveJsonPath) {
+  const W = computeWeave(pop, doc, g, { bins: num('--bins', 120), top: num('--weave-top', 60) });
+  if (weaveJsonPath) { writeFileSync(String(weaveJsonPath), JSON.stringify(W, null, 2)); process.stderr.write(`wrote ${weaveJsonPath}\n`); }
+  if (weaveHtmlPath) { writeFileSync(String(weaveHtmlPath), renderWeaveHtml(W)); process.stderr.write(`wrote ${weaveHtmlPath}\n`); }
+}
+
 const L = [];
 L.push('# Referent-journey read');
 L.push(`source        ${textFlag ? textFlag : URL}`);

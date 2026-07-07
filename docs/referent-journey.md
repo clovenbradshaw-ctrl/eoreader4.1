@@ -142,4 +142,10 @@ journey.
   `nestingSummary(nesting)`, exported through the perceiver face.
 - `tests/referent-nesting.test.js` — the containment → holonic-depth → address chain,
   on a text with an engineered nesting.
-- `tools/referent/journey.mjs` — the reproducible read (journey · weave · nesting).
+- `tools/referent/journey.mjs` — the reproducible read (journey · weave · nesting). Add
+  `--weave-html referent-weave.html` to also emit the weave visualization, or
+  `--weave-json out.json` for the raw thread/storyline data.
+- `referent-weave.html` — a self-contained page of the weave: each referent a density
+  pulse across reading position, grouped into storylines the parser finds from
+  co-activity alone (no character list), with a story-level stacked stream. Regenerate
+  with `node tools/referent/journey.mjs --weave-html referent-weave.html`.
