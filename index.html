@@ -8312,13 +8312,31 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       cites,hasCites:!!(cites&&cites.length),empty:!reading,
       emptyNote:'No reading laid over '+lab+' yet \u2014 it has been named, not read.'};
   }
+  // Gist boilerplate — lines that never belong in a "what it says": citation debris
+  // (_refLike), Wikipedia cleanup notices, and the front matter an imported book carries
+  // before its prose starts. A Gutenberg-style text opens with a shouted title page, an
+  // imprint ("PUBLISHED AT THE ANTI-SLAVERY OFFICE…"), a copyright registration
+  // ("ENTERED, ACCORDING TO ACT OF CONGRESS…") and a transcriber's release note — none
+  // of which is the book SAYING anything. The caps test reads the typography: prose is
+  // mostly lowercase; title pages and imprints shout.
+  _gistBoiler(s){
+    const t=String(s||'');
+    if(this._refLike(t))return true;
+    if(/^this article\b|please help|needs? (additional|more) citation|citation needed|may be in need of|unreferenced|unsourced|multiple issues|improve this article|add citations|learn how and when/i.test(t))return true;
+    if(/\b(project gutenberg|electronic (book|text)|e-?book|e-?text|transcriber|all rights reserved|copyright guidelines?|according to act of congress|in the clerk['’]?s office|www\.gutenberg)\b/i.test(t))return true;
+    if(/^\s*(published|printed)\s+(at|by)\b/i.test(t))return true;
+    if(/^\s*(title|author|editor|translator|illustrator|credits|language|release date|produced by|prepared by|other information)\s*:/i.test(t))return true; // catalog field line — "Title: …", "Credits: …"
+    if(/^\s*[\[(]/.test(t))return true; // leading editorial bracket — "[Born January 15, 1929] …"
+    if(/^\s*[*#=~_-]{2,}/.test(t))return true; // rule/banner line — "*** START OF …"
+    const letters=(t.match(/[A-Za-z]/g)||[]).length,caps=(t.match(/[A-Z]/g)||[]).length;
+    return letters>=24&&caps/letters>0.6;
+  }
   // Page overview — when a page is loaded the panel orients to the WHOLE page: its
   // gist, the spine graph of its main subject, and the entities it introduces.
   pageOverview(url){
     const p=this.pageOf(url);if(!p)return null;
     const idxs=[];for(let i=0;i<this.master.sentences.length;i++)if(this.master.sentenceSource[i]===url)idxs.push(i);
-    const boiler=s=>this._refLike(s)||/^this article\b|please help|needs? (additional|more) citation|citation needed|may be in need of|unreferenced|unsourced|multiple issues|improve this article|add citations|learn how and when/i.test(s);
-    const lead=[];for(const i of idxs){const s=this.clean(this.master.sentences[i]);if(this._proseOk(s)&&s.length>=44&&!boiler(s))lead.push({i,s});if(lead.length>=2)break;}
+    const lead=[];for(const i of idxs){const s=this.clean(this.master.sentences[i]);if(this._proseOk(s)&&s.length>=44&&!this._gistBoiler(s))lead.push({i,s});if(lead.length>=2)break;}
     let gist='',gistIdx=[];if(lead.length){gist=this.endOnBoundary(lead.map(o=>o.s).join(' '),360);gistIdx=lead.map(o=>o.i);}
     const sets=new Map();
     for(const ev of this.master.events){if(ev.sentIdx==null||this.master.sentenceSource[ev.sentIdx]!==url)continue;
@@ -8379,8 +8397,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     const fmtDate=ts=>{try{return new Date(ts).toLocaleDateString([],{year:'numeric',month:'short',day:'numeric'});}catch(e){return '';}};
     let propN=0;for(let i=0;i<this.master.sentenceSource.length;i++)if(this.master.sentenceSource[i]===url)propN++;
     // gist — the source's own lead prose, boilerplate stripped (mirrors pageOverview)
-    const boiler=s=>this._refLike(s)||/^this article\b|please help|needs? (additional|more) citation|citation needed|may be in need of|unreferenced|unsourced|multiple issues|improve this article|add citations|learn how and when/i.test(s);
-    const lead=[];for(let i=0;i<this.master.sentences.length&&lead.length<3;i++){if(this.master.sentenceSource[i]!==url)continue;const s=this.clean(this.master.sentences[i]);if(this._proseOk(s)&&s.length>=44&&!boiler(s))lead.push(s);}
+    const lead=[];for(let i=0;i<this.master.sentences.length&&lead.length<3;i++){if(this.master.sentenceSource[i]!==url)continue;const s=this.clean(this.master.sentences[i]);if(this._proseOk(s)&&s.length>=44&&!this._gistBoiler(s))lead.push(s);}
     const gist=lead.length?this.endOnBoundary(lead.join(' '),440):'';
     const ranked=this._siteEntities(url),maxN=ranked.length?ranked[0].n:1;
     const ents=ranked.slice(0,18).map(({eid,n})=>{const nl=this.labelOf(eid);
@@ -8433,7 +8450,9 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       seen.forEach((st,u)=>entC.set(u,st.size));}
     const fmtDate=ts=>{try{return new Date(ts).toLocaleDateString([],{month:'short',day:'numeric'});}catch(e){return '';}};
     const cards=pages.map(p=>{const f=this._siteFace(p,p.url),c=f.color,muted=this._muted.has(p.url),kind=this._siteKind(p,p.url);
-      const gist=this.truncLabel(this.norm((p.sentences&&p.sentences[0])||p.text||''),150);
+      // card gist — first sentence that actually says something; raw first line only when nothing does
+      let lead='';for(const s0 of (p.sentences||[])){const s=this.clean(s0);if(this._proseOk(s)&&s.length>=44&&!this._gistBoiler(s)){lead=s;break;}}
+      const gist=this.truncLabel(this.norm(lead||(p.sentences&&p.sentences[0])||p.text||''),150);
       const nE=(entC.get(p.url)||0),nP=(propC.get(p.url)||0);
       return {title:this.truncLabel(p.title||f.host||'Untitled source',46),host:f.host,sub:(f.hasHost?f.host+' · ':'')+kind,srcId:this.srcId(p.url),url:p.url,kind,
         av:f.av,
