@@ -6484,6 +6484,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       muteBtnLabel:muted?'Unmute source':'Mute source',
       muteBtnStyle:'display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:8px;padding:7px 13px;cursor:pointer;'+(muted?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
       onRead:()=>this.goWeb(url), onChat:()=>this.newChat(url), onMute:()=>this.muteSrc(url),
+      onWeave:()=>this._openWeave(url),
       onBackDir:()=>this.openSitesDir()
     };
   }
