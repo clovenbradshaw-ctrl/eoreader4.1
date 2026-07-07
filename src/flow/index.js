@@ -33,7 +33,9 @@
 export const OPERATORS = ["NUL","SIG","INS","SEG","CON","SYN","DEF","EVA","REC"];
 export const OP_INDEX = Object.fromEntries(OPERATORS.map((o,i)=>[o,i]));
 const OP_SET = new Set(OPERATORS);
-const nOps=9, LOCAL_DIM=90, GRAPH_DIM=12, STEP_DIM=LOCAL_DIM+GRAPH_DIM;
+const nOps=9, LOCAL_DIM=90, GRAPH_DIM=12, L3_DIM=7;
+const GRAPH_END=LOCAL_DIM+GRAPH_DIM;   // 102: end of the local(90)+graph(12) block
+const STEP_DIM=GRAPH_END+L3_DIM;        // 109: full per-section vector (+ the L3 mode-sequence block)
 const sq=(x,k)=>x/(x+k);
 
 // ── step construction (identical math to eo_trajectory.mjs) ─────────────────
@@ -90,8 +92,48 @@ function mentionsOf(doc){
 function spanStep(evs, mentions, lo, hi){
   const local=localBlock(evs.filter(e=>e.s>=lo&&e.s<=hi));
   const graph=cumGraph(evs.filter(e=>e.s<=hi),mentions,hi,hi+1);
-  const step=new Float64Array(STEP_DIM); step.set(local,0); step.set(graph,LOCAL_DIM);
+  const step=new Float64Array(GRAPH_END); step.set(local,0); step.set(graph,LOCAL_DIM);   // L3 appended later
   return step;
+}
+
+// ── level 3: the section-MODE SEQUENCE (the holon above sections). Properties of the
+// PATTERN of modes — the discourse rhythm visible only at the scale of sections-as-
+// units. Phase groups follow the significance row: open (NUL/SIG/INS/DEF), develop
+// (SEG/CON/EVA), close (SYN/REC). 7 features per step, all ~[0,1].
+const L3_EARLY=new Set([OP_INDEX.NUL,OP_INDEX.SIG,OP_INDEX.INS,OP_INDEX.DEF]);
+const L3_MID  =new Set([OP_INDEX.SEG,OP_INDEX.CON,OP_INDEX.EVA]);
+const L3_CTX=5;
+const argmax9=(s)=>{ let bi=0,bv=-Infinity; for(let i=0;i<nOps;i++) if(s[i]>bv){bv=s[i];bi=i;} return bi; };
+function level3(modes,k){
+  let run=1; for(let j=k-1;j>=0&&modes[j]===modes[k];j--) run++;
+  const sl=modes.slice(Math.max(0,k-L3_CTX+1),k+1);
+  const freq=new Array(nOps).fill(0); for(const m of sl) freq[m]++;
+  let ent=0; for(const f of freq){ if(f>0){ const p=f/sl.length; ent-=p*Math.log(p); } }
+  const localEntropy=ent/(Math.log(Math.min(sl.length,nOps))||1);
+  const modeNovelty=modes.slice(0,k).includes(modes[k])?0:1;
+  let transNovelty=1;
+  if(k>0){ const t=modes[k-1]*nOps+modes[k]; let seen=0; for(let j=1;j<k;j++) if(modes[j-1]*nOps+modes[j]===t) seen++; transNovelty=1/(1+seen); }
+  let eC=0,mC=0,lC=0;
+  for(let j=0;j<=k;j++){ if(L3_EARLY.has(modes[j])) eC++; else if(L3_MID.has(modes[j])) mC++; else lC++; }
+  const sigRowPhase=(mC+2*lC)/(eC+mC+lC||1);
+  const echo=modes[k]===modes[0]?1:(modes.slice(0,Math.min(3,k)).includes(modes[k])?0.5:0);
+  let accel=0;
+  if(k>=L3_CTX*2){ const e2=new Set(modes.slice(0,L3_CTX)).size, r2=new Set(modes.slice(k-L3_CTX+1,k+1)).size; accel=(r2-e2)/L3_CTX; }
+  return [run/(run+3), localEntropy, modeNovelty, transNovelty, sigRowPhase, echo, (accel+1)/2];
+}
+export function level3summary(modes){
+  const n=modes.length||1;
+  const freq=new Array(nOps).fill(0); for(const m of modes) freq[m]++;
+  let ent=0; for(const f of freq){ if(f>0){ const p=f/n; ent-=p*Math.log(p); } }
+  let maxRun=1,cur=1; for(let i=1;i<modes.length;i++){ if(modes[i]===modes[i-1]) cur++; else cur=1; if(cur>maxRun) maxRun=cur; }
+  const bg=new Set(); for(let i=1;i<modes.length;i++) bg.add(modes[i-1]*nOps+modes[i]);
+  const half=Math.floor(modes.length/2), first=modes.slice(0,half), second=modes.slice(modes.length-half).reverse();
+  let match=0; for(let i=0;i<half;i++) if(first[i]===second[i]) match++;
+  const phase=modes.map(m=>L3_EARLY.has(m)?0:L3_MID.has(m)?1:2);
+  let mono=0; for(let i=1;i<phase.length;i++) if(phase[i]>=phase[i-1]) mono++;
+  return { overallEntropy:+(ent/(Math.log(Math.min(n,nOps))||1)).toFixed(3), maxRun,
+    transDiversity:+(bg.size/Math.max(1,modes.length-1)).toFixed(3),
+    palindrome:+(match/Math.max(1,half)).toFixed(3), arcOrder:+(mono/Math.max(1,phase.length-1)).toFixed(3) };
 }
 
 // sectionize — the reading's OWN sections. Per-sentence dominant operator, smoothed
@@ -160,12 +202,17 @@ export function trajectoryFromDoc(doc, opts={ segment:'sections' }){
       : (cfg.steps||40);
     spans = gridSpans(nSent, K);
   }
-  const steps=[], pos=[];
+  const base=[], pos=[];
   for(const sp of spans){
-    steps.push(spanStep(evs, mentions, sp.lo, sp.hi));
+    base.push(spanStep(evs, mentions, sp.lo, sp.hi));
     pos.push(nSent>1 ? ((sp.lo+sp.hi)/2)/(nSent-1) : 0);
   }
-  return { steps, nSent, pos, sections: cfg.segment==='sections'?spans:null, segment: cfg.segment };
+  // append the L3 mode-sequence block → the full 109-dim step vector
+  const modes=base.map(argmax9);
+  const steps=base.map((s,k)=>{ const v=new Float64Array(STEP_DIM); v.set(s,0);
+    const l3=level3(modes,k); for(let i=0;i<L3_DIM;i++) v[GRAPH_END+i]=l3[i]; return v; });
+  return { steps, nSent, pos, sections: cfg.segment==='sections'?spans:null,
+    segment: cfg.segment, l3summary: level3summary(modes) };
 }
 function gridSpans(nSent, K){
   const out=[];

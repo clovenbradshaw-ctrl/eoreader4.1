@@ -1,4 +1,4 @@
-# The flow prior — corpus → 15 KB → per-beat witness
+# The flow prior — corpus → 16 KB → per-beat witness
 
 A book is a **path** through shape-space, not a point. This is the loop that learns
 how competent long-form prose *moves*, compresses that into a small loadable prior,
@@ -8,7 +8,7 @@ schedule.
 
 ```
 corpus.jsonl ─▶ eo_trajectory.mjs ─▶ trajectories.jsonl ─▶ flow_distill.py ─▶ flow-prior.json
-                (parse each book,        (one 102-dim           (PCA + per-position         (15 KB,
+                (parse each book,        (one 109-dim           (PCA + per-position         (16 KB,
                  segment into NATURAL      vector per section)    arc & delta stats,          provenance-stamped)
                  sections, one vec each)                          resampled onto a grid)
                                                                                     │
@@ -72,9 +72,10 @@ and the modes are better resolved. The manifold is not "tighter," and it shouldn
 ## The three layers
 
 **1 — Extraction (`tools/flow/eo_trajectory.mjs`).** Parses each book through
-`parseText`, segments it (default: natural sections), and emits one 102-dim vector
+`parseText`, segments it (default: natural sections), and emits one 109-dim vector
 per section — `[0:9]` local operator distribution, `[9:90]` local bigram
-transitions, `[90:102]` *cumulative* graph features — plus each section's fractional
+transitions, `[90:102]` *cumulative* graph features, `[102:109]` the level-3
+mode-sequence block (run, novelty, sig-row phase, echo…) — plus each section's fractional
 reading position `pos`, dominant-operator label, and length. `--resume` skips
 already-extracted ids and appends, so a large pass is interruptible for free.
 
@@ -103,8 +104,9 @@ reading position, so a variable-count trajectory aligns to a fixed prior.
 Project Gutenberg books** (natural sections, `--min-sent 300`, grid 24, top-10 PCs).
 Section length median ~14 sentences; the dominant-op mix is **INS 48% · SEG 39% ·
 SIG 10% · DEF 3%** — the introducing/segmenting alternation as a corpus statistic (NUL
-is a boundary, not a label). Top-10 PCs capture **86%** of section variance; the whole
-model is **15 KB**.
+is a boundary, not a label). The 109-dim step vector stacks three holon levels —
+L1 local operator state (90) · L2 cumulative graph (12) · L3 mode-sequence rhythm (7).
+Top-10 PCs capture **79%** of section variance; the whole model is **16 KB**.
 
 **What is trustworthy at 36 books (split-half agreement, `manifold_compare` sibling):**
 the build-arc (Pearson r≈0.99) and the manifold mean (r≈0.99) are stable — they are

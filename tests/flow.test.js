@@ -37,22 +37,24 @@ test('sectionize recovers the reading\'s own natural sections', () => {
   assert.ok(lens.size > 1, 'sections are variable-length');
 });
 
-test('trajectoryFromDoc segments by natural sections, with reading positions', () => {
-  const { steps, pos, sections, segment } = trajectoryFromDoc(doc, { segment: 'sections' });
+test('trajectoryFromDoc segments by natural sections, with reading positions and L3', () => {
+  const { steps, pos, sections, segment, l3summary } = trajectoryFromDoc(doc, { segment: 'sections' });
   assert.equal(segment, 'sections');
   assert.equal(steps.length, sections.length);
-  assert.equal(steps[0].length, 102);
+  assert.equal(steps[0].length, 109);                        // local 90 + graph 12 + L3 7
   assert.equal(pos.length, steps.length);
   assert.ok(pos[0] >= 0 && pos[pos.length - 1] <= 1);
   for (let i = 1; i < pos.length; i++) assert.ok(pos[i] >= pos[i - 1], 'positions ascend in reading order');
+  // the level-3 summary describes the section-mode sequence
+  assert.ok(l3summary && Number.isFinite(l3summary.arcOrder) && l3summary.maxRun >= 1);
 });
 
 test('trajectoryFromDoc still supports the legacy equal grid and a sentence window', () => {
   const eq = trajectoryFromDoc(doc, 40);
   assert.equal(eq.steps.length, 40);
-  assert.equal(eq.steps[0].length, 102);
+  assert.equal(eq.steps[0].length, 109);
   const win = trajectoryFromDoc(doc, { perSentences: 12 });
-  assert.ok(win.steps.length >= 2 && win.steps[0].length === 102);
+  assert.ok(win.steps.length >= 2 && win.steps[0].length === 109);
 });
 
 test('scoreTrajectory reports finite numbers, position-aware', () => {

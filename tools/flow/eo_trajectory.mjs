@@ -56,10 +56,10 @@ const segOpts = SEGMENT==='sentences' ? { perSentences: PER_SENT }
 function trajectory(text){
   const doc = parseText(HEAD ? text.slice(0,HEAD) : text);
   if (doc.sentences.length < MIN_SENT) return null;
-  const { steps, nSent, pos, sections, segment } = trajectoryFromDoc(doc, segOpts);
+  const { steps, nSent, pos, sections, segment, l3summary } = trajectoryFromDoc(doc, segOpts);
   const r4 = x=>Math.round(x*1e4)/1e4;
   return {
-    nSent, segment,
+    nSent, segment, l3summary,
     steps: steps.map(s=>[...s].map(r4)),
     pos: pos.map(r4),
     // the discourse path, legible in operator terms: every section's span, length,
@@ -93,8 +93,8 @@ for await (const line of rl){
   const id=String(rec.id||(n+1)).padStart(4,'0');
   out.write(JSON.stringify({ id, title: rec.title||`source ${id}`, subjects: rec.subjects||null,
     nSent: tr.nSent, segment: tr.segment, nSteps: tr.steps.length,
-    stepDim: tr.steps[0]?.length||102, localDim: 90,
-    steps: tr.steps, pos: tr.pos, sections: tr.sections }) + '\n');
+    stepDim: tr.steps[0]?.length||109, localDim: 90, graphDim: 12,
+    steps: tr.steps, pos: tr.pos, sections: tr.sections, l3summary: tr.l3summary }) + '\n');
   n++;
   if (n%25===0){ const r=(n/((Date.now()-t0)/1000)).toFixed(1); process.stdout.write(`\r  ${n} books · ${r}/s · ${skipped} skipped`); }
 }
