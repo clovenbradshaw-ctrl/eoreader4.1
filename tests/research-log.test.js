@@ -6,7 +6,7 @@ import {
   recFrame, voidAbsence, askUser, answerAsk, promoteProposition, phraseSection,
 } from '../src/research/events.js';
 import { projectReport } from '../src/research/project.js';
-import { runGroundedResearch, addressOfSentence } from '../src/research/driver.js';
+import { runGroundedResearch, addressOfSentence, isWellFormedSpan } from '../src/research/driver.js';
 import { createResearchSession, formatChatReply } from '../src/research/session.js';
 import { liveView } from '../src/research/live.js';
 import { renderReportHTML } from '../src/research/render.js';
@@ -192,6 +192,37 @@ test('Bieber non-regression (the founding fixture): an off-topic corpus returns 
   assert.match(report.voids[0].receipt, /scanned \d+ sentences/, 'the void carries its receipt');
   const voidAsk = report.questions.find((q) => q.ask.trigger === 'void');
   assert.ok(voidAsk, 'the VOID gate became a question, not a flat "does not say"');
+});
+
+test('isWellFormedSpan: a real sentence extracts; a mis-split taxonomy fragment does not', () => {
+  // Real claims — a capital start, enough words, a clean tail.
+  assert.ok(isWellFormedSpan('The Amazon river dolphin is the largest species of river dolphin.'));
+  assert.ok(isWellFormedSpan('Reproduction is seasonal, and births take place between May and June.'));
+  // The mis-split taxonomy fragments the parser leaves behind ("I. g. geoffrensis
+  // (…), I. g. boliviensis (…)"): lowercase heads and orphaned trailing initials.
+  assert.ok(!isWellFormedSpan('geoffrensis (Amazon river dolphin), I. g.'));
+  assert.ok(!isWellFormedSpan('boliviensis (Bolivian river dolphin) and I. g.'));
+  assert.ok(!isWellFormedSpan('humboldtiana (Orinoco river dolphin).'));
+  // Too short / too few words to state a claim.
+  assert.ok(!isWellFormedSpan('See below.'));
+});
+
+test('extraction skips mis-split fragments: only well-formed sentences become propositions', async () => {
+  // A taxonomy-heavy source (the dolphin-mating audit, 2026-07-07): the parser
+  // splinters the subspecies line at its initials into head-less fragments that
+  // still carry the subject term. None of them may surface as a proposition.
+  const source = {
+    url: 'https://en.wikipedia.org/wiki/Amazon_river_dolphin', title: 'Amazon river dolphin',
+    text: 'The Amazon river dolphin is a species of toothed whale. '
+      + 'Three subspecies are recognized: I. g. geoffrensis (Amazon river dolphin), I. g. boliviensis (Bolivian river dolphin) and I. g. humboldtiana (Orinoco river dolphin). '
+      + 'The Amazon river dolphin is the largest species of river dolphin.',
+  };
+  const { report } = await runGroundedResearch('dolphin', { sources: [source] });
+  assert.ok(report.propositions.length >= 1, 'the well-formed sentences still extract');
+  for (const p of report.propositions) {
+    assert.ok(isWellFormedSpan(p.span.text), `a proposition is a well-formed span, not a fragment: ${JSON.stringify(p.span.text)}`);
+    assert.ok(!/^[a-z]/.test(p.span.text), 'no proposition begins mid-sentence with a lowercase word');
+  }
 });
 
 test('an empty corpus with no search fires the corpus preliminary and stops', async () => {

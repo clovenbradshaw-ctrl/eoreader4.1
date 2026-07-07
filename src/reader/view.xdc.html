@@ -156,51 +156,6 @@
           </div>
         </sc-if>
       </div>
-      <div style="position:relative;flex:0 0 auto;">
-        <button onclick="{{ chorus.onToggle }}" title="The chorus — read a clause as the whole Born distribution over the 27 cells, not one argmax cell" style="width:30px;height:30px;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">❋</button>
-        <sc-if value="{{ chorus.open }}" hint-placeholder-val="{{ false }}">
-          <div onclick="{{ chorus.onClose }}" style="position:fixed;inset:0;z-index:44;"></div>
-          <div onclick="{{ chorus.stop }}" style="position:absolute;top:38px;right:0;width:340px;max-height:calc(100vh - 92px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:0 16px 44px rgba(20,24,30,.2);padding:14px;z-index:45;animation:eopop .12s ease-out;">
-            <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;"><div style="width:19px;height:19px;border-radius:5px;background:var(--acc);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:800;">❋</div><span style="font-size:13px;font-weight:700;">The chorus</span></div>
-            <div style="font-size:11px;color:var(--ink3);line-height:1.5;margin-bottom:10px;">A clause read as the whole distribution over the 27 cells — squared, normalized, voiced by coverage. No single cell is chosen; the tail is kept, addressed.</div>
-            <textarea value="{{ chorus.text }}" oninput="{{ chorus.onText }}" placeholder="Paste a clause to read…" style="width:100%;box-sizing:border-box;min-height:54px;resize:vertical;font-size:12.5px;line-height:1.5;color:var(--ink);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:8px 10px;outline:none;font-family:var(--sans);"></textarea>
-            <button onclick="{{ chorus.onRead }}" style="width:100%;margin-top:8px;display:inline-flex;align-items:center;justify-content:center;gap:7px;font-size:12px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:9px;padding:9px;cursor:pointer;">{{ chorus.readLabel }}</button>
-            <sc-if value="{{ chorus.hasErr }}" hint-placeholder-val="{{ false }}">
-              <div style="margin-top:10px;font-size:11.5px;color:var(--ink2);line-height:1.5;background:#fbf0db;border:1px solid #f0d9a8;border-radius:8px;padding:8px 10px;">{{ chorus.err }}</div>
-            </sc-if>
-            <sc-if value="{{ chorus.hasRes }}" hint-placeholder-val="{{ false }}">
-              <div style="height:1px;background:var(--line);margin:13px 0 11px;"></div>
-              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:9px;">The cube · {{ chorus.summary }}</div>
-              <sc-for list="{{ chorus.cells }}" as="c" hint-placeholder-count="3">
-                <div style="{{ c.rowStyle }}" title="{{ c.title }}">
-                  <div style="flex:1;min-width:0;"><div style="font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.label }}</div><div style="{{ c.barStyle }}"></div></div>
-                  <span style="font-size:11px;font-weight:700;color:var(--ink2);font-variant-numeric:tabular-nums;flex:0 0 auto;">{{ c.pct }}</span>
-                </div>
-              </sc-for>
-              <sc-if value="{{ chorus.hasEva }}" hint-placeholder-val="{{ false }}">
-                <div style="margin-top:9px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:5px;">Held side by side · EVA-site</div>
-                <sc-for list="{{ chorus.evaSites }}" as="e" hint-placeholder-count="1">
-                  <div style="font-size:11.5px;color:var(--ink2);line-height:1.5;margin-bottom:3px;">{{ e.label }} <span style="color:var(--ink3);">({{ e.pcts }})</span></div>
-                </sc-for>
-              </sc-if>
-              <div style="height:1px;background:var(--line);margin:12px 0 11px;"></div>
-              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:9px;">The three faces</div>
-              <sc-for list="{{ chorus.faces }}" as="f" hint-placeholder-count="3">
-                <div style="margin-bottom:10px;">
-                  <div style="font-size:11px;font-weight:700;color:var(--ink2);margin-bottom:5px;">{{ f.name }}</div>
-                  <sc-for list="{{ f.cells }}" as="fc" hint-placeholder-count="2">
-                    <div style="display:flex;align-items:center;gap:9px;padding:3px 0;">
-                      <div style="flex:1;min-width:0;"><div style="font-size:11px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ fc.label }}</div><div style="{{ fc.barStyle }}"></div></div>
-                      <span style="font-size:10.5px;font-weight:600;color:var(--ink3);font-variant-numeric:tabular-nums;flex:0 0 auto;">{{ fc.pct }}</span>
-                    </div>
-                  </sc-for>
-                </div>
-              </sc-for>
-              <div style="font-size:11px;color:var(--ink3);line-height:1.5;margin-top:2px;">{{ chorus.silenceNote }}</div>
-            </sc-if>
-          </div>
-        </sc-if>
-      </div>
       <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
         <span style="display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--ink3);flex:0 0 auto;"><span style="width:7px;height:7px;border-radius:50%;background:{{ liveColor }};animation:eopulse 2s infinite;display:inline-block;"></span>{{ liveLabel }}</span>
       </sc-if>
@@ -245,7 +200,6 @@
         <button onclick="{{ onSrcImport }}" title="Import a file — text, PDF, audio or video, image, spreadsheet, or web page; it appears here instantly and reads as a source" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><i class="ph" style="font-size:14px;line-height:1;">&#xE61E;</i>Import a file</button>
         <button onclick="{{ onOpenDoc }}" title="Write a document grounded to the Record — every edit is a tracked change, checked against what you've read; ungrounded edits are flagged, never silently kept" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">✎</span>New document</button>
         <button onclick="{{ onOpenDeepResearch }}" title="Open the deep-research panel — ask a question, watch it read the web and pin every source, each claim grounded in a quote you can open" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">⌕</span>Deep research</button>
-        <button onclick="{{ onOpenGraph }}" title="Toggle the read's own entity graph — and resolve any figure the reading can't yet tell apart from another" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">◈</span>Graph</button>
         <button onclick="{{ onOpenDag }}" title="Extract the causal DAG the sources are READ as asserting — every edge a claim traced to its passage, typed accidental/essential/generative and never upgraded, with the confounders and mechanisms surfaced — alongside the reading flow within the source in view" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">⛓</span>Causal DAG</button>
         <!-- Corpus search — one box, nothing to configure. Ranked lexical retrieval
              (token overlap + fuzzy spelling) over every source read so far runs

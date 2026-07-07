@@ -8616,7 +8616,6 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     const _acc=this.curAccent();
     const base={accentVar:_acc,accbgVar:this.mixWhite(_acc,.90),acclineVar:this.mixWhite(_acc,.70),
       settingsOpen:this.state.settingsOpen,onToggleSettings:()=>this.toggleSettings(),onCloseSettings:()=>this.closeSettings(),
-      chorus:this._chorusView(),
       templatesOpen:this.state.templatesOpen,onOpenTemplates:()=>this.setState({templatesOpen:true,settingsOpen:false}),onCloseTemplates:()=>this.setState({templatesOpen:false}),templatesStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
       promptFlowOpen:this.state.promptFlowOpen,onOpenPromptFlow:()=>this.setState({promptFlowOpen:true,settingsOpen:false}),onClosePromptFlow:()=>this.setState({promptFlowOpen:false}),promptFlowStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
       weaveOpen:this.state.weaveOpen,weaveDoc:this.state.weaveDoc||'',onOpenWeave:()=>this._openWeave(null),onCloseWeave:()=>this.setState({weaveOpen:false}),weaveStop:e=>{if(e&&e.stopPropagation)e.stopPropagation();},
@@ -8664,7 +8663,6 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       provMode:'hover',
       onOpenDeepResearch:()=>this.onOpenDeepResearch(),
       onOpenDoc:()=>this.onOpenDoc(),
-      onOpenGraph:()=>this.onOpenGraph(),
       onOpenDag:()=>this.onOpenDag(),
       surfaceTitle:this.state.drHasLog?'Open the live research surface \u2014 the report keeps populating as you research in chat':'Open the research surface \u2014 run grounded deep research in a live panel',
       surfaceStyle:'margin-left:auto;flex:0 0 auto;font-size:11px;font-weight:600;border:none;background:transparent;cursor:pointer;white-space:nowrap;padding:2px 0 2px 9px;'+(this.state.drHasLog?'color:var(--acc);':'color:var(--ink3);'),
