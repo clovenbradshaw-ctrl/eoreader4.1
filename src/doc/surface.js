@@ -174,13 +174,16 @@ export const mountDocSurface = (el, opts = {}) => {
     if (t.classList.contains('doc-pm-src')) { showSpan(t); return; }
   });
 
-  // live grounding read-out as you type a suggestion
+  // Grounding is a fold over the whole Record — for each recorded span it
+  // re-tokenises the passage and intersects it with the line. Running that on
+  // every keystroke made typing lag, so we DON'T fold as you type: the input
+  // handler only shows a neutral hint. The real grounding read-out is computed
+  // once, on submission, and rendered in the margin card (render.js) — nothing
+  // is lost, it just waits until you add the line.
   lineEl.addEventListener('input', () => {
     const v = lineEl.value.trim();
-    if (!v) { liveEl.textContent = ''; return; }
-    const g = ground(v);
-    liveEl.textContent = g.grounded ? '⚓ grounds to ' + (g.srcId || 'the record') : '⚠ leaves the record — kept as your own';
-    liveEl.style.color = g.grounded ? '#15803d' : '#b45309';
+    liveEl.textContent = v ? 'grounding is checked when you add the line' : '';
+    liveEl.style.color = '#9aa1ab';
   });
   lineEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submitLine(); } });
   const submitLine = () => {
