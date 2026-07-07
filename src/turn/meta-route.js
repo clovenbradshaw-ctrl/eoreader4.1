@@ -35,7 +35,7 @@
 // paragraph coheres toward nothing (every weight under its null) → ABSTAIN → the caller's
 // baseline (markers → continuation → fresh-regex-seed) rules, byte-identical to today.
 
-import { tok } from '../perceiver/parse/index.js';
+import { tok, segmentSentences } from '../perceiver/parse/index.js';
 import { bornSalience } from '../surfer/salience.js';
 import { deriveNull } from '../core/voidnull.js';
 import { relax } from '../longgen/relax.js';
@@ -447,18 +447,49 @@ export const creativeDrive = (speech, bases = defaultBases()) => {
   return w > b.null ? w : 0;
 };
 
+// clarifyWeightOf(profile, speech) → the clarify basis's Born weight, measured at the grain the
+// demand is actually SPOKEN: per sentence, the max — not over the whole read as one bag.
+//
+// The clarify demand is uniquely LOCALIZED. Where the route, form, length and register are global
+// properties of the read (the whole paragraph is "about" composing an essay, at length, in the
+// grounded register), the clarify need is a single CAVEAT clause of an otherwise content-full
+// read: "…a well-structured essay covering behavior, habitat, conservation — HOWEVER I'd have to
+// ask them which aspect they mean." bornSalience normalizes by the span's term count (‖s‖² =
+// #terms), so folding that clause into the whole paragraph divides its overlap by every content
+// term the read spent describing the subject, and the signal sinks below a crosstalk null that
+// was derived from single-clause exemplars — a paragraph is always more diluted than any exemplar
+// it is compared against. The read genuinely says "I'd ask them," and the whole-bag measurement
+// misses it: the "write me an essay about dolphins" report — the read voiced the clarify need
+// ("I would need to clarify what specific aspects… the request is quite broad"), and nothing
+// fired. Measured per sentence, that caveat clears on its own clause and the null (single-clause-
+// calibrated) meets a single-clause span, not a diluted bag. This is the same per-unit reading
+// salienceField runs over a document (surfer/salience.js maps bornSalience per sentence); the
+// route measurement collapses to one bag because the route is global, clarify does not because it
+// is local. A read that names the gap in ANY one sentence clears; a read that never does still
+// abstains (the actionable contrast and its null are untouched), so a clear ask is never
+// questioned back. Falls back to the whole text if segmentation yields nothing.
+const clarifyWeightOf = (profile, speech) => {
+  const text = String(speech || '');
+  let sents = null;
+  try { sents = segmentSentences(text); } catch (_) { sents = null; }
+  const spans = (sents && sents.length) ? sents : [text];
+  let best = 0;
+  for (const s of spans) { const w = bornSalience(profile, new Set(tok(s))); if (w > best) best = w; }
+  return best;
+};
+
 // clarifyDemandOf(speech, bases) → 'clarify' | 'actionable' | '' — does the metacognition say the
 // gap is the USER's to close (the ask is ambiguous, only they can resolve it) or that the ask is
 // clear enough to act on? Argmax over the null-gated clarify weights, ORTHOGONAL to the route
 // (a ground turn and a compose turn can each be underspecified). '' when neither clears its null
 // (the speech names no ambiguity), so the caller answers as it would today. Robust to bases from
-// an older buildBases (no clarify group) → ''.
+// an older buildBases (no clarify group) → ''. The weight is read per sentence (clarifyWeightOf)
+// so a localized caveat is not diluted below its null by a content-full read.
 export const clarifyDemandOf = (speech, bases = defaultBases()) => {
   if (!bases || !bases.clarify) return '';
-  const terms = new Set(tok(String(speech || '')));
   let demand = '', best = 0;
   for (const [k, b] of bases.clarify) {
-    const w = bornSalience(b.profile, terms);
+    const w = clarifyWeightOf(b.profile, speech);
     if (w > b.null && w > best) { best = w; demand = k; }
   }
   return demand;
@@ -469,11 +500,11 @@ export const clarifyDemandOf = (speech, bases = defaultBases()) => {
 // says "the WORLD has to answer this," clarifyDrive says "the USER has to — I'd have to ask
 // them." A caller thresholds it to turn around and pose a clarifying question instead of
 // answering past the ambiguity. 0 when the clarify basis is absent or the speech does not clear
-// its crosstalk null.
+// its crosstalk null. Read per sentence (clarifyWeightOf), the same grain as clarifyDemandOf.
 export const clarifyDrive = (speech, bases = defaultBases()) => {
   const b = bases && bases.clarify && bases.clarify.get('clarify');
   if (!b) return 0;
-  const w = bornSalience(b.profile, new Set(tok(String(speech || ''))));
+  const w = clarifyWeightOf(b.profile, speech);
   return w > b.null ? w : 0;
 };
 
