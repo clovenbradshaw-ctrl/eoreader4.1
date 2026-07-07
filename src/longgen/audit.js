@@ -17,8 +17,8 @@ const flowReport = (flow) => {
   if (!flow) return null;
   if (typeof flow.flowScore === 'number') return flow;          // already-scored report
   if (!flow.prior || !flow.doc) return null;
-  const { steps } = trajectoryFromDoc(flow.doc, flow.steps ?? 40);
-  const r = scoreTrajectory(flow.prior, steps);
+  const { steps, pos } = trajectoryFromDoc(flow.doc, flow.segment || { segment: 'sections' });
+  const r = scoreTrajectory(flow.prior, steps, pos);
   return {
     flowScore: r.flowScore, flowPercentile: r.flowPercentile,
     meanResidual: r.meanResidual, meanArcAdherence: r.meanArcAdherence,

@@ -27,7 +27,7 @@ if (trajFile) {
   for (const line of lines) {
     let t; try { t = JSON.parse(line); } catch { continue; }
     const steps = t.steps.map(s => Float64Array.from(s));
-    scored.push({ title: t.title, nSent: t.nSent, ...scoreTrajectory(prior, steps) });
+    scored.push({ title: t.title, nSent: t.nSent, ...scoreTrajectory(prior, steps, t.pos || null) });
   }
   scored.sort((a, b) => a.flowScore - b.flowScore);
   console.log(`scored ${scored.length} trajectories against prior (${prior.meta.books} books)\n`);
@@ -40,10 +40,11 @@ if (trajFile) {
   const eoDir = resolve(String(flag('--eoreader', join(here, '..', '..'))));
   const { parseText } = await import(pathToFileURL(join(eoDir, 'src', 'perceiver', 'parse', 'index.js')).href);
   const doc = parseText(readFileSync(String(textFile), 'utf8'));
-  const { steps } = trajectoryFromDoc(doc, parseInt(flag('--steps', '40'), 10));
-  const r = scoreTrajectory(prior, steps);
+  const seg = args.includes('--steps') ? { segment: 'equal', steps: parseInt(flag('--steps', '40'), 10) } : { segment: 'sections' };
+  const { steps, pos } = trajectoryFromDoc(doc, seg);
+  const r = scoreTrajectory(prior, steps, pos);
   console.log(JSON.stringify({
-    file: textFile, nSent: doc.sentences.length,
+    file: textFile, nSent: doc.sentences.length, nSections: r.nSections,
     flowScore: r.flowScore, flowPercentile: r.flowPercentile,
     meanResidual: r.meanResidual, meanArcAdherence: r.meanArcAdherence,
     worstSteps: r.steps.filter(s => s.deltaPercentile >= 90).map(s => s.step),
