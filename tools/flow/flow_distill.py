@@ -64,7 +64,9 @@ def main():
 
     T=load(a.trajectories, a.min_sent)
     if len(T)<20: sys.exit(f"only {len(T)} trajectories >={a.min_sent} sentences — need >=20")
-    L=T[0]["localDim"]; D=T[0]["stepDim"]; G=a.grid
+    L=T[0]["localDim"]; D=T[0]["stepDim"]; G=a.grid; GD=12   # the 12 named graph features
+    # (a born-rule extractor may append a level-3 block after the graph block; it rides
+    #  in the manifold but the build-arc is only over the 12 graph features.)
     seg=T[0].get("segment","sections")
     books=[np.array(t["steps"],dtype=float) for t in T]
     nsec=[b.shape[0] for b in books]
@@ -85,12 +87,12 @@ def main():
         n=np.linalg.norm(m,axis=1,keepdims=True); n[n==0]=1; return m/n
 
     # ── build arc + delta: resample each book onto the canonical grid by pos ──
-    arcG=np.zeros((len(books),G,D-L)); dG=np.zeros((len(books),G))
+    arcG=np.zeros((len(books),G,GD)); dG=np.zeros((len(books),G))
     all_dl=[]; flow_scores=[]
     for bi,(b,t) in enumerate(zip(books,T)):
         pos=positions(t)
-        graph=b[:,L:]                                    # [k, 12] cumulative features
-        for j in range(D-L):
+        graph=b[:,L:L+GD]                                # [k, 12] cumulative graph features
+        for j in range(GD):
             arcG[bi,:,j]=np.interp(gridpos, pos, graph[:,j])
         loc=unit(b[:,:L])
         dl=1.0-np.sum(loc[1:]*loc[:-1],axis=1)           # section-to-section change
