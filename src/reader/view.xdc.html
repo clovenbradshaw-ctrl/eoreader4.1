@@ -637,6 +637,9 @@
             <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;color:var(--ink3);">
               <span style="width:30px;height:30px;border-radius:50%;border:3px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>
               <span style="font-size:13px;">Opening {{ web.host }}…</span>
+              <sc-if value="{{ web.loadingProgress }}" hint-placeholder-val="{{ false }}">
+                <span style="font-size:11.5px;color:var(--ink3);opacity:.85;font-variant-numeric:tabular-nums;">{{ web.loadingProgress }}</span>
+              </sc-if>
             </div>
           </sc-if>
           <sc-if value="{{ web.err }}" hint-placeholder-val="{{ false }}">
