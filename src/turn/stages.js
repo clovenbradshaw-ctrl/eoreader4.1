@@ -28,7 +28,7 @@ import { canGroundedSpeak, groundedSpeak, RULES_REV } from '../organs/out/speech
 import { projectGraph, VERDICTS } from '../core/index.js';
 import { answerabilityGate } from '../longgen/answerable.js';
 import { factCheck, auditPropositions } from '../factcheck/index.js';
-import { streamAnswer }     from '../write/index.js';
+import { streamParagraphs } from '../write/index.js';
 import { streamPhrase }     from '../model/index.js';
 import { buildConceptTokenMap } from '../write/concept-tokens.js';
 import { mountPersonality, defaultPantheonBank, defaultStanceBanks, defaultSiteBank, stanceFamily, resolveOverlap, dialMultipliers } from '../write/voice.js';
@@ -637,25 +637,31 @@ export const stages = {
     // (the spec's build order: the smallest honest first test is μ-only relevance + the void gate).
     const lens = buildLens(ctx);
 
-    // The STREAMING ANSWER path (docs/streaming-answer.md §5). When a doc is
-    // grounded, a surfer path exists, and streaming is requested, the answer is
-    // realised one grounded sentence per surfer stop — emitted token by token
-    // through ctx.onToken, each beat aware of the ones behind it (the fold) and
-    // bound backward by the witness (§4). The emitted draft becomes `rawOutput`, so
-    // the downstream bind / factcheck / veto stages annotate it exactly as today.
-    // Falls back to the single phrase() below when any precondition is absent —
+    // THE PARAGRAPH LOOP (write/paragraphs.js). When a grounded turn streams, the model
+    // is handed the SAME prompt the one-shot path built — the fold's content: the lines
+    // the reading turned up, the conversation, the question — and answers one paragraph
+    // at a time, each continuation riding as its own assistant turn (so a multiround
+    // backend reuses its KV cache). This retires the sentence-per-beat loop and its
+    // lens-port steering from the answer path: trust the model to write grounded prose,
+    // keep the grounding MECHANICAL and downstream — bind cites per claim, factcheck
+    // adjudicates, veto flags. Falls back to the one-shot draw below on any fault —
     // non-breaking by construction; the present chat / golden paths are untouched.
     // CANCELLATION (the Stop button): the turn's AbortSignal, threaded into every
     // generation path so the backend can halt the decode and hand back the partial.
     const signal = ctx.signal || null;
-    if (ctx.stream && ctx.route === 'grounded' && ctx.doc && ctx.surf && ctx.spans?.length) {
+    if (ctx.stream && ctx.route === 'grounded' && ctx.doc && ctx.spans?.length) {
       try {
-        const streamed = await streamAnswer({
-          doc: ctx.doc, surf: ctx.surf, model: ctx.model, focus: ctx.focus || [],
-          onToken: ctx.onToken, alpha: ctx.alpha ?? undefined, orientation: orientationOf(ctx.doc), lens, signal,
+        const streamed = await streamParagraphs({
+          model: ctx.model, messages: ctx.messages, onToken: ctx.onToken,
+          budget: maxTokens, signal,
         });
         if (streamed && streamed.draft) {
-          return { ...ctx, rawOutput: streamed.draft, maxTokens, streamed, lensEvents: drainLens(ctx), lensMounted: lens?.mounted || null };
+          // The user stopped mid-decode: the partial paragraphs are the answer —
+          // short-circuit the pipeline exactly as the plain path does below.
+          if (signal?.aborted) {
+            return { ...ctx, rawOutput: streamed.draft, answer: streamed.draft.trim(), sources: [], maxTokens, streamed, stopped: true, terminate: true };
+          }
+          return { ...ctx, rawOutput: streamed.draft, maxTokens, streamed };
         }
       } catch { /* a streaming fault degrades to the one-shot path below, never a dead turn */ }
     }
@@ -695,8 +701,14 @@ export const stages = {
     // the γ-field tilt. Both are priors — with no doc they flatten and binding
     // is the old lexical overlap.
     const cursor = ctx.surf?.peak ?? ctx.spans[0]?.idx ?? 0;
-    const bound = bindCitations(ctx.rawOutput, ctx.spans, { doc: ctx.doc, cursor });
-    const answer = renderBound(bound);
+    // Bind PER PARAGRAPH so the draft's blank lines survive into the answer —
+    // renderBound joins claims with a space, which would flatten the paragraph
+    // loop's structure (and any one-shot draft that used blank lines). A draft
+    // with no blank line is one paragraph: byte-identical to binding it whole.
+    const paras = String(ctx.rawOutput || '').split(/\n[ \t]*\n+/).map(p => p.trim()).filter(Boolean);
+    const boundParas = paras.map(p => bindCitations(p, ctx.spans, { doc: ctx.doc, cursor }));
+    const bound = boundParas.flat();
+    const answer = boundParas.map(renderBound).join('\n\n');
     const sources = [...new Set(
       bound.filter(b => b.citation).map(b => parseInt(b.citation.slice(1), 10))
     )];
