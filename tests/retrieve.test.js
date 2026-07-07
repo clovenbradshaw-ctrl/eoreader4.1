@@ -5,6 +5,7 @@ import { parseText } from '../src/perceiver/parse/pipeline.js';
 import { retrieveLexical } from '../src/retrieve/lexical.js';
 import { retrieveHybrid, fuseConcordance, pickRetrievalEmbedder, selectExcerpts } from '../src/retrieve/hybrid.js';
 import { retrieveStructural, retrieveNetwork, queryTouchesDoc } from '../src/retrieve/structural.js';
+import { isReferenceChrome, dropReferenceChrome } from '../src/retrieve/chrome.js';
 import { createHashEmbedder } from '../src/model/embed-hash.js';
 import { ingestText } from '../src/organs/in/text.js';
 
@@ -277,4 +278,58 @@ test('retrieveNetwork degrades to the structural skeleton when the doc has no fi
   assert.ok(net.length > 0, 'never empty — falls back to the skeleton');
   // with no figures, it is the structural read (tagged structural by the fallback)
   assert.ok(net.every(s => s.via === 'structural'), 'a figureless doc falls back to the structural skeleton');
+});
+
+// ── isReferenceChrome: drop reference / navigation apparatus, keep answer content ────────────
+// A web page extracted into "sentences" carries its reference list, external-links section,
+// archive footers and bare nav titles alongside its prose. Handed to the talker these are noise;
+// bound as citations they point the reader at apparatus, not a passage that witnesses the claim.
+
+test('isReferenceChrome flags reference / navigation apparatus (from the real dolphin audits)', () => {
+  const chrome = [
+    '↑ Wickert, Janaína Carrion; von Eye, Sophie Maillard; Oliveira, Larissa Rosa (2016).',
+    'Archived from the original on September 27, 2013.',
+    'CMS - Convention on the Conservation of Migratory Species of Wild Animals.',   // the bare nav title a fabricated answer cited
+    'External links Definitions from Wiktionary Media from Commons Taxa from Wikispecies.',
+    '"Dolphins save surfer from becoming shark’s bait".',                       // a whole-line quoted reference title
+    '"Cooperative Dolphins of Laguna: Data on Nature of Signal (video and detailed description)".',
+    '(Oxford science publications) Oxford University Press, 1982, 433 pp.',
+  ];
+  for (const c of chrome) assert.equal(isReferenceChrome(c), true, `chrome: ${c.slice(0, 40)}`);
+});
+
+test('isReferenceChrome keeps real article prose — even short sentences with a dash', () => {
+  const prose = [
+    'Dolphins are highly social animals living in complex "fission-fusion" societies.',
+    'Dolphins engage in acts of aggression towards each other.',
+    'Membership in pods is not rigid; interchange is common.',
+    'The common bottlenose dolphin is listed in Appendix II to the Convention on the Conservation of Migratory Species of Wild Animals.', // dash-free real claim
+  ];
+  for (const p of prose) assert.equal(isReferenceChrome(p), false, `prose: ${p.slice(0, 40)}`);
+});
+
+test('dropReferenceChrome removes only the apparatus, preserving span order', () => {
+  const spans = [
+    { text: 'Dolphins are highly social animals living in pods.', score: 0.9 },
+    { text: 'Archived from the original on May 14, 2008.', score: 0.8 },
+    { text: 'Dolphins communicate with whistle-like sounds.', score: 0.7 },
+  ];
+  const kept = dropReferenceChrome(spans);
+  assert.deepEqual(kept.map((s) => s.text), [
+    'Dolphins are highly social animals living in pods.',
+    'Dolphins communicate with whistle-like sounds.',
+  ]);
+});
+
+test('selectExcerpts drops chrome before trimming — the talker is shown content, not a title fragment', () => {
+  // The transcript-2 shape: one bare nav title outscoring the one real passage. Without the filter
+  // the title would be shown (and cited); with it, only the real passage rides.
+  const spans = [
+    { text: 'CMS - Convention on the Conservation of Migratory Species of Wild Animals.', score: 0.9, idx: 0 },
+    { text: 'The common bottlenose dolphin is listed in Appendix II, having an unfavorable conservation status.', score: 0.6, idx: 1 },
+  ];
+  const kept = selectExcerpts(spans);
+  assert.ok(kept.every((s) => !isReferenceChrome(s.text)), 'no chrome survives selection');
+  assert.equal(kept.length, 1, 'only the real passage remains');
+  assert.equal(kept[0].idx, 1);
 });

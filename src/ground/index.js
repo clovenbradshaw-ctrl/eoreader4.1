@@ -21,6 +21,10 @@ export { groundSpans, groundSummary } from './spans.js';
 // into an honest "is this actually grounded, or the model's own words wearing a source's passages?"
 // decision (SUPPORT_FLOOR). Modality-neutral, so the chat answer path and the text organ share it.
 export { supportVerdict, SUPPORT_FLOOR } from './spans.js';
+// citationHolds is the per-CITATION honesty gate the render binder reads: below the verbatim floor a
+// lexical passage match may stand only if the passage actually WITNESSES the claim (propositional
+// correspondence, not shared words), so a citation is never severed from the claim it carries.
+export { citationHolds, CITE_VERBATIM } from './spans.js';
 // The reflection: parse the model's OUTPUT back into EOT, compare each proposition with
 // the document graph, and judge the groundedness of what the graph holds — counting the
 // diverse, independent origins that witness each claim (docs/creative-grounded-modes.md).

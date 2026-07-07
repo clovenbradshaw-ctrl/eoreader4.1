@@ -3535,12 +3535,12 @@ class Component extends DCLogic {
     // question (a fresh topic / a sparse fold), so behaviour never regresses.
     try{const pg=this.groundPropositions(q,scope);
       if(pg&&pg.promptSpans&&pg.promptSpans.length)
-        return {spans:pg.promptSpans,entities:a.entities||[],sources:[...new Set(pg.evidence.map(e=>e.u).filter(Boolean))],relevant:true,evidence:pg.evidence,forks:pg.forks||[],chain:!!pg.chain,prop:true};
+        return this._cleanGround({spans:pg.promptSpans,entities:a.entities||[],sources:[...new Set(pg.evidence.map(e=>e.u).filter(Boolean))],relevant:true,evidence:pg.evidence,forks:pg.forks||[],chain:!!pg.chain,prop:true});
     }catch(e){/* any fault → the keyword path below (never worse than today) */}
     // `relevant` = the question actually matched read text (keyword overlap). Only relevant
     // spans are shown as linked grounding; the fallback below still feeds the model context
     // but is NOT surfaced as a citation (it isn't really "where the answer came from").
-    if(a.refs&&a.refs.length)return {spans:a.refs.map(span),entities:a.entities||[],sources:a.sources||[],relevant:true};
+    if(a.refs&&a.refs.length)return this._cleanGround({spans:a.refs.map(span),entities:a.entities||[],sources:a.sources||[],relevant:true});
     // No keyword match (e.g. "what is this about?", "summarize this book") — fall back to the
     // opening lines of the source(s) in scope (or the page being viewed) so the model speaks
     // from the actual text instead of answering as a blank-slate assistant.
@@ -3548,7 +3548,7 @@ class Component extends DCLogic {
     if(this.master&&this.master.sentences.length&&(scope.length||this.state.viewUrl)){
       const idxs=[],used=new Set();
       for(let i=0;i<this.master.sentences.length&&idxs.length<8;i++){const u=this.master.sentenceSource[i];if(!inScope(u))continue;const low=this.norm(this.master.sentences[i]).toLowerCase();if(this._proseOk(low)){idxs.push(i);used.add(u);}}
-      if(idxs.length)return {spans:idxs.map(span),entities:a.entities||[],sources:[...used],relevant:false};
+      if(idxs.length)return this._cleanGround({spans:idxs.map(span),entities:a.entities||[],sources:[...used],relevant:false});
     }
     return {spans:[],entities:a.entities||[],sources:[],relevant:false};}
   // groundPropositions(q,sources,{budget}) → { promptSpans, evidence, relevant } | null
@@ -6555,14 +6555,25 @@ class Component extends DCLogic {
       .map(p=>({p,set:new Set(this._researchTerms(p.text))}));
     const reg={};const sreg={};let sn=0,nSource=0,nSpan=0;const SENT=/(?<=[.!?])\s+/;
     // classify one span against the passages → the best-overlapping passage, or null (void).
-    const bestOf=(toks)=>{
+    // Overlap FINDS the candidate; it does not certify it. Below the verbatim floor the passage must
+    // actually WITNESS the claim (citationHolds → classifyProvenance, same figures in the same
+    // relation) before the ⟦cN⟧ citation stands — otherwise a claim that merely borrows a passage's
+    // vocabulary ("dolphins ... help other animals, including humans, in distress" over a passage about
+    // sexual behaviour "towards other animals, including humans") would be pinned to a source that
+    // witnesses none of it, severing the citation from the claim it carries (the failure eo-gen.js
+    // retired the essay pipeline over). Via the eo-gen bridge when warm; a cold bridge or any fault
+    // degrades to the lexical verdict (mirrors _gateGround) and self-heals on the next render.
+    const bestOf=(toks,sent)=>{
       const tset=new Set(toks);let best=null,bestScore=0;
       for(const {p,set} of ps){
         if(!set.size)continue;let hit=0;for(const t of tset)if(set.has(t))hit++;
         const score=hit/tset.size;
         if(hit>=2&&score>bestScore){bestScore=score;best=p;}
       }
-      return (best&&bestScore>=0.3)?best:null;
+      if(!best||bestScore<0.3)return null;
+      const eg=(typeof window!=='undefined')&&window.eoGen;
+      if(eg&&eg.citationHolds&&!eg.citationHolds(sent,best.text,bestScore))return null;
+      return best;
     };
     // wrap one span in a hoverable provenance sentinel; a source span also carries its footnote.
     // A void span is the model's own — role 'assertion' (a substantive claim it puts forward on
@@ -6571,7 +6582,7 @@ class Component extends DCLogic {
     const wrap=(sent)=>{
       if(!sent)return sent;
       const toks=this._researchTerms(sent);
-      const best=toks.length<3?null:bestOf(toks);const k=sn++;nSpan++;
+      const best=toks.length<3?null:bestOf(toks,sent);const k=sn++;nSpan++;
       if(best){
         nSource++;
         if(!reg[best.i]){
@@ -7924,7 +7935,34 @@ class Component extends DCLogic {
     if(w.length===1&&this.STOP&&this.STOP.has(low))return null;
     if(!/[A-Za-z]/.test(x)||/^(it|this|that|these|those|they|he|she|we|i)$/i.test(x))return null;
     return (x.length>=2&&x.length<=46)?x:null;}
-  _refLike(s){return /(archived from|retrieved\b|\bdoi:|\bisbn\b|wayback|\boriginal (on|pdf)|\bpp?\.\s*\d|\bvol\.\s*\d|cite (web|journal|news|book)|\.pdf\b)/i.test(String(s||''));}
+  _refLike(s){return /(archived from|retrieved\b|\bdoi:|\bisbn\b|wayback|\boriginal (on|pdf)|\bpp?\.\s*\d|\b\d+\s*pp\.|\bvol\.\s*\d|cite (web|journal|news|book)|\.pdf\b)/i.test(String(s||''));}
+  // Is this span REFERENCE / NAVIGATION apparatus, not answer content? The reader-side mirror of
+  // retrieve/chrome.js isReferenceChrome (kept in step so the engine and app agree on what a
+  // reference line is): a footnote marker, a citation shape (_refLike), a whole-line quoted title, a
+  // section header, a trailing (PDF)/(video), or a verbless "Name – Descriptor" nav title. Handed to
+  // the talker these are noise it weaves into; bound as citations they point the reader at apparatus,
+  // not a passage that witnesses the claim (the "CMS - Convention …" title a fabricated answer cited).
+  _spanChrome(s){const t=String(s||'').trim();
+    if(!t)return true;
+    if(t[0]==='↑'||t[0]==='^')return true;
+    if(this._refLike(t))return true;
+    if(/^["“][^"”]{0,220}["”][.\s]*$/.test(t))return true;
+    if(/^(external links|further reading|see also|references|notes|bibliography|citations|retrieved from)\b/i.test(t))return true;
+    if(/\((?:pdf|video[^)]*)\)\.?\s*$/i.test(t))return true;
+    if(/^[A-Z][A-Za-z.&' ]{0,45}\s[–-]\s[A-Z]/.test(t)&&!/\b(is|are|was|were|has|have|had|can|will|would|which|that|when|who|because|since|after|before|during|include|features?)\b/i.test(t))return true;
+    return false;}
+  // Drop reference/nav chrome from a groundNotes result — from the spans SHOWN to the talker and the
+  // evidence used as CITATION targets alike. Never empties a non-empty grounding to nothing on chrome
+  // alone: if every span was apparatus the set was apparatus, and the citation/badge layer already
+  // declines to certify a claim to a passage that doesn't witness it — so the originals ride and the
+  // honest "thin/absent" verdict is reached downstream, never a filter result invented from nothing.
+  _cleanGround(g){
+    if(!g)return g;
+    const drop=(arr)=>Array.isArray(arr)?arr.filter(x=>!this._spanChrome(x&&x.text!=null?x.text:x)):arr;
+    const keep=(orig,filtered)=>(orig&&orig.length&&Array.isArray(filtered)&&!filtered.length)?orig:filtered;
+    const out={...g,spans:keep(g.spans,drop(g.spans))};
+    if(g.evidence!==undefined)out.evidence=keep(g.evidence,drop(g.evidence));
+    return out;}
   // Candidate readings — what the record says ABOUT the entity (subject-role, defined,
   // and evaluative lines). Each carries a base amplitude: its characterizing force.
   _readingCandidates(id){

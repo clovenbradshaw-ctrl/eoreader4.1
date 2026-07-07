@@ -87,6 +87,34 @@ test('nothing substantive to judge is a no-op — never falsely demoted', () => 
   assert.equal(verd.supported, true, 'pure connective scaffolding is not a grounding failure');
 });
 
+// The topical-vocabulary trap, from a real "dolphin conservation" transcript badged "matched".
+// The passages are ABOUT conservation, so every fabricated sentence shares "conservation / species
+// / international" with them; raw content-word overlap therefore marked invented IUCN / WWF /
+// Sea-Shepherd / right-whale claims "sourced" and read the whole mostly-invented answer as grounded.
+// A span counts as sourced only when a passage WITNESSES it (propositional correspondence), not when
+// it merely reuses the subject's vocabulary — so only the one genuine lift counts and the badge drops.
+const CONSERVATION_PASSAGES = [
+  { u: 'https://en.wikipedia.org/wiki/Irrawaddy_dolphin', i: 0,
+    text: 'CMS - Convention on the Conservation of Migratory Species of Wild Animals.' },
+  { u: 'https://en.wikipedia.org/wiki/Common_bottlenose_dolphin', i: 1,
+    text: 'Conservation The North Sea, Baltic, Mediterranean and Black Sea populations of the common bottlenose dolphin are listed in Appendix II to the Convention on the Conservation of Migratory Species of Wild Animals (CMS) of the Bonn Convention, since they have an unfavorable conservation status or would benefit significantly from international cooperation organized by tailored agreements.' },
+];
+
+test('fabrications that reuse only the passages\' TOPIC vocabulary are not sourced — a mostly-invented answer must not badge "matched"', () => {
+  const answer = [
+    'The IUCN has a global program to conserve marine mammals, including dolphins.',                                 // fabricated
+    'According to the IUCN Red List, many dolphin species are threatened or endangered due to overfishing, habitat destruction, and pollution.', // fabricated
+    'The IUCN has helped develop conservation plans for the North Atlantic right whale, which is also a dolphin species.', // fabricated (and false — a right whale is not a dolphin)
+    'The World Wildlife Fund has programs to protect dolphins in the Mediterranean Sea and the Indian Ocean.',       // fabricated
+    'The Sea Shepherd Conservation Society has a global program to protect marine mammals, including dolphins.',     // fabricated
+    'The common bottlenose dolphin is listed in Appendix II to the Convention on the Conservation of Migratory Species of Wild Animals, since it has an unfavorable conservation status or would benefit from international cooperation.', // genuine lift of passage 2
+  ];
+  const verd = supportVerdict(groundSummary(groundSpans(answer, { passages: CONSERVATION_PASSAGES })));
+  assert.equal(verd.source, 1, 'only the CMS/Appendix II sentence witnesses a passage; the IUCN/WWF/right-whale claims share topic words but no proposition');
+  assert.equal(verd.supported, false, '1 of 6 substantive claims traces to a source — below the floor, so the badge must not stand as grounded');
+  assert.equal(verd.kind, 'partial');
+});
+
 test('the floor is applied on the SUBSTANTIVE claims, not every span — connectives do not drag it down', () => {
   // Two sourced claims + one connective: connectives are excluded from the denominator, so the
   // verdict is a clean 2/2, not 2/3. A fluent, well-grounded answer is not punished for its glue.

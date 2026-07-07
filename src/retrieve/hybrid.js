@@ -17,6 +17,7 @@
 
 import { retrieveLexical }  from './lexical.js';
 import { retrieveSemantic } from './semantic.js';
+import { isReferenceChrome } from './chrome.js';
 
 const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
 
@@ -48,7 +49,13 @@ export const pickRetrievalEmbedder = ({ embedder, geometricEmbedder } = {}) =>
 // always keep at least the strongest. Binding still runs over the FULL span set, so
 // trimming the display never costs a citation.
 export const selectExcerpts = (spans = [], { max = 5, ratio = 0.4, floor = 0.1 } = {}) => {
-  const ranked = [...spans].sort((a, b) => (b.score || 0) - (a.score || 0));
+  // Reference/nav chrome (archive lines, "↑ …" refs, quoted titles, a bare "Name – Descriptor" nav
+  // title) is not answer content — shown to the talker it is noise it weaves into, cited it points
+  // the reader at apparatus. Drop it before ranking. If EVERY span is chrome the set was apparatus;
+  // keep the original ranking then (thin-but-honest beats inventing a filter result from nothing).
+  const clean = spans.filter((s) => !isReferenceChrome(s.text));
+  const pool  = clean.length ? clean : spans;
+  const ranked = [...pool].sort((a, b) => (b.score || 0) - (a.score || 0));
   if (ranked.length <= 1) return ranked;
   const top = ranked[0].score || 0;
   const cut = Math.max(floor, top * ratio);

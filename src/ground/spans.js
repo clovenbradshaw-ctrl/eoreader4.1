@@ -21,6 +21,37 @@
 
 import { classifyProvenance } from './provenance.js';
 
+// CITE_VERBATIM — the overlap at or above which a lexical match is a genuine LIFT: so much of the
+// claim is the passage's own words that the surface IS the grounding, and no propositional check is
+// owed (the same 0.6 the groundSpans doc-guard treats as near-verbatim). Below it, shared vocabulary
+// is not yet evidence of a lift.
+export const CITE_VERBATIM = 0.6;
+
+// citationHolds(claim, passageText, lexScore) → may this lexical match stand as a CITATION?
+//
+// A citation CERTIFIES that the passage it points to is where the claim came from. Lexical overlap
+// alone cannot make that promise honestly: a claim can borrow a passage's nouns yet assert a relation
+// the passage never makes — "dolphins ... help other animals, including humans, in distress" scores a
+// high overlap against "dolphins ... exhibit sexual behavior towards other animals, including humans"
+// on the shared phrase, but the passage witnesses NONE of the claim (empathy, help, distress). Pinning
+// a citation there severs it from the claim it is meant to carry — the exact failure that retired the
+// essay pipeline (eo-gen.js). So below the verbatim floor the passage must actually WITNESS the claim:
+// classifyProvenance asks the propositional question (the SAME figures in the SAME relation, coref by
+// label) that raw overlap cannot. A near-verbatim overlap needs no such check — it is the lift itself.
+//
+// Fail SAFE, not silent: a parse fault (or an empty parse the caller cannot interpret) must never cost
+// a citation on its own, so on any throw we degrade to the lexical verdict the caller already had. The
+// gate only ever DEMOTES a match that made lexical contact but no propositional one — it never invents
+// a citation, and it never fires above the verbatim floor.
+export const citationHolds = (claim, passageText, lexScore) => {
+  if (!(lexScore < CITE_VERBATIM)) return true;   // near-verbatim (or NaN) → a genuine lift, it stands
+  try {
+    return classifyProvenance(String(claim ?? ''), [String(passageText ?? '')]).anyWitnessed;
+  } catch {
+    return true;   // the parser must never be the reason a citation is dropped
+  }
+};
+
 // The content terms a span binds on — the same shape the reader's _researchTerms and the
 // witness's contentWords use: lowercased words of ≥3 chars, function words stripped. The one
 // unavoidable lexical boundary (a span arrives as words); past it, meaning decides.
@@ -127,12 +158,20 @@ export const groundSpans = (spans, { passages = [], doc = null, minOverlap = 0.3
     const wit = docWitness(text, doc);
 
     if (lex) {
-      // A lexical hit on a retrieved passage. If the doc is available and judges the span's
-      // meaning UNwitnessed AND the overlap is not near-verbatim, the shared words are a salad,
-      // not a lift — hold it to the void (the provenance.js discipline). A near-verbatim overlap
-      // is a genuine lift and stands even where the parser read no relation.
-      if (wit === 'void' && lex.score < 0.6) return llm(text, 'assertion');
-      return sourced(text, { ...lex.passage, score: lex.score });
+      // A lexical hit is a CANDIDATE, not a verdict. A near-verbatim overlap is a genuine lift and
+      // stands even where the parser read no relation. Below that floor the shared words must
+      // actually WITNESS the claim, or they are the topic's own vocabulary — the salad the whole
+      // answer shares with passages that are ABOUT the subject (a conservation answer over
+      // conservation passages: every sentence touches "conservation / species / international", so
+      // raw overlap marked fabricated IUCN/WWF/right-whale claims "sourced" and the badge read
+      // "matched"). Three witnesses, strongest first: the doc's coref-intact reading ('void' is a
+      // definitive deny, 'witnessed' a definitive pass); else whether the CITED PASSAGE itself
+      // witnesses the claim (citationHolds — the SAME propositional gate the render binder reads,
+      // one rule for the inline citation and the badge alike). A parse fault degrades to the lift.
+      if (wit === 'void' && lex.score < CITE_VERBATIM) return llm(text, 'assertion');
+      if (lex.score >= CITE_VERBATIM || wit === 'witnessed') return sourced(text, { ...lex.passage, score: lex.score });
+      if (citationHolds(text, lex.passage.text, lex.score)) return sourced(text, { ...lex.passage, score: lex.score });
+      return llm(text, 'assertion');
     }
 
     // No passage carried it, but the graph witnesses the meaning (a coref-grounded claim, not
