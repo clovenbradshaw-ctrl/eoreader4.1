@@ -62,8 +62,10 @@ export const layout = (spec, config = {}) => {
   }
 };
 
-// Shared: resolve edge endpoints to node centres and finalize the view.
-const finalize = (kind, nodes, spec, regions = [], annotations = []) => {
+// Shared: resolve edge endpoints to node centres and finalize the view. A
+// layout may pass `dims` to size the canvas to the figure (layered DAGs grow
+// with their column/row counts instead of smudging into a fixed frame).
+const finalize = (kind, nodes, spec, regions = [], annotations = [], dims = null) => {
   const byId = new Map(nodes.map(n => [n.id, n]));
   const edges = (spec.edges || [])
     .map(e => {
@@ -74,7 +76,7 @@ const finalize = (kind, nodes, spec, regions = [], annotations = []) => {
     })
     .filter(Boolean);
   return Object.freeze({
-    width: W, height: H, kind,
+    width: dims ? dims.width : W, height: dims ? dims.height : H, kind,
     nodes: Object.freeze(nodes),
     edges: Object.freeze(edges),
     regions: Object.freeze(regions),
@@ -142,46 +144,103 @@ const layoutForce = (spec) => {
   return finalize('graph', nodes.map(Object.freeze), spec, [], spec.annotations);
 };
 
-// ── graph · layered (BFS columns) ─────────────────────────────────────────────
+// ── graph · layered (a proper DAG read: columns = longest distance from a
+// root, rows ordered by neighbour barycentre so edges cross as little as
+// possible, canvas sized to the figure) ───────────────────────────────────────
 const layoutLayered = (spec) => {
-  const adj = new Map(spec.nodes.map(n => [n.id, []]));
-  for (const e of spec.edges || []) { adj.get(e.source)?.push(e.target); }
-  const indeg = new Map(spec.nodes.map(n => [n.id, 0]));
-  for (const e of spec.edges || []) indeg.set(e.target, (indeg.get(e.target) || 0) + 1);
+  const ids = spec.nodes.map(n => n.id);
+  const adj = new Map(ids.map(id => [id, []]));
+  const radj = new Map(ids.map(id => [id, []]));
+  for (const e of spec.edges || []) {
+    if (adj.has(e.source) && adj.has(e.target) && e.source !== e.target) {
+      adj.get(e.source).push(e.target); radj.get(e.target).push(e.source);
+    }
+  }
+
+  // A figure with no bonds is not a root of anything — piling it into column 0
+  // fakes structure. The DAG holds the linked figures; the unlinked ones sit in
+  // their own strip underneath, present but not pretending to be upstream.
+  const isolated = spec.nodes.filter(n => !adj.get(n.id).length && !radj.get(n.id).length);
+  const isoSet = new Set(isolated.map(n => n.id));
+  const linked = spec.nodes.filter(n => !isoSet.has(n.id));
 
   // Layer = longest distance from a root (in-degree-0). BFS over the DAG; cycles
   // fall back to source-order so a non-DAG still lays out deterministically.
   const layerOf = new Map();
-  const roots = spec.nodes.filter(n => (indeg.get(n.id) || 0) === 0).map(n => n.id);
-  const queue = (roots.length ? roots : spec.nodes.map(n => n.id)).map(id => [id, 0]);
-  let guard = 0, MAX = spec.nodes.length * spec.nodes.length + 1;
+  const roots = linked.map(n => n.id).filter(id => radj.get(id).length === 0);
+  const queue = (roots.length ? roots : linked.map(n => n.id)).map(id => [id, 0]);
+  let guard = 0, MAX = ids.length * ids.length + 1;
   while (queue.length && guard++ < MAX) {
     const [id, L] = queue.shift();
     if ((layerOf.get(id) ?? -1) >= L) continue;
     layerOf.set(id, L);
     for (const t of adj.get(id) || []) queue.push([t, L + 1]);
   }
-  for (const n of spec.nodes) if (!layerOf.has(n.id)) layerOf.set(n.id, 0);
+  for (const n of linked) if (!layerOf.has(n.id)) layerOf.set(n.id, 0);
 
   const layers = new Map();
-  for (const n of spec.nodes) {
+  for (const n of linked) {
     const L = layerOf.get(n.id);
     if (!layers.has(L)) layers.set(L, []);
     layers.get(L).push(n);
   }
   const cols = [...layers.keys()].sort((a, b) => a - b);
-  const colW = (W - 2 * PAD) / Math.max(1, cols.length - 1 || 1);
+
+  // Crossing reduction: two barycentre sweeps (left→right pulling each node
+  // toward its in-neighbours' rows, then right→left toward its out-neighbours').
+  // Pure array work — deterministic, ties broken by prior order.
+  const rowOf = new Map();
+  cols.forEach(L => layers.get(L).forEach((n, i) => rowOf.set(n.id, i)));
+  const bary = (n, nbrs) => {
+    const ys = (nbrs.get(n.id) || []).map(m => rowOf.get(m)).filter(y => y != null);
+    return ys.length ? ys.reduce((s, y) => s + y, 0) / ys.length : rowOf.get(n.id);
+  };
+  const sweep = (order, nbrs) => {
+    for (const L of order) {
+      const scored = layers.get(L).map((n, i) => [n, bary(n, nbrs), i]);
+      scored.sort((a, b) => (a[1] - b[1]) || (a[2] - b[2]));
+      const sorted = scored.map(s => s[0]);
+      layers.set(L, sorted);
+      sorted.forEach((n, i) => rowOf.set(n.id, i));
+    }
+  };
+  sweep(cols, radj);
+  sweep([...cols].reverse(), adj);
+
+  // Size the canvas to the DAG, not the DAG to the canvas: a wide or deep
+  // figure gets room instead of a smudge (the host scales it responsively).
+  const maxRows = cols.reduce((m, L) => Math.max(m, layers.get(L).length), 1);
+  const width = Math.max(W, PAD * 2 + (cols.length - 1) * 150);
+  const dagH = linked.length ? Math.max(300, PAD * 2 + maxRows * 54) : 0;
+  const colW = (width - 2 * PAD) / Math.max(1, cols.length - 1 || 1);
   const nodes = [];
   cols.forEach((L, ci) => {
     const members = layers.get(L);
-    const rowH = (H - 2 * PAD) / Math.max(1, members.length);
+    const rowH = (dagH - 2 * PAD) / Math.max(1, members.length);
     members.forEach((n, ri) => {
       nodes.push(Object.freeze({ ...baseNode(n),
-        x: quant(cols.length === 1 ? W / 2 : PAD + ci * colW),
+        x: quant(cols.length === 1 ? width / 2 : PAD + ci * colW),
         y: quant(PAD + rowH * (ri + 0.5)) }));
     });
   });
-  return finalize('graph', nodes, spec, [], spec.annotations);
+  // The unlinked strip: a plain grid under the DAG, annotated so the break in
+  // the figure is named, not implied.
+  let height = dagH;
+  const annotations = [...(spec.annotations || [])];
+  if (isolated.length) {
+    const perRow = Math.max(1, Math.floor((width - 2 * PAD) / 92));
+    const y0 = (linked.length ? dagH : PAD) + 34;
+    isolated.forEach((n, k) => {
+      nodes.push(Object.freeze({ ...baseNode(n),
+        x: quant(PAD + (k % perRow) * 92 + 20),
+        y: quant(y0 + Math.floor(k / perRow) * 58) }));
+    });
+    const anchor = isolated[Math.min(2, isolated.length - 1)];
+    annotations.push({ target: anchor.id, text: isolated.length + ' unlinked — no bonds yet', ref: anchor.ref });
+    height = y0 + Math.ceil(isolated.length / perRow) * 58;
+  }
+  height = Math.max(height, 220);
+  return finalize('graph', nodes, spec, [], annotations, { width, height });
 };
 
 // ── timeline · temporal (time on x, lane on y) ────────────────────────────────
