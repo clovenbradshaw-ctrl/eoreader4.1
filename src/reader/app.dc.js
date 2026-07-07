@@ -1520,12 +1520,12 @@ class Component extends DCLogic {
     // question (a fresh topic / a sparse fold), so behaviour never regresses.
     try{const pg=this.groundPropositions(q,scope);
       if(pg&&pg.promptSpans&&pg.promptSpans.length)
-        return {spans:pg.promptSpans,entities:a.entities||[],sources:[...new Set(pg.evidence.map(e=>e.u).filter(Boolean))],relevant:true,evidence:pg.evidence,forks:pg.forks||[],chain:!!pg.chain,prop:true};
+        return this._cleanGround({spans:pg.promptSpans,entities:a.entities||[],sources:[...new Set(pg.evidence.map(e=>e.u).filter(Boolean))],relevant:true,evidence:pg.evidence,forks:pg.forks||[],chain:!!pg.chain,prop:true});
     }catch(e){/* any fault → the keyword path below (never worse than today) */}
     // `relevant` = the question actually matched read text (keyword overlap). Only relevant
     // spans are shown as linked grounding; the fallback below still feeds the model context
     // but is NOT surfaced as a citation (it isn't really "where the answer came from").
-    if(a.refs&&a.refs.length)return {spans:a.refs.map(span),entities:a.entities||[],sources:a.sources||[],relevant:true};
+    if(a.refs&&a.refs.length)return this._cleanGround({spans:a.refs.map(span),entities:a.entities||[],sources:a.sources||[],relevant:true});
     // No keyword match (e.g. "what is this about?", "summarize this book") — fall back to the
     // opening lines of the source(s) in scope (or the page being viewed) so the model speaks
     // from the actual text instead of answering as a blank-slate assistant.
@@ -1533,7 +1533,7 @@ class Component extends DCLogic {
     if(this.master&&this.master.sentences.length&&(scope.length||this.state.viewUrl)){
       const idxs=[],used=new Set();
       for(let i=0;i<this.master.sentences.length&&idxs.length<8;i++){const u=this.master.sentenceSource[i];if(!inScope(u))continue;const low=this.norm(this.master.sentences[i]).toLowerCase();if(this._proseOk(low)){idxs.push(i);used.add(u);}}
-      if(idxs.length)return {spans:idxs.map(span),entities:a.entities||[],sources:[...used],relevant:false};
+      if(idxs.length)return this._cleanGround({spans:idxs.map(span),entities:a.entities||[],sources:[...used],relevant:false});
     }
     return {spans:[],entities:a.entities||[],sources:[],relevant:false};}
   // groundPropositions(q,sources,{budget}) → { promptSpans, evidence, relevant } | null
@@ -5911,7 +5911,34 @@ class Component extends DCLogic {
     if(w.length===1&&this.STOP&&this.STOP.has(low))return null;
     if(!/[A-Za-z]/.test(x)||/^(it|this|that|these|those|they|he|she|we|i)$/i.test(x))return null;
     return (x.length>=2&&x.length<=46)?x:null;}
-  _refLike(s){return /(archived from|retrieved\b|\bdoi:|\bisbn\b|wayback|\boriginal (on|pdf)|\bpp?\.\s*\d|\bvol\.\s*\d|cite (web|journal|news|book)|\.pdf\b)/i.test(String(s||''));}
+  _refLike(s){return /(archived from|retrieved\b|\bdoi:|\bisbn\b|wayback|\boriginal (on|pdf)|\bpp?\.\s*\d|\b\d+\s*pp\.|\bvol\.\s*\d|cite (web|journal|news|book)|\.pdf\b)/i.test(String(s||''));}
+  // Is this span REFERENCE / NAVIGATION apparatus, not answer content? The reader-side mirror of
+  // retrieve/chrome.js isReferenceChrome (kept in step so the engine and app agree on what a
+  // reference line is): a footnote marker, a citation shape (_refLike), a whole-line quoted title, a
+  // section header, a trailing (PDF)/(video), or a verbless "Name – Descriptor" nav title. Handed to
+  // the talker these are noise it weaves into; bound as citations they point the reader at apparatus,
+  // not a passage that witnesses the claim (the "CMS - Convention …" title a fabricated answer cited).
+  _spanChrome(s){const t=String(s||'').trim();
+    if(!t)return true;
+    if(t[0]==='↑'||t[0]==='^')return true;
+    if(this._refLike(t))return true;
+    if(/^["“][^"”]{0,220}["”][.\s]*$/.test(t))return true;
+    if(/^(external links|further reading|see also|references|notes|bibliography|citations|retrieved from)\b/i.test(t))return true;
+    if(/\((?:pdf|video[^)]*)\)\.?\s*$/i.test(t))return true;
+    if(/^[A-Z][A-Za-z.&' ]{0,45}\s[–-]\s[A-Z]/.test(t)&&!/\b(is|are|was|were|has|have|had|can|will|would|which|that|when|who|because|since|after|before|during|include|features?)\b/i.test(t))return true;
+    return false;}
+  // Drop reference/nav chrome from a groundNotes result — from the spans SHOWN to the talker and the
+  // evidence used as CITATION targets alike. Never empties a non-empty grounding to nothing on chrome
+  // alone: if every span was apparatus the set was apparatus, and the citation/badge layer already
+  // declines to certify a claim to a passage that doesn't witness it — so the originals ride and the
+  // honest "thin/absent" verdict is reached downstream, never a filter result invented from nothing.
+  _cleanGround(g){
+    if(!g)return g;
+    const drop=(arr)=>Array.isArray(arr)?arr.filter(x=>!this._spanChrome(x&&x.text!=null?x.text:x)):arr;
+    const keep=(orig,filtered)=>(orig&&orig.length&&Array.isArray(filtered)&&!filtered.length)?orig:filtered;
+    const out={...g,spans:keep(g.spans,drop(g.spans))};
+    if(g.evidence!==undefined)out.evidence=keep(g.evidence,drop(g.evidence));
+    return out;}
   // Candidate readings — what the record says ABOUT the entity (subject-role, defined,
   // and evaluative lines). Each carries a base amplitude: its characterizing force.
   _readingCandidates(id){
