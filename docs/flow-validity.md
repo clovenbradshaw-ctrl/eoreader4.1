@@ -19,39 +19,53 @@ that matters for the stated goal — a witness that flags bad prose — and it u
 If the instrument tracks coherence, degraded versions should score worse, and the
 per-beat flag should fire *at* the spliced-in alien sections.
 
-## Result — negative, on all three
+## Result — weak, split by axis, and underpowered (N = 8)
 
-| test | expectation | result |
-|---|---|---|
-| section-shuffle worse than good | most of 8 | **3–4 / 8** (chance is 4/8) |
-| sentence-scramble worse than good | most of 8 | **3 / 8**; mean flowScore *fell* 0.351 → 0.338 |
-| flag fires on alien sections | P(flag\|alien) ≫ P(flag\|native) | **0%** vs **14%** (alien flagged *less*) |
-| register-matched prior cuts saturation | big drop | 28% vs 22% (narrative) — **no drop** |
+Counts are "of 8 held-out documents, how many had the DEGRADED version score worse",
+averaged over 6 shuffle seeds (chance = 4/8):
 
-The instrument does not distinguish a coherent expository article from a shuffled or
-spliced version of itself, and does not localize inserted foreign material.
+| manipulation | axis | mean / 8 | reading |
+|---|---|---|---|
+| section-shuffle (destroy global arc) | manifold residual | **5.3** | weak but real — reordering pushes steps off-manifold |
+| section-shuffle | delta / flowScore | 4.2 | at chance — the delta axis doesn't see it |
+| sentence-scramble (maximal local destruction) | flowScore | **2.3** | *below* chance — scrambling **homogenises** and scores *smoother* |
+| sentence-scramble | residual | 2.8 | below chance |
+| alien-splice | P(flag\|alien) vs P(flag\|native) | **0% vs 14%** | no localization (also underpowered) |
+| — | good-article saturation | 28% vs 22% | register-matched prior did **not** cut the flag rate |
+
+So it is not a clean zero: **destroying section *order* leaves a faint print on the
+manifold residual (~5/8).** But the delta / "lurch" axis — the one we headline — is at
+chance on reordering and is *actively fooled* by scrambling (homogenised text looks
+smoother). And nothing localizes an inserted foreign paragraph. At N = 8 none of these
+counts is statistically strong; treat them as directions, not proofs.
 
 ## Why — and it is not a bug
 
 The flow vector abstracts text into **discourse-operator structure**: which operators
-fire, in what distribution, rhythm, and cumulative build. Shuffling sentences
-*preserves the operator set* and even homogenises it — every window drifts toward the
-corpus mean — so measured delta and residual go *down*, not up. Alien paragraphs in
-the same register have the *same* operator structure as native ones, so no anomaly
-registers.
+fire, in what distribution, rhythm, and cumulative build. Human-perceived "reads
+badly" is largely a **semantic / referential** failure — this sentence doesn't follow
+from the last, a referent doesn't resolve, the argument doesn't build — and that
+signal lives in the *content* the operator abstraction discards.
 
-Human-perceived "reads badly" is largely a **semantic / referential** failure — this
-sentence doesn't follow from the last, a referent doesn't resolve, the argument
-doesn't build. That signal lives in the *content* the operator abstraction discards.
-So the instrument is a faithful measure of a real thing that is **orthogonal to the
-coherence signal we hoped it tracked.**
+The split in the results falls straight out of this:
+
+- **Local scrambling** *preserves and homogenises* the operator stream — every window
+  drifts toward the corpus mean — so the delta axis scores maximally-scrambled text as
+  *smoother*, not worse. The instrument is not just blind here; it is fooled.
+- **Destroying the global order of whole sections** perturbs the *cumulative* build
+  enough to read as off-manifold, so the residual axis catches it ~5/8 of the time —
+  a weak, real signal, and the only place coherence leaves a print.
+- **Alien paragraphs in the same register** carry the *same* operator structure as
+  native ones, so nothing localizes them.
 
 ## What this means for the system
 
-**Do not wire `flowVerdict` as a quality critic.** On this evidence it will not catch
-bad prose; it will fire on register/rhythm difference, not on incoherence. The
-`write/witness.js` hook should be read as a **register/shape-conformance** signal
-("does this beat move like the target corpus"), never as a "reads badly" veto.
+**Do not rely on `flowVerdict` as a quality critic.** On this evidence it is, at best,
+a weak detector of *gross global-structure* disruption (via residual, ~5/8), and it is
+blind to — or fooled by — local incoherence. It will fire on register/rhythm
+difference, not on whether the prose makes sense. The `write/witness.js` hook is
+honestly a **register/shape-conformance** signal ("does this beat move like the target
+corpus"), not a "reads badly" veto.
 
 **What the instrument *is* validated for** (evidenced elsewhere in these docs):
 
@@ -66,7 +80,9 @@ bad prose; it will fire on register/rhythm difference, not on incoherence. The
 
 The honest one-line verdict: the segmentation and representation improvements are real
 and make the instrument a *better measure of discourse structure* — but discourse
-structure is not writing quality, and the controlled test says so plainly.
+structure is largely not writing quality. The controlled test (underpowered at N = 8)
+finds only a faint global-structure print on the residual axis and no reliable
+coherence signal, so the improvements helped the instrument, not the original goal.
 
 Reproduce: `node tools/flow/validity_test.mjs --prior <expo-prior.json> --test <held-out.jsonl> --baseline data/flow-prior.json`
 (build the expository prior with the standard pipeline over a corpus of the target register).
