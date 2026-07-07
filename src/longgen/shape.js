@@ -27,6 +27,7 @@
 // signal (the weld) overrides the develop bias, as it should.
 
 import { MOVE_ALPHABET } from '../predict/movelog.js';
+import { arcTarget } from '../flow/index.js';
 
 // When the uncovered budget falls to this fraction of the total, the walk is in its
 // closing reach — lean toward SYN to land. Above it, the body develops.
@@ -89,3 +90,19 @@ export const applyPhaseBias = (posterior = [], bias = {}) => {
 // cannot ground — the arc's floor on thin answers made operational.
 export const shouldCollapse = ({ units = [], remainingFrac = 1, epsilon = 0.05 } = {}) =>
   units.length >= 1 && remainingFrac < epsilon;
+
+// THE BUILD-ARC SCHEDULE as a phase target (src/flow). arcPhase names the phase off
+// the state; this hands that phase the corpus-typical CUMULATIVE state to aim the
+// artifact at — early: entity introduction high; late: relations and coref rising,
+// new entities decaying. It is the measured complement to phaseBias: phaseBias leans
+// the operator draw (condition the behavior), while arcPhaseTarget conditions the
+// ARTIFACT — the target is a state the corpus reaches at this reading position, not a
+// rule. `t` is how far along the arc is (budget spent = 1 − remainingFrac). Off by
+// default: no prior wired ⇒ null, and nothing downstream changes.
+export const arcPhaseTarget = (prior, { remainingFrac = 1, stepIndex = null, totalSteps = null } = {}) => {
+  if (!prior) return null;
+  const t = (Number.isFinite(stepIndex) && Number.isFinite(totalSteps) && totalSteps > 0)
+    ? stepIndex / totalSteps
+    : Math.min(1, Math.max(0, 1 - remainingFrac));
+  return arcTarget(prior, t);
+};

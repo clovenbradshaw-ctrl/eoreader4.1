@@ -26,6 +26,7 @@
 // the source, because the production is the model's output, not evidence.
 
 import { canWitness, classify, EXAFFERENCE } from '../core/index.js';
+import { flowVerdict } from '../flow/index.js';
 
 // The default grounding threshold: a claim is grounded when enough of its content
 // words are carried by a single source span. The production grounder is
@@ -41,6 +42,11 @@ const GROUND_OVERLAP = 0.5;
 //   source     the grounded spans for this beat ([{ text, idx, prov? }]); a span
 //              with reafferent provenance cannot anchor (the type law)
 //   fold       the running fold — its referents are the rebind vocabulary
+//   opts.flow  { prior, prevStep, doc } — OPTIONAL flow-witness (src/flow). When
+//              wired, the beat is also scored against the corpus flow prior and the
+//              verdict is attached to the audit as `flow`. A flow flag is surfaced
+//              (like a source finding), NOT a hard fail — `ok` is unchanged by it.
+//              Absent (no prior/doc) → `flow: null` and behavior is identical.
 export const witness = (spurtText, expect, source = [], fold, opts = {}) => {
   const text = String(spurtText ?? '');
   const expected = expect instanceof Set ? expect : new Set(expect || []);
@@ -68,6 +74,14 @@ export const witness = (spurtText, expect, source = [], fold, opts = {}) => {
   // 7d — pay the retraction: the record is the surfaced void, logged beside the kept
   // beat (suppress-never-erase). `ok` is the witness verdict for this beat.
   const ok = flagged.length === 0 && retractions.length === 0;
+
+  // FLOW WITNESS (§7, optional) — does this beat MOVE the way the corpus moves? The
+  // flow verdict is a structural finding, not a truth veto: a lurch (delta > p90) or
+  // an off-manifold step (residual > p95) is surfaced for EVA to weigh, never a hard
+  // fail. It rides beside the source veto so the same surface carries both. Off by
+  // default: no prior wired ⇒ flow === null and `ok` is exactly the veto verdict.
+  const flow = opts.flow ? flowVerdict(opts.flow.prior, opts.flow.prevStep, opts.flow.doc, opts.flow) : null;
+
   return Object.freeze({
     bound: Object.freeze(bound),
     surfaces: Object.freeze(surfaces),
@@ -76,6 +90,7 @@ export const witness = (spurtText, expect, source = [], fold, opts = {}) => {
     retractions: Object.freeze(retractions),
     inadmissibleSource: Object.freeze(inadmissibleSource.map(s => s?.idx ?? null)),
     ok,
+    flow: flow ? Object.freeze(flow) : null,
   });
 };
 

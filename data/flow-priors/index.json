@@ -1,0 +1,38 @@
+{
+ "kind": "eo-flow-prior-registry",
+ "version": "1",
+ "priors": [
+  {
+   "name": "expository-en-science",
+   "file": "expository-en-science.json",
+   "facets": {
+    "lang": "en",
+    "region": "global",
+    "era": "contemporary",
+    "domain": "science",
+    "register": "expository"
+   },
+   "books": 32,
+   "segment": "sections",
+   "grid": 24,
+   "sourceSha256": "3a86d64ca529c379",
+   "generated": "2026-07-07T19:16:58.283456Z"
+  },
+  {
+   "name": "narrative-en-1900s",
+   "file": "narrative-en-1900s.json",
+   "facets": {
+    "lang": "en",
+    "region": "gb-us",
+    "era": "1900s",
+    "domain": "literature",
+    "register": "narrative"
+   },
+   "books": 36,
+   "segment": "sections",
+   "grid": 24,
+   "sourceSha256": "0311125566e29467",
+   "generated": "2026-07-07T19:16:58.115613Z"
+  }
+ ]
+}
