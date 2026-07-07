@@ -8,8 +8,9 @@
 // first-class values" and Google Docs' suggesting mode — here the value is an event
 // on the log, so it survives reload, export, and audit like everything else.
 
-export { DKIND, CHANGE_KINDS, docCreate, blockAdd, changePropose, changeAccept, changeReject } from './events.js';
+export { DKIND, CHANGE_KINDS, docCreate, blockAdd, blockEdit, changePropose, changeAccept, changeReject, docRevert } from './events.js';
 export { groundText, blockGrounding, contentWords } from './ground.js';
 export { projectDoc } from './project.js';
-export { renderDocFragment, docStatLine, DOC_CSS } from './render.js';
+export { projectHistory, charDiff } from './history.js';
+export { renderDocFragment, renderHistoryFragment, docStatLine, DOC_CSS } from './render.js';
 export { mountDocSurface } from './surface.js';
