@@ -305,6 +305,21 @@ test('formulateSearchQuery hands the discourse subject to the model (discourse f
   assert.match(seen, /photosynthesis/i);               // carrying the subject the conversation is on
 });
 
+test('formulateSearchQuery instructs the model to strip task/format framing and read through typos', async () => {
+  // The "wrtie me an essay about dolphins" run: a typo defeats the deterministic subject peel, so the
+  // whole framed sentence reaches this formulator. The prompt must tell the model to search the
+  // SUBJECT, not the chore — dropping the "essay/report/…" piece noun and the "write/compose" verb —
+  // and to read through the typo. If it doesn't, the query stays "essay about dolphins" and Wikipedia
+  // lands on "Island of the Blue Dolphins", never the Dolphin article. Capture what the model sees.
+  let seen = '';
+  const model = { phrase: async (messages) => { seen = messages.map(m => m.content).join('\n'); return 'dolphins'; } };
+  const q = await formulateSearchQuery({ model, question: 'wrtie me an essay about dolphins' });
+  assert.equal(q, 'dolphins');                          // the bare subject passes through
+  assert.match(seen, /wrtie me an essay about dolphins/); // the framed, misspelled turn reached the model
+  assert.match(seen, /essay/i);                          // and the prompt names the produce-a-piece framing
+  assert.match(seen, /typo/i);                           // …and tells it to read through the misspelling
+});
+
 test('runWebFollowup reformulates the raw query before searching (conversation in scope)', async () => {
   let searched = null;
   const model = { phrase: async () => 'X-Files new series 2026 producer' };

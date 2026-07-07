@@ -90,13 +90,29 @@ export const formulateSearchQuery = async ({ model, question, history = [], fall
     subject ? `Subject in focus: ${subject}` : '',
     openIntent ? `Open question: ${openIntent}` : '',
   ].filter(Boolean).join('\n');
+  // THE TASK-FRAMING + TYPO GUARD (the "wrtie me an essay about dolphins" run). The deterministic
+  // subject peel (app.dc.js _subjectOf) is spelling-exact on the leading verb, so a typo — "wrtie"
+  // for "write" — passes the whole framed sentence through to HERE. If this prompt only says "no
+  // filler", a small model doesn't read "essay about" as filler and keeps it, so the query becomes
+  // "essay about dolphins" — which Wikipedia matches to "Island of the Blue Dolphins", never the
+  // Dolphin article, and the whole turn grounds to void off the wrong topic. So the instruction now
+  // names the produce-a-piece framing explicitly (write/compose an essay/report/… about X → X), tells
+  // the model to drop the task verb and the piece noun, and to read through typos — the LLM doing the
+  // subject extraction the regex can't, exactly where the raw sentence lands.
   const messages = [
     { role: 'system', content:
-      'You turn a chat turn into ONE web search query. You are given the DISCOURSE STATE: the ' +
-      'subject the conversation is currently about and the question it left open. Resolve every ' +
-      'pronoun and back-reference against that discourse so the query stands alone, and KEEP THE ' +
-      'SUBJECT in focus — never drop it for a name you are unsure of. Keep it short — the keywords ' +
-      'a search engine needs, no filler, no question words, no quotes. Output ONLY the query.' },
+      'You turn a chat turn into ONE web search query — just the SUBJECT to look up. You are given ' +
+      'the DISCOURSE STATE: the subject the conversation is currently about and the question it left ' +
+      'open. Resolve every pronoun and back-reference against that discourse so the query stands ' +
+      'alone, and KEEP THE SUBJECT in focus — never drop it for a name you are unsure of. When the ' +
+      'turn asks you to PRODUCE something about a topic — "write me an essay about X", "give me a ' +
+      'report on Y", "summarize Z", "tell me about W" — search for the topic itself (X, Y, Z, W) and ' +
+      'DROP the task: never keep the instruction verb (write, compose, draft, make, give) or the kind ' +
+      'of piece (essay, report, article, summary, overview, story, paper) in the query — those say ' +
+      'what to DO with the subject, not what to look up. Read through obvious typos and search for the ' +
+      'correctly-spelled subject. Keep it short — the keywords a search engine needs, no filler, no ' +
+      'question words, no quotes. Output ONLY the query. ' +
+      'For example, "wrtie me an essay about dolphins" becomes: dolphins' },
     { role: 'user', content:
       `${frame ? `Discourse state:\n${frame}\n\n` : ''}${thread ? `User's earlier turns:\n${thread}\n\n` : ''}Latest turn: ${base}\n\nSearch query:` },
   ];
