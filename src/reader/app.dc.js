@@ -45,8 +45,10 @@ class Component extends DCLogic {
       // real read source lands in master.pages; on failure it stays, with its error, until dismissed.
       imports:[],
       // Entity panel width — persisted + clamped. Chat column width (chatW) likewise.
+      // Chat opens pre-wide (600) so a research/thinking answer reads at full width from
+      // the first turn — no need to drag it out once the model starts working.
       panelW:(()=>{try{return Math.max(300,Math.min(820,+localStorage.getItem('eo_panelw')||380));}catch(e){return 380;}})(),
-      chatW:(()=>{try{return Math.max(320,Math.min(640,+localStorage.getItem('eo_chatw')||420));}catch(e){return 420;}})(),
+      chatW:(()=>{try{return Math.max(320,Math.min(820,+localStorage.getItem('eo_chatw')||600));}catch(e){return 600;}})(),
       // Viewport width drives the responsive tier (wide / mid / phone). Updated by a
       // resize listener; pane is the active region when in single-pane phone mode.
       vw:(typeof window!=='undefined'?window.innerWidth:1400), pane:'doc',
@@ -3810,34 +3812,6 @@ class Component extends DCLogic {
       words,relational,speculative,
     };
   }
-  // The readout's render props — a readout, not buttons: there is nothing to set.
-  _readView(){
-    const r=this._read(this.state.chatInput);
-    if(!r)return {
-      dotStyle:'width:7px;height:7px;border-radius:50%;background:var(--line2);display:inline-block;flex:0 0 auto;',
-      lead:'At rest',chips:[],
-      gloss:'The ask sets its own route — intent, depth, grounding and breadth all fall out of what you type.',
-    };
-    const chip=(label,accent,why)=>({label,why,
-      style:'font-size:11px;font-weight:600;border-radius:7px;padding:2px 9px;white-space:nowrap;'
-        +(accent?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);'
-                :'color:var(--ink2);background:var(--app);border:1px solid var(--line2);')});
-    const chips=[
-      chip(r.research?'research':'answer',r.research,r.research?'A relational or long ask relaxes into research':'A direct lookup stays a single answer'),
-      chip(r.depth,r.depth==='obsessive','Depth is a length demand read off the ask’s complexity'),
-      chip(r.register==='creative'?'creative':'grounded',r.register==='creative',
-        r.register==='creative'?'Speculative wording leaves the library — the model writes freely'
-          :'Checked against your sources — the answer is badged with the register it actually used'),
-      chip(r.breadth,false,'Breadth follows intent'),
-    ];
-    const gloss=r.speculative?'Speculative — it will write freely, marked creative.'
-      :r.research?(r.depth==='obsessive'?'A causal ask across the reading — deep, grounded research.':'A relational ask — grounded research across sources.')
-      :'A direct lookup — grounded to passages.';
-    return {
-      dotStyle:'width:9px;height:9px;border-radius:50%;background:var(--acc);display:inline-block;flex:0 0 auto;box-shadow:0 0 0 3px var(--accbg);',
-      lead:'Reads as',chips,gloss,
-    };
-  }
   // The research-depth policy (shallow / deep / obsessive) → concrete walk knobs. This is the
   // arc's coverage cut: how wide the battery, how many hops, how many pages per thread, and how
   // patiently the leash tolerates a dry thread before stopping. Depth now rides
@@ -5413,7 +5387,7 @@ class Component extends DCLogic {
         ? 'max-width:720px;margin:0 auto 8px;font-size:11.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:6px 11px;display:flex;align-items:center;gap:8px;'
         : 'max-width:720px;margin:0 auto 8px;font-size:11.5px;color:var(--ink3);display:flex;align-items:center;gap:8px;',
       shellStyle:drawer
-        ? 'position:absolute;top:0;right:0;bottom:0;width:min(440px,92%);z-index:20;display:flex;flex-direction:column;min-height:0;background:var(--app);border-left:1px solid var(--line);box-shadow:-14px 0 44px rgba(20,24,30,.16);animation:eoslide .18s ease-out;'
+        ? 'position:absolute;top:0;right:0;bottom:0;width:min(600px,92%);z-index:20;display:flex;flex-direction:column;min-height:0;background:var(--app);border-left:1px solid var(--line);box-shadow:-14px 0 44px rgba(20,24,30,.16);animation:eoslide .18s ease-out;'
         : 'height:100%;display:flex;flex-direction:column;min-height:0;background:var(--app);'+(docked?'border-left:1px solid var(--line);':''),
       placeholder:isIso?'Ask anything — nothing tagged yet…'
         :isEvery?'Ask about everything you’ve read…'
@@ -7029,11 +7003,11 @@ class Component extends DCLogic {
     const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);document.body.style.cursor='';document.body.style.userSelect='';if(cur!==startW){try{localStorage.setItem('eo_panelw',String(cur));}catch(e){}this.setState({panelW:cur});}};
     window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);document.body.style.cursor='col-resize';document.body.style.userSelect='none';}
   onResizeReset(){try{localStorage.setItem('eo_panelw','380');}catch(e){}this.setState({panelW:380});}
-  onChatResizeDown(e){e.preventDefault();const startX=e.clientX,startW=this.state.chatW||420;let cur=startW;
-    const move=(ev)=>{let w=startW+(startX-ev.clientX);w=Math.max(320,Math.min(640,Math.round(w)));if(w!==cur){cur=w;this.setState({chatW:w});}};
+  onChatResizeDown(e){e.preventDefault();const startX=e.clientX,startW=this.state.chatW||600;let cur=startW;
+    const move=(ev)=>{let w=startW+(startX-ev.clientX);w=Math.max(320,Math.min(820,Math.round(w)));if(w!==cur){cur=w;this.setState({chatW:w});}};
     const up=()=>{window.removeEventListener('pointermove',move);window.removeEventListener('pointerup',up);document.body.style.cursor='';document.body.style.userSelect='';if(cur!==startW){try{localStorage.setItem('eo_chatw',String(cur));}catch(e){}this.setState({chatW:cur});}};
     window.addEventListener('pointermove',move);window.addEventListener('pointerup',up);document.body.style.cursor='col-resize';document.body.style.userSelect='none';}
-  onChatResizeReset(){try{localStorage.setItem('eo_chatw','420');}catch(e){}this.setState({chatW:420});}
+  onChatResizeReset(){try{localStorage.setItem('eo_chatw','600');}catch(e){}this.setState({chatW:600});}
   toggleSwap(){const v=!this.state.swapped;try{localStorage.setItem('eo_swap',v?'1':'0');}catch(e){}this.setState({swapped:v});}
   // ── layout presets ────────────────────────────────────────────────────────
   // Presets are one-click setters of the open flags + chat. The active preset is DERIVED
@@ -8381,17 +8355,11 @@ class Component extends DCLogic {
       onSearch:e=>this.onSearch(e),inboxCount:'',inbox:[],inboxEmpty:true,groups:[],hasEgo:false,
       chats:[],hasChats:false,chatOn:false,chat:null,chatInput:this.state.chatInput||'',askPageOn:false,
       onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onStopGen:()=>this.stopGeneration(),onCloseChat:()=>this.closeChat(),onAskPage:()=>this.askThisPage(),
-      // THE EMERGENT READOUT (design/chat-redesign/REVISIONS.md): the six manual
-      // composer controls are gone. The route is read off the ask as you type \u2014
-      // intent, depth, register, breadth \u2014 and the same _read(q) derives the
-      // turn's config at send time. The chips are a readout, not buttons: there
-      // is nothing to set. Provenance marks are emergent too \u2014 clean
-      // hover-reveal, always (the root's data-prov attribute reads the constant
-      // below). Deep research still runs from the ask itself (the read relaxes
-      // into research) or the explicit /research command; the SURFACE \u2014 the
-      // live report panel over the session's research log \u2014 stays reachable
-      // from the readout row: a view, not a mode.
-      read:this._readView(),
+      // The composer has no chat-type options \u2014 no readout, no mode buttons. The route
+      // is still read off the ask at send time (_read derives the turn's config), and
+      // deep research runs from the ask itself or the explicit /research command.
+      // Provenance marks stay emergent \u2014 clean hover-reveal, always (the root's
+      // data-prov attribute reads the constant below).
       provMode:'hover',
       onOpenDeepResearch:()=>this.onOpenDeepResearch(),
       onOpenDoc:()=>this.onOpenDoc(),
@@ -8446,7 +8414,7 @@ class Component extends DCLogic {
       const L=this.state.leftOpen, R=this.state.rightOpen;
       const chatActive=!!this.activeChatObj();
       const C=chatActive && !!this.state.viewUrl && !isNarrow;   // chat docked as a column
-      const pw=(this.state.panelW||380), cw=(this.state.chatW||420);
+      const pw=(this.state.panelW||380), cw=(this.state.chatW||600);
       base.isPhone=isPhone; base.isNarrow=isNarrow; base.chatColOn=C;
       if(isPhone){
         base.gridCols='1fr';
