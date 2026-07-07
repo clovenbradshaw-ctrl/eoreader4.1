@@ -6546,14 +6546,25 @@ class Component extends DCLogic {
       .map(p=>({p,set:new Set(this._researchTerms(p.text))}));
     const reg={};const sreg={};let sn=0,nSource=0,nSpan=0;const SENT=/(?<=[.!?])\s+/;
     // classify one span against the passages → the best-overlapping passage, or null (void).
-    const bestOf=(toks)=>{
+    // Overlap FINDS the candidate; it does not certify it. Below the verbatim floor the passage must
+    // actually WITNESS the claim (citationHolds → classifyProvenance, same figures in the same
+    // relation) before the ⟦cN⟧ citation stands — otherwise a claim that merely borrows a passage's
+    // vocabulary ("dolphins ... help other animals, including humans, in distress" over a passage about
+    // sexual behaviour "towards other animals, including humans") would be pinned to a source that
+    // witnesses none of it, severing the citation from the claim it carries (the failure eo-gen.js
+    // retired the essay pipeline over). Via the eo-gen bridge when warm; a cold bridge or any fault
+    // degrades to the lexical verdict (mirrors _gateGround) and self-heals on the next render.
+    const bestOf=(toks,sent)=>{
       const tset=new Set(toks);let best=null,bestScore=0;
       for(const {p,set} of ps){
         if(!set.size)continue;let hit=0;for(const t of tset)if(set.has(t))hit++;
         const score=hit/tset.size;
         if(hit>=2&&score>bestScore){bestScore=score;best=p;}
       }
-      return (best&&bestScore>=0.3)?best:null;
+      if(!best||bestScore<0.3)return null;
+      const eg=(typeof window!=='undefined')&&window.eoGen;
+      if(eg&&eg.citationHolds&&!eg.citationHolds(sent,best.text,bestScore))return null;
+      return best;
     };
     // wrap one span in a hoverable provenance sentinel; a source span also carries its footnote.
     // A void span is the model's own — role 'assertion' (a substantive claim it puts forward on
@@ -6562,7 +6573,7 @@ class Component extends DCLogic {
     const wrap=(sent)=>{
       if(!sent)return sent;
       const toks=this._researchTerms(sent);
-      const best=toks.length<3?null:bestOf(toks);const k=sn++;nSpan++;
+      const best=toks.length<3?null:bestOf(toks,sent);const k=sn++;nSpan++;
       if(best){
         nSource++;
         if(!reg[best.i]){

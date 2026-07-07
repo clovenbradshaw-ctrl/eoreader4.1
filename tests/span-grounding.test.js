@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { groundSpans, groundSummary } from '../src/ground/index.js';
+import { groundSpans, groundSummary, citationHolds } from '../src/ground/index.js';
 import { parseText } from '../src/perceiver/parse/index.js';
 
 // Every span of an answer is grounded: EITHER to a source (from the perceiver door — with the
@@ -92,4 +92,30 @@ test('a genuine verbatim lift stands even when the parser reads no relation out 
   const passages = [{ u: 'text:d', i: 0, text: 'The mesolimbic pathway modulates dopaminergic tone.' }];
   const [v] = groundSpans(['The mesolimbic pathway modulates dopaminergic tone.'], { passages, doc });
   assert.equal(v.kind, 'source', 'a near-verbatim lift is sourced regardless of parse');
+});
+
+// ── citationHolds: the per-citation honesty gate the inline render binder reads ─────────────
+// Overlap FINDS a candidate passage; citationHolds decides whether pinning a citation there is
+// honest. Below the verbatim floor the passage must WITNESS the claim (same figures, same relation),
+// not merely share its words — so a citation is never severed from the claim it is meant to carry.
+
+test('citationHolds REFUSES a claim that borrows a passage\'s words but asserts a relation it never makes', () => {
+  // The reported failure, verbatim: a confabulated wholesome claim ("empathy ... help other animals,
+  // including humans, in distress") lexically matches a passage about SEXUAL behaviour on the shared
+  // phrase "other animals, including humans" — but the passage witnesses none of what the claim says.
+  const claim = 'Dolphins have been observed showing empathy and compassion towards each other, and they have even been known to help other animals, including humans, in distress.';
+  const passage = 'Various species of dolphin have been known to engage in sexual behavior including copulation with dolphins of other species, and occasionally exhibit sexual behavior towards other animals, including humans.';
+  assert.equal(citationHolds(claim, passage, 0.47), false, 'shared vocabulary, no witnessed proposition → the citation must not stand');
+});
+
+test('citationHolds ADMITS a near-verbatim lift with no propositional check — verbatim IS the grounding', () => {
+  const claim = 'Dolphins are highly social animals living in complex fission-fusion societies, forming fluid groups that constantly change in size and composition.';
+  const passage = 'Dolphins are highly social animals living in complex "fission-fusion" societies, forming fluid groups (i.e., pods) that constantly change in size and composition.';
+  assert.equal(citationHolds(claim, passage, 0.74), true, 'at/above the verbatim floor the lift stands');
+});
+
+test('citationHolds ADMITS a below-verbatim reword the passage genuinely witnesses', () => {
+  const claim = 'Dolphins tend to travel in pods.';
+  const passage = 'Dolphins tend to travel in pods, upon which there are groups of dolphins that range from a few to many.';
+  assert.equal(citationHolds(claim, passage, 0.4), true, 'the passage asserts the same relation → the citation is honest');
 });

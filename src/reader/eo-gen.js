@@ -22,11 +22,14 @@ import { reflectAnswer } from '../ground/reflect.js';
 // supportVerdict (ground/spans.js): the ANSWER-GRAIN bind-check the grounding badge reads —
 // turns the per-span tally into an honest "matched" / "the model's own words" decision, so the
 // chat path never badges a namesake-passage answer as grounded. Shared with the text organ.
-import { groundSpans, groundSummary, supportVerdict } from '../ground/spans.js';
+// citationHolds (ground/spans.js): the per-citation honesty gate the chat's inline binder reads —
+// below the verbatim floor a lexical passage match may stand as a citation only if the passage
+// actually WITNESSES the claim, so a citation is never severed from the claim it carries.
+import { groundSpans, groundSummary, supportVerdict, citationHolds } from '../ground/spans.js';
 
 if (typeof window !== 'undefined') {
-  window.eoGen = { reflectAnswer, groundSpans, groundSummary, supportVerdict, version: 8 };
+  window.eoGen = { reflectAnswer, groundSpans, groundSummary, supportVerdict, citationHolds, version: 9 };
   window.dispatchEvent(new Event('eogen-ready'));
 }
 
-export { reflectAnswer, groundSpans, groundSummary, supportVerdict };
+export { reflectAnswer, groundSpans, groundSummary, supportVerdict, citationHolds };
