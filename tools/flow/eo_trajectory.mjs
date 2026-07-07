@@ -56,12 +56,14 @@ function trajectory(text){
   const doc = parseText(HEAD ? text.slice(0,HEAD) : text);
   if (doc.sentences.length < MIN_SENT) return null;
   const { steps, nSent, pos, sections, segment } = trajectoryFromDoc(doc, segOpts);
+  const r4 = x=>Math.round(x*1e4)/1e4;
   return {
     nSent, segment,
-    steps: steps.map(s=>[...s].map(x=>Math.round(x*1e4)/1e4)),
-    pos: pos.map(x=>Math.round(x*1e4)/1e4),
-    sectionOps: sections ? sections.map(s=>s.op) : null,
-    sectionLens: sections ? sections.map(s=>s.len) : null,
+    steps: steps.map(s=>[...s].map(r4)),
+    pos: pos.map(r4),
+    // the discourse path, legible in operator terms: every section's span, length,
+    // dominant operator, whether it opens on a NUL birth, and its reading position.
+    sections: sections ? sections.map((s,i)=>({ from:s.lo, to:s.hi, len:s.len, dom:s.op, birth:!!s.born, pos:r4(pos[i]) })) : null,
   };
 }
 
@@ -91,7 +93,7 @@ for await (const line of rl){
   out.write(JSON.stringify({ id, title: rec.title||`source ${id}`, subjects: rec.subjects||null,
     nSent: tr.nSent, segment: tr.segment, nSteps: tr.steps.length,
     stepDim: tr.steps[0]?.length||102, localDim: 90,
-    steps: tr.steps, pos: tr.pos, sectionOps: tr.sectionOps, sectionLens: tr.sectionLens }) + '\n');
+    steps: tr.steps, pos: tr.pos, sections: tr.sections }) + '\n');
   n++;
   if (n%25===0){ const r=(n/((Date.now()-t0)/1000)).toFixed(1); process.stdout.write(`\r  ${n} books · ${r}/s · ${skipped} skipped`); }
 }

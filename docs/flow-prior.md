@@ -38,6 +38,32 @@ three Parts falling on NUL births. The delta between consecutive sections is the
 | `{perSentences:N}` | a fixed *N*-sentence window | the running paragraph-at-a-time critic (short drafts have few sections, so a window gives it more points) |
 | `{segment:'equal',steps:N}` or a number | *N* equal slices | legacy comparability |
 
+## Why sections — the measured case (and one honest correction)
+
+The prediction was that natural joints would give a *sharper manifold* than the grid.
+Tested head-to-head on the same corpus (same parse, same step-math, only segmentation
+differs — `tools/flow/manifold_compare.py`), the result splits:
+
+| metric | grid-40 | sentences-12 | sections |
+|---|---|---|---|
+| PCs to 90% variance | 9 | 10 | 10 |
+| variance @ top-10 PCs | 94% | 90% | 90% |
+| **mean Δ (step-to-step)** | 0.164 | 0.316 | **0.322** |
+| **mode separability** (between/within by dominant op) | 0.13 | 0.14 | **0.17** |
+
+The raw manifold-tightness metrics (fewer PCs, higher variance-captured, lower
+residual) actually **favor the grid** — but that is a *blur* artifact, not a point
+for the grid: a grid cell averages over many sentences, smoothing operator variation
+toward the book mean, so the cloud is artificially compact. It is tighter because it
+is blurrier.
+
+The metrics that test whether the *joints* are real both favor sections: the
+step-to-step delta is **~2× larger** (0.164 → 0.322 — cutting at real joints yields
+transitions twice the size of cutting mid-unit), and the sections **separate ~27%
+more cleanly by dominant operator** (0.13 → 0.17). So the deltas are more meaningful
+and the modes are better resolved. The manifold is not "tighter," and it shouldn't be
+— a tighter grid manifold only means the grid discarded structure by averaging.
+
 ## The three layers
 
 **1 — Extraction (`tools/flow/eo_trajectory.mjs`).** Parses each book through

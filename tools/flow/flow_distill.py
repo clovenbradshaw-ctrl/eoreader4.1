@@ -103,12 +103,18 @@ def main():
     flow_scores=np.asarray(flow_scores)
 
     # ── sections: length, count, dominant-op mix + transition matrix ──────────
+    def sec_ops(t):   # dominant-operator sequence — from the `sections` array (new) or the legacy arrays
+        if t.get("sections"): return [s.get("dom") for s in t["sections"]]
+        return t.get("sectionOps") or []
+    def sec_lens(t):
+        if t.get("sections"): return [s.get("len") for s in t["sections"]]
+        return t.get("sectionLens") or []
     sec_block=None
-    if any(t.get("sectionOps") for t in T):
-        lens=[l for t in T for l in (t.get("sectionLens") or [])]
+    if any(sec_ops(t) for t in T):
+        lens=[l for t in T for l in sec_lens(t)]
         opdist=np.zeros(len(OPS)); trans=np.zeros((len(OPS),len(OPS)))
         for t in T:
-            ops=t.get("sectionOps") or []
+            ops=sec_ops(t)
             for o in ops:
                 if o in OPI: opdist[OPI[o]]+=1
             for x,y in zip(ops[:-1],ops[1:]):
