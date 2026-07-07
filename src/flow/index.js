@@ -330,6 +330,20 @@ export function arcTarget(prior, t){
   for(let j=0;j<GRAPH_DIM;j++) out[prior.arcKeys[j]]={mean:prior.arcMean[pk][j], sd:prior.arcSd[pk][j]};
   return out;
 }
+// arcState — the READ half of the build-arc comparison, symmetric with arcTarget.
+// arcTarget hands back the corpus-typical cumulative state at position t; arcState
+// reads the SAME 12 graph features off a LIVE step vector (its graph block, the 12
+// dims after the local(90) block — byte-identical to scoreTrajectory's `g`), keyed by
+// the same arcKeys. So `arcState(step)[k] − arcTarget(t)[k].mean` is the gap the move
+// deriver reads — where the trajectory actually is vs where the corpus would be here.
+// Null-safe: no prior or no step ⇒ null (longgen/fold.js then falls back to the phase).
+export function arcState(prior, step){
+  if(!prior||!step) return null;
+  const g=step.slice(LOCAL_DIM);
+  const out={};
+  for(let j=0;j<GRAPH_DIM;j++) out[prior.arcKeys[j]]=g[j];
+  return out;
+}
 // 3) longgen/audit.js — whole-piece report: scoreTrajectory(prior,
 //    ...trajectoryFromDoc(doc)) in the export audit, alongside diagnose().
 

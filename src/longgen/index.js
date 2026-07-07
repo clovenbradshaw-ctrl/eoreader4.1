@@ -36,6 +36,15 @@ export {
 } from './render.js';
 export { progressAgainst } from './progress.js';
 export { composeParagraphs, evaSplice, frameLeak } from './compose.js';
+// The prompt as a FOLD, and multi-response generation as variation + selection
+// (docs/multi-response-folds.md): the arc-gap move deriver, the live-thread reader,
+// the fold-prompt builder (build_prompt(prior, prevStep, liveGraph, arcPhase)), the
+// flow-prior fitness function, and the best-of-n selector that keeps the on-manifold
+// candidate.
+export {
+  buildFoldPrompt, build_prompt, foldBestOfN, arcGapMove, liveThreads,
+  flowScorer, OP_DIRECTIVES, SYSTEM_FOLD,
+} from './fold.js';
 export {
   atomPrompt, stablePrefix, prefixCacheKey, readWindow,
   propositionInstruction, speculateNext, SYSTEM_WRITER,
