@@ -111,3 +111,16 @@ test('OPERATORS is the 9-operator alphabet the prior was built on', () => {
   assert.equal(OPERATORS.length, 9);
   assert.ok(OPERATORS.includes('CON') && OPERATORS.includes('REC'));
 });
+
+test('the committed exemplar spec loads as a prior and re-centers the arc', () => {
+  const spec = loadPrior(readFileSync(join(root, 'data/flow-spec-viruses.json'), 'utf8'));
+  assert.equal(spec.meta.kind, 'exemplar-spec');
+  assert.ok(spec.meta.exemplar && spec.meta.exemplar.title, 'carries exemplar provenance');
+  assert.equal(spec.steps, prior.steps);                     // same step grid as the base prior
+  const t = arcTarget(spec, 0.5);
+  assert.deepEqual(Object.keys(t).sort(), [...spec.arcKeys].sort());
+  // the overlay replaced the corpus arc mean with the exemplar's own
+  assert.notDeepEqual(spec.arcMean[20], prior.arcMean[20]);
+  // but borrowed the corpus spread (sd) as the tolerance
+  assert.deepEqual(spec.arcSd[20], prior.arcSd[20]);
+});
