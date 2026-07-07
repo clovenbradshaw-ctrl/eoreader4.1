@@ -132,13 +132,69 @@ discrimination column. Until a mapping clears it, the k·step accumulator stays 
 because the seat is defensible, but because the proposed replacement does not measure the
 same break.
 
+## Follow-on: grounding the *number of steps* in signal-vs-noise
+
+The Born swap failed, so the k·step mechanism stays — but its number of steps is still
+hand-set (`perLayerSteps = { proposition: 3, document: 8 }`, the seat). A second probe,
+`eoreader4-eval/noise-k-probe.mjs`, tests the alternative the Born measure was reaching
+for by a different route: **derive the number of steps from the reading's own noise**,
+the same signal-from-noise discipline `deriveNull` / `boundedNull` already apply
+everywhere else in the tree.
+
+The strain deltas `d_c = max(0, surprise − band)` arrive over read time. Under the null
+— deltas arriving *independently*, no clustering — the leaky accumulator still wanders up
+to some level by chance. The threshold is then the `(1−α)` level of that chance
+accumulation (Monte-Carlo: shuffle the deltas, accumulate, read the level off the
+shuffles), and the implied `k = threshold / step` *falls out of the noise* instead of
+being picked. Two nulls: pointwise (per-cursor exceedance, length-robust) and
+extreme-value (per-document max — deriveNull's own discipline, but confounded by document
+length, so an upper bound). Measured over the same corpus and the same live reading:
+
+```
+LAYER proposition (hand-set k=3, step≈0.115)   LAYER document (hand-set k=8, step≈0.115)
+  α=0.05  pointwise k≈8.1   extreme k≈14          α=0.05  pointwise k≈8.1   extreme k≈14
+
+k_doc / k_prop = 1.00 at every α, both nulls   (hand-set ratio 2.67)
+
+PARITY (grounded pointwise rule vs today's k·step breaks)
+  proposition  implied k≈7.3  recall 12%  F1 20%   (grounded rule fires 14 vs today's 68)
+  document     implied k≈8.1  recall 43%  F1 35%   (grounded rule fires 10 vs today's 7)
+```
+
+Three findings, robust across nulls and α:
+
+1. **The definition works.** Signal-vs-noise yields a *definite* number of steps for a
+   given (α, null). The method is sound — `k` need not be a constant.
+2. **One number, not two — the ratio is a prior, not in the signal.** Both layers are fed
+   the *same* surprise stream and the *same* leak, so their marginal noise is identical
+   and the noise-derived `k` is the *same* (~8 pointwise) for proposition and document.
+   `k_doc/k_prop = 1.00` at every α. The `8 : 3` hierarchy ("a document holds ~2.7×
+   harder") does **not** fall out of the noise. To ground the ratio too, the layers would
+   need *different noise* — a longer leak for the higher layer (more memory → higher
+   floor → more steps), or a coarser-grain surprise for the document — not a constant.
+3. **The grounded number validates document's 8 and indicts proposition's 3.** The
+   pointwise noise floor is `k ≈ 8` (α=0.05). Document's hand-set 8 is noise-calibrated;
+   proposition's hand-set 3 sits *well below* any noise floor (8 pointwise, 14
+   extreme-value), so proposition RECs at `k=3` are firing on chance-level clustering — a
+   deliberate hair-trigger, not a grounded break. Grounding the number would suppress
+   most of today's proposition breaks (recall 12% — 14 grounded vs 68 today), which is
+   why this is a *behavior change*, not a parity-preserving swap: a grounded threshold
+   correctly rejects the sub-noise breaks the current `k=3` admits.
+
+So the number of steps *can* be defined by signal-vs-noise, and the answer is concrete:
+today's proposition threshold is a sub-noise hair-trigger, today's document threshold is
+about right, and the layer ratio is a structural prior the current single surprise stream
+cannot supply. That is a grounded, actionable finding about the existing mechanism —
+where the Born swap could only report that a different quantity does not track it.
+
 ## Reproducing
 
 ```
-NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node eoreader4-eval/born-frame-probe.mjs
+NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node eoreader4-eval/born-frame-probe.mjs   # Step 0 (Born partition)
+NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node eoreader4-eval/noise-k-probe.mjs       # follow-on (noise-derived k)
 ```
 
-Requires the live MiniLM organ (`@huggingface/transformers`, `Xenova/paraphrase-
+Both require the live MiniLM organ (`@huggingface/transformers`, `Xenova/paraphrase-
 multilingual-MiniLM-L12-v2`, q8/cpu) — the same organ the eoreader4-eval mechanics use.
-Read-only: it parses and reads the corpus and prints the partition; it writes nothing
-and changes no behavior.
+Read-only: they parse and read the corpus and print the measurement; they write nothing
+and change no behavior.
