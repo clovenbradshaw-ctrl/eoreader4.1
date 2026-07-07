@@ -1,0 +1,417 @@
+<title>Two cursors on a corpus — the causal DAG the sources are read as asserting</title>
+<style>
+  :root{
+    --ground:#eef0f4; --panel:#ffffff; --panel2:#f7f8fb; --ink:#15181e; --muted:#5c6472;
+    --line:#dfe3ea; --line2:#eceff4;
+    --essential:#3b46c4; --generative:#0c8f7f; --accidental:#8a94a6; --warm:#c9760a; --contest:#c0344d;
+    --focus:#3b46c4;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --ground:#0e1117; --panel:#161a21; --panel2:#1b2029; --ink:#e7eaf0; --muted:#8894a4;
+      --line:#272d38; --line2:#1f242d;
+      --essential:#7c85f2; --generative:#37bcaa; --accidental:#6c7684; --warm:#e0942f; --contest:#e26a82; --focus:#7c85f2;
+    }
+  }
+  :root[data-theme="light"]{
+    --ground:#eef0f4; --panel:#ffffff; --panel2:#f7f8fb; --ink:#15181e; --muted:#5c6472;
+    --line:#dfe3ea; --line2:#eceff4;
+    --essential:#3b46c4; --generative:#0c8f7f; --accidental:#8a94a6; --warm:#c9760a; --contest:#c0344d; --focus:#3b46c4;
+  }
+  :root[data-theme="dark"]{
+    --ground:#0e1117; --panel:#161a21; --panel2:#1b2029; --ink:#e7eaf0; --muted:#8894a4;
+    --line:#272d38; --line2:#1f242d;
+    --essential:#7c85f2; --generative:#37bcaa; --accidental:#6c7684; --warm:#e0942f; --contest:#e26a82; --focus:#7c85f2;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);line-height:1.5;
+    -webkit-font-smoothing:antialiased;font-size:15px}
+  .wrap{max-width:1060px;margin:0 auto;padding:34px 22px 80px}
+  .eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  h1{font-family:var(--sans);font-weight:640;font-size:clamp(24px,3.6vw,33px);line-height:1.12;
+    margin:.5rem 0 .5rem;letter-spacing:-.014em;text-wrap:balance;max-width:20ch}
+  .thesis{font-family:var(--serif);font-style:italic;font-size:clamp(16px,2.2vw,19px);color:var(--ink);
+    max-width:60ch;margin:.2rem 0 0;line-height:1.45}
+  .thesis b{font-style:normal;font-weight:600;border-bottom:2px solid color-mix(in srgb,var(--focus) 55%,transparent);padding-bottom:1px}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin:22px 0 10px}
+  .chip{font-family:var(--mono);font-size:12px;background:var(--panel);border:1px solid var(--line);
+    border-radius:999px;padding:5px 11px;display:flex;gap:7px;align-items:center;color:var(--muted)}
+  .chip b{color:var(--ink);font-weight:600}
+  .tabs{display:flex;gap:4px;margin:20px 0 0;border-bottom:1px solid var(--line)}
+  .tab{appearance:none;background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;
+    font-family:var(--sans);font-size:14px;font-weight:550;color:var(--muted);padding:9px 13px;cursor:pointer}
+  .tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--focus)}
+  .tab:focus-visible{outline:2px solid var(--focus);outline-offset:2px;border-radius:4px}
+  .cursor-note{font-size:13.5px;color:var(--muted);margin:14px 0 6px;max-width:64ch}
+  .stage{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin-top:12px;overflow:hidden}
+  .stage-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;
+    padding:12px 16px;border-bottom:1px solid var(--line2);background:var(--panel2)}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted)}
+  .lg{display:flex;align-items:center;gap:6px;white-space:nowrap}
+  .lg svg{display:block}
+  .toggle{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink);cursor:pointer;user-select:none}
+  .toggle input{accent-color:var(--warm);width:15px;height:15px}
+  .svgscroll{overflow-x:auto}
+  svg.graph{display:block;width:100%;min-width:640px;height:auto;font-family:var(--mono)}
+  .node rect{fill:var(--panel2);stroke:var(--line);stroke-width:1.5}
+  .node text{fill:var(--ink);font-size:13px;font-family:var(--mono)}
+  .node .sub{fill:var(--muted);font-size:10px}
+  .node.dim{opacity:.32}
+  .node.warm rect{stroke:var(--warm);stroke-width:2.5}
+  .node.sel rect{stroke:var(--focus);stroke-width:2.5}
+  .edge{fill:none;cursor:pointer}
+  .edge.dim{opacity:.14}
+  .edge-hit{fill:none;stroke:transparent;stroke-width:16;cursor:pointer}
+  .elabel{font-size:10px;fill:var(--muted);font-family:var(--mono)}
+  .contest-ring{fill:none;stroke:var(--contest);stroke-width:1.4;stroke-dasharray:2 3;opacity:.85}
+  .inspector{border-top:1px solid var(--line2);padding:0}
+  .insp-empty{padding:18px 16px;color:var(--muted);font-size:13.5px}
+  .insp-head{padding:13px 16px 6px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+  .insp-title{font-family:var(--mono);font-size:15px;font-weight:600}
+  .insp-sub{font-size:12.5px;color:var(--muted)}
+  .claims{list-style:none;margin:0;padding:4px 16px 16px;display:flex;flex-direction:column;gap:9px}
+  .claim{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel2)}
+  .claim-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+  .stance{font-family:var(--mono);font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;color:#fff}
+  .stance.essential{background:var(--essential)} .stance.generative{background:var(--generative)}
+  .stance.accidental{background:var(--accidental)}
+  .src{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .passage{font-family:var(--mono);font-size:12.5px;color:var(--ink);line-height:1.55}
+  .passage mark{background:color-mix(in srgb,var(--focus) 22%,transparent);color:var(--ink);
+    padding:0 2px;border-radius:3px}
+  .meta{display:flex;gap:12px;flex-wrap:wrap;margin-top:7px;font-size:11px;color:var(--muted);font-family:var(--mono)}
+  .rc{display:inline-flex;align-items:center;gap:5px}
+  .rcbar{width:44px;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
+  .rcbar i{display:block;height:100%;background:var(--focus)}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-top:18px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px 16px}
+  .card h3{margin:0 0 4px;font-size:13px;letter-spacing:.02em;display:flex;align-items:center;gap:8px}
+  .card .dot{width:9px;height:9px;border-radius:50%}
+  .card p.k{font-size:12px;color:var(--muted);margin:.1rem 0 10px}
+  .item{font-size:13px;padding:9px 0;border-top:1px solid var(--line2)}
+  .item:first-of-type{border-top:0}
+  .item code{font-family:var(--mono);background:var(--panel2);border:1px solid var(--line);border-radius:5px;
+    padding:1px 5px;font-size:12px}
+  .q{font-family:var(--serif);font-style:italic;font-size:13.5px;color:var(--ink);margin:2px 0 6px}
+  .silent{font-family:var(--mono);font-size:11px;color:var(--contest);font-weight:600;letter-spacing:.03em}
+  .foot{margin-top:26px;font-size:12px;color:var(--muted);max-width:70ch;line-height:1.6}
+  .foot code{font-family:var(--mono);font-size:11.5px}
+  .hidden{display:none}
+  /* cursor 1 */
+  .flowscroll{overflow-x:auto;padding:6px 0}
+  svg.flow{display:block;width:100%;min-width:680px;height:auto;font-family:var(--mono)}
+  .snode circle{fill:var(--panel2);stroke:var(--line);stroke-width:1.5;cursor:pointer}
+  .snode.sel circle{stroke:var(--focus);stroke-width:2.5;fill:color-mix(in srgb,var(--focus) 14%,var(--panel2))}
+  .snum{font-size:11px;fill:var(--muted);font-family:var(--mono)}
+  .darc{fill:none;stroke-width:2}
+  .sentence-read{padding:14px 16px;border-top:1px solid var(--line2);font-family:var(--mono);font-size:13px;line-height:1.6}
+  .sentence-read .n{color:var(--muted)}
+  .intra{display:inline-block;font-family:var(--mono);font-size:10.5px;padding:1px 7px;border-radius:999px;
+    margin:2px 4px 0 0;border:1px solid var(--line)}
+  @media (prefers-reduced-motion:no-preference){ .edge,.node rect,.snode circle{transition:opacity .18s} }
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">eoreader4.1 · DAG&nbsp;from&nbsp;corpus</div>
+  <h1>Two cursors on a corpus about a library and crime</h1>
+  <p class="thesis">A causal effect is a counterfactual — it is not in any text. So this never says
+    “the library cut crime.” It says what the reader <b>reads the sources as claiming</b>, traced to the
+    passage, typed by the stance the source proposed — and it can never upgrade that stance, because only a
+    design can.</p>
+
+  <div class="chips" id="chips"></div>
+
+  <div class="tabs" role="tablist" aria-label="cursors">
+    <button class="tab" id="tab-2" role="tab" aria-selected="true" aria-controls="view-2">Cursor 2 · the world the sources assert</button>
+    <button class="tab" id="tab-1" role="tab" aria-selected="false" aria-controls="view-1">Cursor 1 · the document’s own flow</button>
+  </div>
+
+  <!-- CURSOR 2 -->
+  <section id="view-2" role="tabpanel" aria-labelledby="tab-2">
+    <p class="cursor-note">The causal graph the corpus is <em>read as</em> asserting. Each edge is a claim, not
+      a fact; click one to see the passages that made it. Nodes are the described constructs; an
+      <span style="color:var(--warm);font-weight:600">amber</span> node is warm from both trails — a candidate
+      common cause the corpus cannot rule out.</p>
+    <div class="stage">
+      <div class="stage-head">
+        <div class="legend" id="legend2"></div>
+        <label class="toggle"><input type="checkbox" id="forks"> show the confounder’s forks</label>
+      </div>
+      <div class="svgscroll"><svg class="graph" id="g2" viewBox="0 0 960 300" role="img" aria-label="causal DAG"></svg></div>
+      <div class="inspector" id="insp"><div class="insp-empty">Select an edge or a node to trace its claims to their passages.</div></div>
+    </div>
+    <div class="cards" id="cards2"></div>
+  </section>
+
+  <!-- CURSOR 1 -->
+  <section id="view-1" role="tabpanel" aria-labelledby="tab-1" class="hidden">
+    <p class="cursor-note">The flow of content <em>within one document</em> — its sentences in reading order and
+      the discourse relations it draws between them. Blind to the described world. The same word “because” is a
+      <span style="color:var(--essential);font-weight:600">reason</span> arc here and a causal edge over there —
+      the arrow is in the narration, not always in the thing.</p>
+    <div class="stage">
+      <div class="stage-head"><div class="legend" id="legend1"></div></div>
+      <div class="flowscroll"><svg class="flow" id="g1" viewBox="0 0 960 168" role="img" aria-label="discourse DAG"></svg></div>
+      <div class="sentence-read" id="sread">Select a sentence to read it.</div>
+    </div>
+  </section>
+
+  <p class="foot" id="foot"></p>
+</div>
+
+<script id="data" type="application/json">{"asserted":{"nodes":[{"key":"library","labels":["the library","libraries are","libraries"],"sources":["city-report","critic","program-study","measurement"]},{"key":"crime","labels":["crime","lower crime","reported crime"],"sources":["city-report","critic","program-study","measurement"]},{"key":"investment","labels":["but civic investment","civic investment also"],"sources":["critic"]},{"key":"attainment","labels":["attainment"],"sources":["program-study"]},{"key":"traffic","labels":["foot traffic"],"sources":["measurement"]}],"edges":[{"from":"library","to":"crime","stanceTally":{"accidental":1,"essential":2,"generative":1},"strongest":"generative","sources":["city-report","critic","measurement"],"contested":true,"polarity":{"positive":4,"null":0},"claims":[{"stance":"essential","marker":"reduced","polarity":"+","modality":"realis","rc":0.9,"effectSign":"−","docId":"city-report","sentIdx":0,"span":[12,19],"text":"The library reduced crime in the neighborhood."},{"stance":"generative","marker":"cut","polarity":"+","modality":"realis","rc":0.85,"effectSign":"−","docId":"city-report","sentIdx":1,"span":[12,15],"text":"The library cut crime through informal surveillance."},{"stance":"accidental","marker":"associated","polarity":"+","modality":"realis","rc":0.85,"effectSign":"−","docId":"critic","sentIdx":0,"span":[14,24],"text":"Libraries are associated with lower crime."},{"stance":"essential","marker":"reduced","polarity":"+","modality":"realis","rc":0.9,"effectSign":"−","docId":"measurement","sentIdx":0,"span":[12,19],"text":"The library reduced reported crime."}]},{"from":"investment","to":"library","stanceTally":{"accidental":0,"essential":1,"generative":0},"strongest":"essential","sources":["critic"],"contested":false,"polarity":{"positive":1,"null":0},"claims":[{"stance":"essential","marker":"increased","polarity":"+","modality":"realis","rc":0.9,"effectSign":"+","docId":"critic","sentIdx":1,"span":[21,30],"text":"But civic investment increased libraries."}]},{"from":"investment","to":"crime","stanceTally":{"accidental":0,"essential":1,"generative":0},"strongest":"essential","sources":["critic"],"contested":false,"polarity":{"positive":1,"null":0},"claims":[{"stance":"essential","marker":"reduced","polarity":"+","modality":"realis","rc":0.9,"effectSign":"−","docId":"critic","sentIdx":2,"span":[22,29],"text":"Civic investment also reduced crime."}]},{"from":"library","to":"attainment","stanceTally":{"accidental":0,"essential":1,"generative":0},"strongest":"essential","sources":["program-study"],"contested":false,"polarity":{"positive":1,"null":0},"claims":[{"stance":"essential","marker":"increased","polarity":"+","modality":"realis","rc":0.9,"effectSign":"+","docId":"program-study","sentIdx":0,"span":[12,21],"text":"The library increased attainment."}]},{"from":"attainment","to":"crime","stanceTally":{"accidental":0,"essential":1,"generative":0},"strongest":"essential","sources":["program-study"],"contested":false,"polarity":{"positive":1,"null":0},"claims":[{"stance":"essential","marker":"reduced","polarity":"+","modality":"realis","rc":0.9,"effectSign":"−","docId":"program-study","sentIdx":1,"span":[11,18],"text":"Attainment reduced crime."}]},{"from":"traffic","to":"crime","stanceTally":{"accidental":0,"essential":1,"generative":0},"strongest":"essential","sources":["measurement"],"contested":false,"polarity":{"positive":1,"null":0},"claims":[{"stance":"essential","marker":"raised","polarity":"+","modality":"realis","rc":0.9,"effectSign":"+","docId":"measurement","sentIdx":1,"span":[13,19],"text":"Foot traffic raised reported crime."}]}],"confounding":[{"edge":"library→crime","z":"investment","zToCause":[{"docId":"critic","sentIdx":1,"span":[21,30],"text":"But civic investment increased libraries."}],"zToEffect":[{"docId":"critic","sentIdx":2,"span":[22,29],"text":"Civic investment also reduced crime."}],"note":"'investment' is read as a cause of both 'library' and 'crime' — a candidate common cause of the library→crime reading. The corpus cannot rule it out; only a design can."},{"edge":"attainment→crime","z":"library","zToCause":[{"docId":"program-study","sentIdx":0,"span":[12,21],"text":"The library increased attainment."}],"zToEffect":[{"docId":"city-report","sentIdx":0,"span":[12,19],"text":"The library reduced crime in the neighborhood."},{"docId":"city-report","sentIdx":1,"span":[12,15],"text":"The library cut crime through informal surveillance."},{"docId":"critic","sentIdx":0,"span":[14,24],"text":"Libraries are associated with lower crime."},{"docId":"measurement","sentIdx":0,"span":[12,19],"text":"The library reduced reported crime."}],"note":"'library' is read as a cause of both 'attainment' and 'crime' — a candidate common cause of the attainment→crime reading. The corpus cannot rule it out; only a design can."}],"mechanism":[{"edge":"library→crime","path":["library","attainment","crime"],"note":"A mechanism the corpus articulates for library→crime: library → attainment → crime."},{"edge":"investment→crime","path":["investment","library","crime"],"note":"A mechanism the corpus articulates for investment→crime: investment → library → crime."},{"edge":"investment→crime","path":["investment","library","attainment","crime"],"note":"A mechanism the corpus articulates for investment→crime: investment → library → attainment → crime."}],"reverse":[],"construct":[]},"corpus":{"disagreements":[{"edge":"library→crime","assertedBy":["city-report","critic","measurement"],"reverseAssertedBy":null,"confounderProposedBy":["investment"],"polaritySplit":{"positive":4,"null":0}},{"edge":"attainment→crime","assertedBy":["program-study"],"reverseAssertedBy":null,"confounderProposedBy":["library"],"polaritySplit":{"positive":1,"null":0}}],"distinguishing":[{"edge":"library→crime","tests":[{"question":"Does the library→crime association survive controlling for 'investment'? (direct-edge graph predicts yes; common-cause graph predicts no.)","corpusHas":false,"corpusStatus":"has-claim"}]},{"edge":"attainment→crime","tests":[{"question":"Does the attainment→crime association survive controlling for 'library'? (direct-edge graph predicts yes; common-cause graph predicts no.)","corpusHas":false,"corpusStatus":"has-claim"}]}],"sources":["city-report","critic","program-study","measurement","null-study"]},"sourceText":{"city-report":"The library reduced crime in the neighborhood. The library cut crime through informal surveillance.","critic":"Libraries are associated with lower crime. But civic investment increased libraries. Civic investment also reduced crime.","program-study":"The library increased attainment. Attainment reduced crime.","measurement":"The library reduced reported crime. Foot traffic raised reported crime.","null-study":"The after-school program had no effect on crime."},"discourse":{"sentenceNodes":[{"i":0,"text":"The city opened a new central library in the spring.","section":0},{"i":1,"text":"Residents gathered there daily through the summer.","section":0},{"i":2,"text":"The council claimed the library reduced crime because foot traffic rose.","section":0},{"i":3,"text":"Although reported crime did fall, victimization surveys told a different story.","section":0},{"i":4,"text":"Critics argued that civic investment drove both the library and the drop in crime.","section":0},{"i":5,"text":"Therefore the council commissioned an independent study.","section":0},{"i":6,"text":"The study found that after-school programs raised attainment.","section":0},{"i":7,"text":"Higher attainment then lowered later offending.","section":0},{"i":8,"text":"The report concluded the library mattered, but the mechanism ran through programs.","section":0}],"discourseLinks":[{"type":"reason","connective":"because","at":2,"grain":"intra"},{"type":"contrast","connective":"although","from":2,"to":3,"grain":"inter"},{"type":"consequence","connective":"therefore","from":4,"to":5,"grain":"inter"},{"type":"sequence","connective":"later","at":7,"grain":"intra"},{"type":"sequence","connective":"then","at":7,"grain":"intra"},{"type":"contrast","connective":"but","at":8,"grain":"intra"}]}}</script>
+<script>
+const DATA = JSON.parse(document.getElementById('data').textContent);
+const SC = { essential:'var(--essential)', generative:'var(--generative)', accidental:'var(--accidental)' };
+const el = (t,a={},kids=[])=>{const n=document.createElementNS(a.ns||'http://www.w3.org/1999/xhtml',t);
+  for(const k in a){if(k==='ns')continue; if(k==='text')n.textContent=a[k]; else n.setAttribute(k,a[k]);}
+  for(const c of [].concat(kids)) if(c) n.appendChild(c); return n;};
+const S = (t,a={},kids=[])=>el(t,{...a,ns:'http://www.w3.org/2000/svg'},kids);
+const esc = (s)=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+/* ---------- summary chips ---------- */
+(function(){
+  const a=DATA.asserted;
+  const chips=[
+    ['edges', a.edges.length], ['nodes', a.nodes.length],
+    ['sources', DATA.corpus.sources.length],
+    ['contested', a.edges.filter(e=>e.contested).length],
+    ['confounders', a.confounding.length], ['mechanisms', a.mechanism.length],
+  ];
+  const box=document.getElementById('chips');
+  for(const [k,v] of chips) box.appendChild(el('span',{class:'chip'},[el('b',{text:v}),document.createTextNode(k)]));
+})();
+
+/* ---------- cursor 2 : layered causal DAG ---------- */
+const G2 = (function(){
+  const a=DATA.asserted, W=960, H=300, PADX=70, NODEW=132, NODEH=46;
+  const incoming={}, outgoing={};
+  a.nodes.forEach(n=>{incoming[n.key]=[];outgoing[n.key]=[];});
+  a.edges.forEach(e=>{outgoing[e.from].push(e); incoming[e.to].push(e);});
+  // longest-path layering from sources
+  const layer={}; const order=a.nodes.map(n=>n.key);
+  let changed=true;
+  order.forEach(k=>layer[k]=0);
+  for(let pass=0;pass<order.length&&changed;pass++){ changed=false;
+    a.edges.forEach(e=>{ if(layer[e.to] < layer[e.from]+1){layer[e.to]=layer[e.from]+1; changed=true;} }); }
+  const maxL=Math.max(...Object.values(layer));
+  const byLayer={}; order.forEach(k=>{(byLayer[layer[k]]=byLayer[layer[k]]||[]).push(k);});
+  const pos={};
+  const gapX=(W-2*PADX)/Math.max(1,maxL);
+  for(let L=0;L<=maxL;L++){ const col=byLayer[L]||[]; const gy=H/(col.length+1);
+    col.forEach((k,i)=>{ pos[k]={x:PADX+L*gapX, y:gy*(i+1)}; }); }
+  const confZ = new Set(a.confounding.map(c=>c.z));
+
+  const strongestColor=(e)=> SC[e.strongest]||'var(--accidental)';
+  const isAccidentalOnly=(e)=> e.stanceTally.essential===0 && e.stanceTally.generative===0;
+
+  function draw(){
+    const svg=document.getElementById('g2'); svg.innerHTML='';
+    const defs=S('defs');
+    for(const [name,color] of [['essential','var(--essential)'],['generative','var(--generative)'],['accidental','var(--accidental)'],['warm','var(--warm)']]){
+      const m=S('marker',{id:'ar-'+name,viewBox:'0 0 10 10',refX:'9',refY:'5',markerWidth:'7',markerHeight:'7',orient:'auto-start-reverse'});
+      m.appendChild(S('path',{d:'M0,0 L10,5 L0,10 z',fill:color})); defs.appendChild(m);
+    }
+    svg.appendChild(defs);
+    const showForks=document.getElementById('forks').checked;
+    const forkEdges=new Set();
+    if(showForks) a.confounding.forEach(c=>{ forkEdges.add(c.z+'→'+c.edge.split('→')[0]); forkEdges.add(c.z+'→'+c.edge.split('→')[1]); });
+
+    // edges
+    a.edges.forEach(e=>{
+      const p1=pos[e.from], p2=pos[e.to];
+      const x1=p1.x+NODEW/2, y1=p1.y, x2=p2.x-NODEW/2, y2=p2.y;
+      const mx=(x1+x2)/2;
+      const d=`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`;
+      const key=e.from+'→'+e.to;
+      const isFork=forkEdges.has(key);
+      const color= isFork ? 'var(--warm)' : strongestColor(e);
+      const wid= Math.min(4.5, 1.4 + e.claims.length*0.7);
+      if(e.contested) svg.appendChild(S('path',{d,class:'contest-ring','data-edge':key}));
+      const path=S('path',{d,class:'edge','data-edge':key,stroke:color,'stroke-width':wid,
+        'marker-end':`url(#ar-${isFork?'warm':(isAccidentalOnly(e)?'accidental':e.strongest)})`,
+        ...(isAccidentalOnly(e)&&!isFork?{'stroke-dasharray':'6 5'}:{})});
+      svg.appendChild(path);
+      const hit=S('path',{d,class:'edge-hit','data-edge':key}); svg.appendChild(hit);
+      hit.addEventListener('click',()=>selectEdge(key));
+      path.addEventListener('click',()=>selectEdge(key));
+      // marker label (verb) at midpoint
+      const label=[...new Set(e.claims.map(c=>c.marker))].slice(0,2).join('·');
+      svg.appendChild(S('text',{x:mx,y:(y1+y2)/2-6,'text-anchor':'middle',class:'elabel'},[document.createTextNode(label)]));
+    });
+    // nodes
+    a.nodes.forEach(n=>{
+      const p=pos[n.key];
+      const g=S('g',{class:'node'+(confZ.has(n.key)?' warm':''),'data-node':n.key});
+      g.appendChild(S('rect',{x:p.x-NODEW/2,y:p.y-NODEH/2,width:NODEW,height:NODEH,rx:9}));
+      g.appendChild(S('text',{x:p.x,y:p.y-2,'text-anchor':'middle'},[document.createTextNode(n.key)]));
+      g.appendChild(S('text',{x:p.x,y:p.y+13,'text-anchor':'middle',class:'sub'},[document.createTextNode(n.sources.length+' src'+(n.sources.length>1?'s':''))]));
+      g.style.cursor='pointer';
+      g.addEventListener('click',()=>selectNode(n.key));
+      svg.appendChild(g);
+    });
+  }
+
+  let selE=null, selN=null;
+  function clearHi(){ document.querySelectorAll('#g2 .edge,#g2 .node').forEach(x=>x.classList.remove('dim','sel')); }
+  function selectEdge(key){ selN=null; selE=key; clearHi();
+    document.querySelectorAll('#g2 .edge').forEach(p=>{ if(p.getAttribute('data-edge')!==key) p.classList.add('dim'); });
+    const [f,t]=key.split('→');
+    document.querySelectorAll('#g2 .node').forEach(g=>{ const k=g.getAttribute('data-node'); if(k!==f&&k!==t) g.classList.add('dim'); else g.classList.add('sel'); });
+    renderEdgeInspector(a.edges.find(e=>e.from+'→'+e.to===key));
+  }
+  function selectNode(k){ selE=null; selN=k; clearHi();
+    document.querySelectorAll('#g2 .node').forEach(g=>{ if(g.getAttribute('data-node')!==k) g.classList.add('dim'); else g.classList.add('sel'); });
+    document.querySelectorAll('#g2 .edge').forEach(p=>{ const [f,t]=p.getAttribute('data-edge').split('→'); if(f!==k&&t!==k) p.classList.add('dim'); });
+    renderNodeInspector(a.nodes.find(n=>n.key===k));
+  }
+  document.getElementById('forks').addEventListener('change',draw);
+  return { draw };
+})();
+
+function renderEdgeInspector(e){
+  const box=document.getElementById('insp'); box.innerHTML='';
+  const tally=Object.entries(e.stanceTally).filter(([,v])=>v).map(([k,v])=>`${k} ×${v}`).join(', ');
+  box.appendChild(el('div',{class:'insp-head'},[
+    el('span',{class:'insp-title',text:`${e.from} → ${e.to}`}),
+    el('span',{class:'insp-sub',text:`${e.claims.length} reading${e.claims.length>1?'s':''} · stances: ${tally}${e.contested?' · CONTESTED':''}`}),
+  ]));
+  const ul=el('ul',{class:'claims'});
+  e.claims.forEach(c=>{
+    const passage=el('div',{class:'passage'});
+    const t=c.text, [s0,s1]=c.span;
+    passage.innerHTML = esc(t.slice(0,s0))+'<mark>'+esc(t.slice(s0,s1))+'</mark>'+esc(t.slice(s1));
+    ul.appendChild(el('li',{class:'claim'},[
+      el('div',{class:'claim-top'},[
+        el('span',{class:'stance '+c.stance,text:c.stance}),
+        el('span',{class:'src',text:`${c.docId} · s${c.sentIdx}`}),
+      ]),
+      passage,
+      el('div',{class:'meta'},[
+        el('span',{text:`marker: ${c.marker}`}),
+        el('span',{text:`polarity: ${c.polarity==='−'?'null':'effect'}`}),
+        el('span',{text:`modality: ${c.modality}`}),
+        (()=>{const w=el('span',{class:'rc'});w.appendChild(document.createTextNode('read-conf'));
+          const bar=el('span',{class:'rcbar'});const i=el('i');i.style.width=Math.round(c.rc*100)+'%';bar.appendChild(i);
+          w.appendChild(bar);w.appendChild(document.createTextNode(c.rc.toFixed(2)));return w;})(),
+      ]),
+    ]));
+  });
+  box.appendChild(ul);
+}
+function renderNodeInspector(n){
+  const box=document.getElementById('insp'); box.innerHTML='';
+  box.appendChild(el('div',{class:'insp-head'},[
+    el('span',{class:'insp-title',text:n.key}),
+    el('span',{class:'insp-sub',text:`read in ${n.sources.length} source${n.sources.length>1?'s':''}: ${n.sources.join(', ')}`}),
+  ]));
+  const p=el('div',{class:'claims'});
+  p.appendChild(el('div',{class:'passage',text:'surface forms read as this node: '+n.labels.map(l=>'“'+l+'”').join('  ')}));
+  box.appendChild(p);
+}
+
+/* ---------- cursor 2 cards ---------- */
+(function(){
+  const a=DATA.asserted, box=document.getElementById('cards2');
+  const card=(title,color,sub,items)=>{
+    const c=el('div',{class:'card'});
+    c.appendChild(el('h3',{},[el('span',{class:'dot'}),document.createTextNode(title)]));
+    c.querySelector('.dot').style.background=color;
+    if(sub) c.appendChild(el('p',{class:'k',text:sub}));
+    items.forEach(i=>c.appendChild(i));
+    box.appendChild(c);
+  };
+  card('Confounding','var(--warm)','a node warm from both trails — the wave-fold convergence, surfaced not removed',
+    a.confounding.map(c=>el('div',{class:'item'},[
+      el('div',{},[document.createTextNode('common cause of '),el('code',{text:c.edge}),document.createTextNode(': '),el('code',{text:c.z})]),
+      el('div',{style:'color:var(--muted);font-size:12px;margin-top:3px',text:'the corpus cannot rule it out; only a design can.'})
+    ])));
+  card('Mechanism','var(--generative)','a pathway the corpus articulates — the “through what” a bare edge omits',
+    a.mechanism.map(m=>el('div',{class:'item'},[el('code',{text:m.path.join(' → ')})])));
+  const dis=DATA.corpus.distinguishing;
+  card('Disagreement · Pearl’s question','var(--contest)','what evidence would tell the graphs apart — and is the corpus silent on it?',
+    dis.flatMap(d=>d.tests.map(t=>el('div',{class:'item'},[
+      el('div',{},[el('code',{text:d.edge})]),
+      el('div',{class:'q',text:t.question}),
+      el('div',{class:'silent',text:t.corpusHas?'corpus contains this evidence':'NO — the corpus is silent on it'})
+    ]))));
+})();
+
+/* ---------- cursor 1 : discourse flow ---------- */
+(function(){
+  const d=DATA.discourse, W=960, PADX=40;
+  const DC = { contrast:'var(--contest)', consequence:'var(--generative)', reason:'var(--essential)',
+    condition:'var(--warm)', sequence:'var(--muted)', elaboration:'var(--accidental)' };
+  const n=d.sentenceNodes.length; const gap=(W-2*PADX)/Math.max(1,n-1);
+  const baseY=120; const x=i=>PADX+i*gap;
+  const svg=document.getElementById('g1');
+  function draw(){
+    svg.innerHTML='';
+    // spine
+    svg.appendChild(S('line',{x1:x(0),y1:baseY,x2:x(n-1),y2:baseY,stroke:'var(--line)','stroke-width':2}));
+    // inter-sentence discourse arcs (above)
+    d.discourseLinks.filter(l=>l.grain==='inter').forEach(l=>{
+      const x1=x(l.from), x2=x(l.to), h=baseY-48;
+      const dd=`M${x1},${baseY-10} C${x1},${h} ${x2},${h} ${x2},${baseY-10}`;
+      svg.appendChild(S('path',{d:dd,class:'darc',stroke:DC[l.type]||'var(--muted)'}));
+      svg.appendChild(S('text',{x:(x1+x2)/2,y:h-4,'text-anchor':'middle',class:'elabel'},[document.createTextNode(l.connective)]));
+    });
+    // nodes
+    d.sentenceNodes.forEach((s,i)=>{
+      const g=S('g',{class:'snode','data-i':i});
+      g.appendChild(S('circle',{cx:x(i),cy:baseY,r:13}));
+      g.appendChild(S('text',{x:x(i),y:baseY+4,'text-anchor':'middle',class:'snum'},[document.createTextNode(i+1)]));
+      g.addEventListener('click',()=>read(i));
+      svg.appendChild(g);
+    });
+  }
+  function read(i){
+    document.querySelectorAll('#g1 .snode').forEach(g=>g.classList.toggle('sel', +g.getAttribute('data-i')===i));
+    const s=d.sentenceNodes[i];
+    const intra=d.discourseLinks.filter(l=>l.grain==='intra'&&l.at===i);
+    const box=document.getElementById('sread'); box.innerHTML='';
+    box.appendChild(el('span',{class:'n',text:`sentence ${i+1} — `}));
+    box.appendChild(document.createTextNode(s.text));
+    if(intra.length){ const wrap=el('div',{}); intra.forEach(l=>{const c=el('span',{class:'intra',text:l.connective+' · '+l.type});
+      c.style.borderColor=DC[l.type]||'var(--line)';c.style.color=DC[l.type]||'var(--muted)';wrap.appendChild(c);}); box.appendChild(wrap);}
+  }
+  draw();
+  document.getElementById('sread').textContent='Select a sentence to read it, and its discourse moves.';
+})();
+
+/* ---------- legends ---------- */
+(function(){
+  const line=(color,dash)=>{const s=S('svg',{width:'26',height:'10',viewBox:'0 0 26 10'});
+    s.appendChild(S('line',{x1:'1',y1:'5',x2:'25',y2:'5',stroke:color,'stroke-width':'2.5',...(dash?{'stroke-dasharray':'5 4'}:{})}));return s;};
+  const L2=document.getElementById('legend2');
+  [['essential','var(--essential)',false,'genuine dependence'],['generative','var(--generative)',false,'mechanism'],
+   ['accidental','var(--accidental)',true,'mere association'],['confounder','var(--warm)',false,'common cause']].forEach(([n,c,dash,desc])=>{
+    L2.appendChild(el('span',{class:'lg'},[line(c,dash),document.createTextNode(n)]));});
+  L2.appendChild(el('span',{class:'lg'},[(()=>{const s=S('svg',{width:'26',height:'10'});s.appendChild(S('line',{x1:'1',y1:'5',x2:'25',y2:'5',stroke:'var(--contest)','stroke-width':'1.4','stroke-dasharray':'2 3'}));return s;})(),document.createTextNode('contested')]));
+  const L1=document.getElementById('legend1');
+  [['reason','var(--essential)'],['contrast','var(--contest)'],['consequence','var(--generative)'],
+   ['sequence','var(--muted)'],['elaboration','var(--accidental)'],['condition','var(--warm)']].forEach(([n,c])=>{
+    L1.appendChild(el('span',{class:'lg'},[line(c,false),document.createTextNode(n)]));});
+})();
+
+/* ---------- tabs ---------- */
+function show(which){
+  document.getElementById('tab-2').setAttribute('aria-selected', which===2);
+  document.getElementById('tab-1').setAttribute('aria-selected', which===1);
+  document.getElementById('view-2').classList.toggle('hidden', which!==2);
+  document.getElementById('view-1').classList.toggle('hidden', which!==1);
+}
+document.getElementById('tab-2').addEventListener('click',()=>show(2));
+document.getElementById('tab-1').addEventListener('click',()=>show(1));
+
+document.getElementById('foot').innerHTML =
+  'Generated by <code>tools/dag/extract_dag.mjs</code> over a 5-document corpus — a reading of claims, never facts. '+
+  'Every edge traces to the passage that proposed it (<code>claim-src</code>); the stance is what the source proposed and is never upgraded; '+
+  'the map is a <b>floor</b> on what the corpus states, not a ceiling — it can miss a confounder no source named.';
+
+G2.draw();
+show(2);
+</script>
