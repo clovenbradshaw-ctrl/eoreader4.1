@@ -100,6 +100,7 @@ inspection.
 | `doc` | **EO change tracking**: a written document as a fold of an append-only edit log (events · `projectDoc`); every edit grounding-checked against the Record (bind, or kept as void — marked) and reviewed as tracked changes in a Google-Docs-style suggesting surface (`mountDocSurface`) | nothing (the reader supplies the record) |
 | `archive` | archive.org pinning: dated snapshots, content hashes, span anchors (`#:~:text=`) | `ingest` |
 | `credence` | belief / credence detection (carried for the eval battery — see the pointer) | `core` |
+| `dag` | **DAG-from-corpus, two cursors** (`docs/dag-corpus.md`): the discourse DAG (flow of content *within* a document) and the asserted causal DAG (the graph each source is *read as* proposing) — stance-typed (accidental·essential·generative, never upgraded), sourced (`claim-src`), reading-rooted, with the four complexities (confounding·reverse·mechanism·construct) and the three NULs surfaced, laid side by side for adjudication | `core`, `perceiver`, `flow` |
 
 ## The nine operators
 
