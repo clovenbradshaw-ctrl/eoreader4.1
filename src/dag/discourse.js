@@ -21,6 +21,43 @@ import { sectionize } from '../flow/index.js';
 
 const CONNECTIVE_TYPE = Object.freeze({ cause: 'cause', contrast: 'contrast', condition: 'condition', sequence: 'sequence' });
 
+// The document's OWN discourse connectives, read at the sentence grain — the rhetorical
+// relations a document draws between its sentences, independent of whether the entities are
+// admitted. A sentence-INITIAL connective links the PREVIOUS sentence to this one; an
+// embedded one ("…, because …", "…, but …") is an intra-sentence relation. This is what
+// makes the two cursors legible against each other: the SAME word "because" is a discourse
+// 'reason' arc here (cursor 1) and a causal edge between world-nodes there (cursor 2). The
+// arrow is in the narration; keeping it here is what stops it leaking into the world graph.
+const DISCOURSE_MARKERS = Object.freeze({
+  therefore: 'consequence', thus: 'consequence', hence: 'consequence', so: 'consequence',
+  consequently: 'consequence', accordingly: 'consequence',
+  but: 'contrast', however: 'contrast', although: 'contrast', though: 'contrast',
+  whereas: 'contrast', yet: 'contrast', nonetheless: 'contrast', nevertheless: 'contrast', still: 'contrast',
+  because: 'reason', since: 'reason',
+  if: 'condition', unless: 'condition',
+  meanwhile: 'sequence', afterward: 'sequence', later: 'sequence', then: 'sequence',
+  moreover: 'elaboration', furthermore: 'elaboration', additionally: 'elaboration', also: 'elaboration',
+});
+const firstWord = (s) => (String(s || '').trim().match(/^[a-z]+/i) || [''])[0].toLowerCase();
+
+// Read the sentence-grain discourse relations. Inter-sentence arcs (from a sentence-initial
+// marker) plus intra-sentence relations (an embedded marker), each sourced to its sentence.
+export const readDiscourseLinks = (sentences) => {
+  const links = [];
+  sentences.forEach((sent, i) => {
+    const lead = firstWord(sent);
+    if (i > 0 && DISCOURSE_MARKERS[lead]) {
+      links.push(Object.freeze({ type: DISCOURSE_MARKERS[lead], connective: lead, from: i - 1, to: i, grain: 'inter' }));
+    }
+    // embedded markers (after the first word) — intra-sentence discourse moves.
+    const body = ` ${sent.toLowerCase()} `;
+    for (const [w, type] of Object.entries(DISCOURSE_MARKERS)) {
+      if (w !== lead && body.includes(` ${w} `)) links.push(Object.freeze({ type, connective: w, at: i, grain: 'intra' }));
+    }
+  });
+  return Object.freeze(links);
+};
+
 // Which section a sentence index falls in.
 const sectionAt = (sections, sentIdx) => {
   for (let i = 0; i < sections.length; i++) if (sentIdx >= sections[i].lo && sentIdx <= sections[i].hi) return i;
@@ -63,12 +100,22 @@ export const discourseDag = (doc, opts = {}) => {
     }));
   }
 
+  // The sentence-grain layer: every sentence a node, the discourse connectives between them
+  // read directly (readDiscourseLinks) so the cursor is legible even on prose whose entities
+  // are not admitted — and so the narration's own arrows are visible next to the world's.
+  const sentenceNodes = (doc.sentences || []).map((t, i) => Object.freeze({
+    i, text: t, section: sectionAt(sections, i),
+  }));
+  const discourseLinks = readDiscourseLinks(doc.sentences || []);
+
   return Object.freeze({
     kind: 'discourse-dag',
     cursor: 'within-doc',
     nodes: Object.freeze(nodes),
     spine: Object.freeze(spine),
     links: Object.freeze(links),
+    sentenceNodes: Object.freeze(sentenceNodes),
+    discourseLinks,
     note: 'The flow of content within the document — its argument in its own order. Blind to the described world (that is the asserted DAG). A floor on the discourse structure, sourced to the sentences the relations were read on.',
   });
 };
