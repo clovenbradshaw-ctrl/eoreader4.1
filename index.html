@@ -617,6 +617,7 @@
                 <button onclick="{{ onStopGen }}" title="Stop generating" style="font-size:13px;font-weight:600;color:#fff;background:#dc2626;border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;gap:6px;" style-hover="background:#b91c1c"><span style="width:9px;height:9px;background:#fff;border-radius:2px;display:inline-block;"></span>Stop</button>
               </sc-if>
               <sc-if value="{{ !chat.generating }}" hint-placeholder-val="{{ true }}">
+                <button onclick="{{ onLongform }}" title="Write a developed, multi-paragraph answer — one grounded paragraph at a time, across the reading" style="font-size:13px;font-weight:600;color:var(--acc);background:transparent;border:1px solid var(--accline);border-radius:11px;padding:8px 13px;flex:0 0 auto;cursor:pointer;" style-hover="background:var(--app)">¶ Long-form</button>
                 <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
               </sc-if>
             </div>
@@ -1511,6 +1512,7 @@
               <button onclick="{{ onStopGen }}" title="Stop generating" style="font-size:13px;font-weight:600;color:#fff;background:#dc2626;border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;gap:6px;" style-hover="background:#b91c1c"><span style="width:9px;height:9px;background:#fff;border-radius:2px;display:inline-block;"></span>Stop</button>
             </sc-if>
             <sc-if value="{{ !chat.generating }}" hint-placeholder-val="{{ true }}">
+              <button onclick="{{ onLongform }}" title="Write a developed, multi-paragraph answer — one grounded paragraph at a time, across the reading" style="font-size:13px;font-weight:600;color:var(--acc);background:transparent;border:1px solid var(--accline);border-radius:11px;padding:8px 13px;flex:0 0 auto;cursor:pointer;" style-hover="background:var(--app)">¶ Long-form</button>
               <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
             </sc-if>
           </div>
@@ -3332,6 +3334,11 @@ class Component extends DCLogic {
   // the element is the last one typed into.
   _clearComposer(){this._chatDraft='';if(this._chatEl){try{this._chatEl.value='';}catch(e){}}}
   onChatKey(ev){if(ev&&ev.key==='Enter'&&!ev.shiftKey){if(ev.preventDefault)ev.preventDefault();this.sendChat();}}
+  // The composer's "Long-form" button: send this turn but FORCE the multi-paragraph walk,
+  // for when the ask reads short and the automatic cue won't fire. Sets the one-shot
+  // `_forceWalk` flag sendChat consumes; nothing else about the turn changes (it still
+  // grounds, routes, and refolds exactly as a cued walk does).
+  sendLongform(){this._forceWalk=true;this.sendChat();}
   // Per-answer grounding strip: collapsed by default (not overwhelming), one tap reveals
   // the passages/entities the answer is grounded in. Keyed by chat id + message index.
   toggleGround(key){this.setState(s=>{const g={...(s.groundOpen||{})};g[key]=!g[key];return {groundOpen:g};});}
@@ -6038,6 +6045,12 @@ class Component extends DCLogic {
     const q=this.norm(qArg!=null?qArg:(this._chatDraft||''));if(!q)return;
     this._clearComposer();  // empty the DOM box now that the turn is committed
     this._stopGen=false;   // a fresh turn clears any prior stop
+    // MANUAL LONG-FORM — the composer's "Long-form" button sets `_forceWalk`, which this
+    // turn consumes into `_turnForceWalk` (cleared here so it never leaks to the next send).
+    // When set, the two grounded walk cues below force the multi-paragraph walk even when the
+    // ask names no length — the manual override for when the emergent length read comes back
+    // short. Gated the same as the automatic cue: grounded, non-creative reading only.
+    this._turnForceWalk=!!this._forceWalk; this._forceWalk=false;
     // THE TURN'S CONFIG IS DERIVED, not stored (design/chat-redesign/REVISIONS.md):
     // one emergent read of the ask replaces the old composer mode state. It rides
     // on the instance for the depth/strategy consumers downstream of this turn
@@ -6297,8 +6310,8 @@ class Component extends DCLogic {
       // So is the metacognition's own settled compose·essay verdict (route=compose,
       // kind=essay), for the paraphrased essay ask no regex floor catches.
       {const rd=read||meta;
-      if(grounded&&amode!=='creative'&&(this._paragraphDemand(q)||this._wantsLongform(q,rd)||(rd&&rd.route==='compose'&&rd.kind==='essay'))){
-        return await this._walkReply(id,q,sources,{model,guard,finish,ground,meta,read,prev});
+      if(grounded&&amode!=='creative'&&(this._turnForceWalk||this._paragraphDemand(q)||this._wantsLongform(q,rd)||(rd&&rd.route==='compose'&&rd.kind==='essay'))){
+        return await this._walkReply(id,q,sources,{model,guard,finish,ground,meta,read,prev,forced:this._turnForceWalk});
       }}
       let messages;
       // The reader answers as a research LIBRARIAN — sources foregrounded, attributed, quoted —
@@ -7028,8 +7041,8 @@ class Component extends DCLogic {
       // developed shape rides from the ORIGINAL turn: the walk's reformulation strips
       // it to the bare subject ("They asked you: batman"), so cue on `orig` first.
       const ask=orig||q;
-      if(grounded&&amode!=='creative'&&(this._paragraphDemand(ask)||this._wantsLongform(ask,meta)||(meta&&meta.route==='compose'&&meta.kind==='essay'))){
-        return await this._walkReply(id,q,sources,{model,guard,finish,ground,meta,read:meta,prev:_prev,ask});
+      if(grounded&&amode!=='creative'&&(this._turnForceWalk||this._paragraphDemand(ask)||this._wantsLongform(ask,meta)||(meta&&meta.route==='compose'&&meta.kind==='essay'))){
+        return await this._walkReply(id,q,sources,{model,guard,finish,ground,meta,read:meta,prev:_prev,ask,forced:this._turnForceWalk});
       }
       let messages;
       // The research/web chat path: same librarian register (+ sectioned shape on a broad question),
@@ -11859,7 +11872,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       readBtnLabel:this.state.busy?'…':'Read',readBtnStyle:'font-size:12px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:7px;padding:6px 13px;flex:0 0 auto;cursor:pointer;'+(this.state.busy?'opacity:.6;':''),
       onSearch:e=>this.onSearch(e),inboxCount:'',inbox:[],inboxEmpty:true,groups:[],hasEgo:false,
       chats:[],hasChats:false,chatOn:false,chat:null,chatInput:this.state.chatInput||'',askPageOn:false,
-      onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onStopGen:()=>this.stopGeneration(),onCloseChat:()=>this.closeChat(),onAskPage:()=>this.askThisPage(),
+      onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onLongform:()=>this.sendLongform(),onStopGen:()=>this.stopGeneration(),onCloseChat:()=>this.closeChat(),onAskPage:()=>this.askThisPage(),
       // The composer has no chat-type options \u2014 no readout, no mode buttons. The route
       // is still read off the ask at send time (_read derives the turn's config), and
       // deep research runs from the ask itself or the explicit /research command.
