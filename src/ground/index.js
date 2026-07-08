@@ -25,6 +25,9 @@ export { supportVerdict, SUPPORT_FLOOR } from './spans.js';
 // lexical passage match may stand only if the passage actually WITNESSES the claim (propositional
 // correspondence, not shared words), so a citation is never severed from the claim it carries.
 export { citationHolds, CITE_VERBATIM } from './spans.js';
+// contentTerms is the span module's own content-word read (stopwords stripped) —
+// the substantiveness floor the weld's refold signal shares with the witness gate.
+export { contentTerms } from './spans.js';
 // The reflection: parse the model's OUTPUT back into EOT, compare each proposition with
 // the document graph, and judge the groundedness of what the graph holds — counting the
 // diverse, independent origins that witness each claim (docs/creative-grounded-modes.md).

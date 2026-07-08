@@ -57,6 +57,10 @@ export const citationHolds = (claim, passageText, lexScore) => {
 // unavoidable lexical boundary (a span arrives as words); past it, meaning decides.
 const STOP = new Set(('a an the of to in on at by for with and or but nor so yet as is was were are be been being it its it\'s he she they them his her their him this that these those not no into out over under up down off then than now once would will do did had has have from about into their our your my me we you i').split(' '));
 const terms = (s) => (String(s ?? '').toLowerCase().match(/[a-z][a-z0-9'’-]{2,}/g) || []).filter((t) => !STOP.has(t));
+// The same content-term read, exported: the self-read weld's refold signal uses it
+// so "does this sentence carry enough content to bind anywhere" is ONE rule here
+// and there — a connective that binds nowhere is scaffolding, never contamination.
+export const contentTerms = terms;
 
 // The best passage a span lifts from, by content-term overlap — the same lexical floor the
 // reader's _citeAnnotate binds on (≥2 shared terms, overlap ≥ minOverlap). Returns the

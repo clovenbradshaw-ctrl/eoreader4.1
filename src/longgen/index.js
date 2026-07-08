@@ -41,6 +41,10 @@ export { progressAgainst } from './progress.js';
 // over the same walk (compose.js).
 export { walk, sliceFor } from './walk.js';
 export { composeParagraphs, evaSplice, frameLeak } from './compose.js';
+// The self-read weld — re-read an accepted paragraph through the grounder before
+// it becomes the next prior; strike drifted sentences (number / refold / witness,
+// docs/self-read-weld-measurement.md). The walk runs it by default (selfRead).
+export { selfRead } from './weld.js';
 // The prompt as a FOLD, and multi-response generation as variation + selection
 // (docs/multi-response-folds.md): the arc-gap move deriver, the live-thread reader,
 // the fold-prompt builder (build_prompt(prior, prevStep, liveGraph, arcPhase)), the
