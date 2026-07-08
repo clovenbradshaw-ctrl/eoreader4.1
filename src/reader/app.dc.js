@@ -4521,9 +4521,11 @@ class Component extends DCLogic {
     const seed=(o.seed||[]).filter(p=>p&&p.text);
     const ask=o.ask||q;
     const demand=this._paragraphDemand(ask)||((o.read||o.meta)&&(o.read||o.meta).lengthDemand==='develop'?6:5);
-    // renderBound tags an accepted claim with its cite ([s123]); provenance already rides in
-    // `sources`/passages, so the tags never reach the bubble.
-    const untag=t=>String(t||'').replace(/\s*\[s[^\]\s]*\]/g,'');
+    // renderBound tags an accepted claim with its cite ([s123], or the walk's synthesized
+    // [sL2.1]); provenance already rides in `sources`/passages, so the tags never reach the
+    // bubble. Tight to the actual tag grammar — a verbatim corpus sentence can legitimately
+    // carry "[sic]" or "[s]he", which a loose \[s...\] would silently eat.
+    const untag=t=>String(t||'').replace(/\s*\[s(?:\d+|L[\d.]+)\]/g,'');
     this._setThink(id,this._composeOpen(true,o.ground));
     // Stream: the accepted paragraphs plus the paragraph currently decoding, painted token by
     // token into the pending bubble (the same rAF-batched paint the single-call path uses).
@@ -4541,8 +4543,11 @@ class Component extends DCLogic {
     // The pointed retrieval runs thin on a broad ask (the batman essay run: groundNotes held the
     // same 2 passages every beat, so beat 2 refolded to nothing and the walk "saturated" over a
     // 1294-entity corpus) — so when it serves fewer than a slice's worth of FRESH spans, the
-    // corpus fallback ranks the in-scope sentences against the focus and tops the slice up. An
-    // empty refold then honestly means the READING is spent, not that one query went dry.
+    // SUBJECT-GATED corpus pool (below) tops the slice up. An empty refold then honestly means
+    // the reading holds no more sentences that NAME the subject — the reading is spent for this
+    // ask — not that one query went dry.
+    const subject=this._walkSubjectTerms(ask,q,o.prev);
+    const fallbackPool=this._walkFallbackPool(subject,sources);   // ONE corpus scan per walk
     const refold=async ({prior,index,seen})=>{
       try{
         const focus=(index>0&&prior)?(this.norm(prior).split(/\s+/).slice(-40).join(' ')+' '+q):this._groundingQuery(q,o.prev,null);
@@ -4551,7 +4556,7 @@ class Component extends DCLogic {
         for(const s of ((g&&g.spans)||[])){ const i=s.i; if(!Number.isInteger(i)||seen.has(String(i)))continue; if(out.some(x=>x.idx===i))continue; out.push({...s,idx:i}); if(out.length>=6)break; }
         if(out.length<3){
           const ex=new Set(seen); for(const s of out)ex.add(String(s.idx));
-          out.push(...this._walkFallbackSpans((index>0&&prior)?(this.norm(prior).split(/\s+/).slice(-24).join(' ')+' '+q):q,sources,ex,6-out.length));
+          out.push(...this._walkFallbackPick(fallbackPool,ex,(index>0&&prior)?prior:'',6-out.length));
         }
         return out;
       }catch(e){ return []; }
@@ -4624,31 +4629,58 @@ class Component extends DCLogic {
     const paras=String(text||'').split(/\n\s*\n/).map(s=>this.norm(s)).filter(Boolean);
     return paras.map((t,i)=>({beat:'b'+i,role:i?'continue':'open',heading:null,topic:'',kind:'connective',seed:'',text:t,sources:[],boundFraction:1,action:'discovered',closes:false}));
   }
-  // _walkFallbackSpans — the corpus-level retrieval floor for the walk's refold. The pointed
-  // grounding (propositions, then keyword refs) serves a handful of spans for a broad ask and
-  // then repeats itself, so the walk saturated after one beat over a corpus of thousands of
-  // sentences. Here the in-scope prose sentences are ranked by content-term overlap with the
-  // focus and the strongest UNSEEN ones top the slice up. Scores ride 0.6–0.8: developable and
-  // load-bearing, so the beat is pinned by a grounded topic sentence (the seed is the anchor's
-  // own lead sentence — grounded by construction, which is what the salvage floor rests on).
-  _walkFallbackSpans(focus,sources,seen,need){
-    if(!this.master||!this.master.sentences||!this.master.sentences.length||!(need>0))return [];
+  // _walkSubjectTerms — what the piece is ABOUT, as content terms: the ask (original, when the
+  // research path reformulated it) plus the resolved grounding query (which carries the thread's
+  // subject for an anaphoric "write the essay"), minus the FRAMING vocabulary of the request
+  // itself. Admission to the walk's fallback pool requires naming one of these — so "an essay
+  // about batman" can never admit a sentence on the strength of "essay" or "about", and the
+  // prior paragraph's tail can never admit an off-topic sentence however many generic words it
+  // shares (the review's compounding-drift finding).
+  _walkSubjectTerms(ask,q,prev){
+    const FRAME=new Set(('write writes writing wrote written essay essays paragraph paragraphs report reports article articles piece pieces overview overviews account accounts guide guides breakdown treatise dissertation monograph story stories longer shorter long short word words page pages line lines section sections give tell make makes draft drafts compose please detailed detail details comprehensive thorough thoroughly depth explain explains describe describes summarize summary about regarding concerning covering want wants wanted need needs needed would could should focus focused focusing topic topics subject subjects theme themes style tone voice format using based something anything everything').split(' '));
+    const terms=new Set();
+    const add=(s)=>{for(const w of this.norm(String(s||'')).toLowerCase().split(/[^a-z0-9]+/)){if(w.length>3&&!this.STOP.has(w)&&!FRAME.has(w))terms.add(w);}};
+    add(ask);add(q);
+    try{add(this._groundingQuery(q,prev||[],null));}catch(e){}
+    return terms;
+  }
+  // _walkFallbackPool — the corpus-level retrieval floor for the walk's refold, built ONCE per
+  // walk (one scan, not one per beat). The pointed grounding serves a handful of spans for a
+  // broad ask and then repeats itself, so the walk saturated after one beat over a corpus of
+  // thousands of sentences. The pool holds every in-scope prose sentence that NAMES the subject;
+  // saturation then honestly means "no unread sentence names the subject" — never padding. An
+  // empty subject (no discernible topic) disables the fallback outright rather than free-
+  // associating over the library.
+  _walkFallbackPool(subject,sources){
+    if(!subject||!subject.size||!this.master||!this.master.sentences||!this.master.sentences.length)return [];
     const scope=(Array.isArray(sources)&&sources.length)?new Set(sources):null;
-    const qt=new Set(this.norm(focus).toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>3&&!this.STOP.has(w)));
-    if(!qt.size)return [];
-    const scored=[];
+    const pool=[];
     for(let i=0;i<this.master.sentences.length;i++){
-      if(seen.has(String(i)))continue;
       const u=this.master.sentenceSource[i];if(scope&&!scope.has(u))continue;
       const s=this.norm(this.master.sentences[i]);
       const low=s.toLowerCase();
       if(s.length<60||s.length>360||!this._proseOk(low))continue;
-      let hit=0;for(const w of new Set(low.split(/[^a-z0-9]+/)))if(qt.has(w))hit++;
-      if(hit>=1)scored.push({i,u,s,hit});
+      let sub=0;for(const w of new Set(low.split(/[^a-z0-9]+/)))if(subject.has(w))sub++;
+      if(sub>=1)pool.push({i,u,text:this._clipPassage(s),low,sub});
     }
-    // Strongest term contact first; document order breaks ties (a wiki lead outranks trivia).
-    scored.sort((a,b)=>b.hit-a.hit||a.i-b.i);
-    return scored.slice(0,need).map(x=>({text:this._clipPassage(x.s),score:Math.min(0.8,0.6+0.05*x.hit),i:x.i,u:x.u,idx:x.i}));
+    return pool;
+  }
+  // _walkFallbackPick — the per-beat top-up from the subject-gated pool: unseen sentences ranked
+  // by subject contact, then by contact with the prior paragraph's tail (the self-read steer —
+  // a RANKING signal only; it can no longer admit), then document order (a lead sentence outranks
+  // trivia). Scores 0.65–0.8: the sentence names the subject, so pinning it load-bearing (its own
+  // lead sentence as the grounded seed) is the intended grain for a small model.
+  _walkFallbackPick(pool,seen,prior,need){
+    if(!pool||!pool.length||!(need>0))return [];
+    const pt=new Set(this.norm(String(prior||'')).toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>3&&!this.STOP.has(w)));
+    const ranked=[];
+    for(const c of pool){
+      if(seen.has(String(c.i)))continue;
+      let f=0;if(pt.size)for(const w of new Set(c.low.split(/[^a-z0-9]+/)))if(pt.has(w))f++;
+      ranked.push({c,f});
+    }
+    ranked.sort((a,b)=>(b.c.sub-a.c.sub)||(b.f-a.f)||(a.c.i-b.c.i));
+    return ranked.slice(0,need).map(({c,f})=>({text:c.text,score:Math.min(0.8,0.55+0.1*c.sub+0.03*f),i:c.i,u:c.u,idx:c.i}));
   }
   // ── COMPOSE: make the artifact, get out of the model's way ────────────────────────────────
   // A small model writes in a named style — Dickinson's dashes, a haiku's 5-7-5, a limerick's bounce
