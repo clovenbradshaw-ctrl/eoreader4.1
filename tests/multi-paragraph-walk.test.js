@@ -304,3 +304,36 @@ test('the live walk resumes from state — the discovered continuation seeds acc
   assert.ok(res.paragraphs.length >= 2, 'the seeded paragraph is kept and the walk continues past it');
   assert.equal(res.paragraphs[0].text, seedPara.text, 'the discovered paragraph leads the continued run');
 });
+
+// ── write first, ground later: keep the whole draft, ground as a label ──────────
+
+// Continues the seed (the grounded topic sentence the walk hands it) with ungrounded
+// expansion the birth gate would strike. It does NOT echo the seed, so there is no
+// duplicate for the degeneration trim to cut — the expansion is genuine new prose.
+const looseModel = (tail) => ({
+  id: 'loose', kind: 'test', isLoaded: () => true, async load() {},
+  async phrase() { return tail; },
+});
+
+test('groundLater keeps the whole drafted paragraph instead of salvaging it to the cited prefix', async () => {
+  const tail = 'This matters because the birds embody a quiet, general grace that rewards patient attention over many seasons.';
+  const gated = await walk({ fold: foldOf(), design: { demand: 2, question: 'falcons' }, model: looseModel(tail) });
+  const later = await walk({ fold: foldOf(), design: { demand: 2, question: 'falcons' }, model: looseModel(tail), groundLater: true });
+
+  // The birth gate trims the ungrounded expansion; groundLater keeps it, so the
+  // ground-later answer is strictly longer and still contains the ungrounded tail.
+  assert.ok(later.answer.length > gated.answer.length, 'ground-later keeps more than the birth gate');
+  assert.ok(later.answer.includes('quiet, general grace'), 'the ungrounded expansion survives under groundLater');
+  assert.ok(!gated.answer.includes('quiet, general grace'), 'the birth gate strikes the ungrounded expansion');
+});
+
+test('groundLater still strikes an editor-register leak, and still cites what binds', async () => {
+  const res = await walk({
+    fold: foldOf(), design: { demand: 2, question: 'falcons' },
+    model: looseModel('Here is the continuation of the text: more about falcons follows.'),
+    groundLater: true,
+  });
+  assert.doesNotMatch(res.answer, /here is the continuation of the text/i, 'the editor-register leak is struck even under groundLater');
+  // The sourced sentence still earns its citation label (sources are carried, not gated away).
+  assert.ok(res.sources.length >= 1, 'what binds is still cited under groundLater');
+});
