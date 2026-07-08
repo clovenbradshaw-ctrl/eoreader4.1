@@ -61,6 +61,11 @@ const html = `<!doctype html>
      works deployed; the app degrades to its old paths if absent. Lives HERE in the builder —
      it was once hand-added to index.html and a rebuild silently dropped it. -->
 <script type="module">import(new URL('src/reader/eo-gen.js', document.baseURI).href).catch(e=>console.warn('eoGen load failed:', e));</script>
+<!-- The everything-workspace filing model (src/workspace): a pure folder + membership
+     algebra over the Record, exposed as window.EOWorkspace. The DC app script is inlined
+     (not a module) so it can't import; it reads this global instead and degrades to a
+     no-op file explorer until the module lands. -->
+<script type="module">import(new URL('src/workspace/index.js', document.baseURI).href).then(m=>{window.EOWorkspace=m;}).catch(e=>console.warn('workspace load failed:', e));</script>
 <!-- The EOT ledger + its live terminal surface (src/audit/): every operation the app
      performs — a read, a search, a route, a prompt, a generation, a bind, a veto — read
      out as one EOT line the moment it happens, tailed in a terminal drawer (Ctrl+backtick),

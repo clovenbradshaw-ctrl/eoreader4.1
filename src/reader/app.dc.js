@@ -29,7 +29,7 @@ class Component extends DCLogic {
     // every rebuild as real SYN events so they carry exactly as much weight as any
     // other identity event, just the heaviest kind (recordIdentityJudgment).
     this._identityJudgments=[];
-    this.state={ ready:false, engineErr:null, pages:[], selId:null, siteView:null, sitesDir:false, docView:null, dataView:null, query:'', url:'', busy:false, feed:[],
+    this.state={ ready:false, engineErr:null, pages:[], selId:null, siteView:null, sitesDir:false,explorerView:null, docView:null, dataView:null, query:'', url:'', busy:false, feed:[],
       // Corpus search — the smartest-possible-grep surface (docs/corpus-search.md): a query
       // typed here retrieves ranked passages from EVERY source read, fusing three channels
       // (lexical, meaning, remembered — see the "corpus search" methods) with nothing to
@@ -120,7 +120,18 @@ class Component extends DCLogic {
       // over the 27-cell ground, not collapsed to one argmax cell. Its own overlay,
       // lazily warming the MiniLM meaning organ on first read; degrades honestly when
       // the geometric reader can't come up. chorusRes holds the last weighted map.
-      chorusOpen:false, chorusText:'', chorusRes:null, chorusBusy:false, chorusErr:null };
+      chorusOpen:false, chorusText:'', chorusRes:null, chorusBusy:false, chorusErr:null,
+      // ── The everything-workspace / file explorer (src/workspace) ──────────
+      // A folder tree + virtual filing over EVERYTHING read: sources, chats and
+      // documents, each referenced by a stable refKey and filable into many
+      // folders at once. explorerView names the open view — a folder id, or a
+      // smart-view key ('@all' / '@sources' / '@chats' / '@docs' / '@unfiled').
+      // wsExpanded holds tree open/closed state; wsRenaming is the folder whose
+      // name is being edited inline; wsFileMenu is the refKey whose "file in…"
+      // menu is open; wsRev bumps to re-render after a structural filing change
+      // (the workspace itself lives on this._ws, persisted to localStorage).
+      explorerView:null, wsExpanded:{}, wsRenaming:null, wsFileMenu:null, wsRev:0 };
+    this._ws=null; this._wsLoaded=false;
   }
   // ── theme helpers ─────────────────────────────────────────────────────
   _hx(h){h=String(h||'').replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16);return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
@@ -1125,7 +1136,7 @@ class Component extends DCLogic {
     // not silently grounded in the whole library.
     const sources=scopeUrl?[scopeUrl]:[];
     this._chatTab(id);
-    this.setState(s=>({chats:[{id,title,sources,scopeAll:false,messages:[],ts:Date.now()},...s.chats],activeChat:id,viewUrl:null,selId:null,siteView:null,sitesDir:false,chatInput:'',chatAddOpen:false,rightOpen:true,newTabOpen:false,histRev:(s.histRev||0)+1}));
+    this.setState(s=>({chats:[{id,title,sources,scopeAll:false,messages:[],ts:Date.now()},...s.chats],activeChat:id,viewUrl:null,selId:null,siteView:null,sitesDir:false,explorerView:null,chatInput:'',chatAddOpen:false,rightOpen:true,newTabOpen:false,histRev:(s.histRev||0)+1}));
     return id;
   }
   // The sources a chat is ABOUT, as a URL list. Tolerates the older single-`scope` shape
@@ -2568,7 +2579,7 @@ class Component extends DCLogic {
     this._tabs.push({id:tid,kind:'new',hist:[],hpos:-1,viewMode:this.state.viewMode||'native',chatId:null});
     this._activeTab=tid;this._hist=[];this._hpos=-1;this._pageUrl=null;
     this._pushLoc({t:'doc',id});
-    const patch={docView:id,siteView:null,sitesDir:false,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
+    const patch={docView:id,siteView:null,sitesDir:false,explorerView:null,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
     if(this.phone())patch.pane='doc';
     this.setState(s=>({...patch,histRev:(s.histRev||0)+1}),()=>this._syncDocDock());
     this._scrollMainTop();
@@ -2677,7 +2688,7 @@ class Component extends DCLogic {
     this._tabs.push({id:tid,kind:'new',hist:[],hpos:-1,viewMode:this.state.viewMode||'native',chatId:null});
     this._activeTab=tid;this._hist=[];this._hpos=-1;this._pageUrl=null;
     this._pushLoc({t:'data',id:url});
-    const patch={dataView:url,docView:null,siteView:null,sitesDir:false,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
+    const patch={dataView:url,docView:null,siteView:null,sitesDir:false,explorerView:null,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
     if(this.phone())patch.pane='doc';
     this.setState(s=>({...patch,histRev:(s.histRev||0)+1}),()=>this._syncDataDock());
     this._scrollMainTop();
@@ -7542,10 +7553,11 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
   _locEq(a,b){return a&&b&&a.t===b.t&&((a.t==='web'||a.t==='site')?a.url===b.url:(a.t==='sites'?true:a.id===b.id));}
   _pushLoc(loc){this._ensureTabs();let h=(this._hist||[]);let p=(this._hpos==null?-1:this._hpos);if(this._locEq(h[p],loc)){this._syncActiveBrowse();return;}h=h.slice(0,p+1);h.push(loc);this._hist=h;this._hpos=h.length-1;this._syncActiveBrowse();}
   _applyLoc(loc){if(!loc)return;
-    if(loc.t==='web'){this.setState(s=>({selId:null,viewUrl:loc.url,siteView:null,sitesDir:false,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(loc.url);}
-    else if(loc.t==='site'){this.setState(s=>({selId:null,viewUrl:null,siteView:loc.url,sitesDir:false,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
-    else if(loc.t==='sites'){this.setState(s=>({selId:null,viewUrl:null,siteView:null,sitesDir:true,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
-    else{this.setState(s=>({selId:loc.id,viewUrl:null,siteView:null,sitesDir:false,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
+    if(loc.t==='web'){this.setState(s=>({selId:null,viewUrl:loc.url,siteView:null,sitesDir:false,explorerView:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(loc.url);}
+    else if(loc.t==='site'){this.setState(s=>({selId:null,viewUrl:null,siteView:loc.url,sitesDir:false,explorerView:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
+    else if(loc.t==='sites'){this.setState(s=>({selId:null,viewUrl:null,siteView:null,sitesDir:true,explorerView:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
+    else if(loc.t==='explorer'){this.setState(s=>({selId:null,viewUrl:null,siteView:null,sitesDir:false,explorerView:loc.view||'@all',panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
+    else{this.setState(s=>({selId:loc.id,viewUrl:null,siteView:null,sitesDir:false,explorerView:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
     this._syncPos();}
   // ---- Independent, browser-like tabs. Every open tab is one of three kinds:
   //   'browse' — a website / entity, with its OWN back-forward history (hist/hpos) and its
@@ -7581,7 +7593,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     const t=this._tabs.find(x=>x.id===id);if(!t)return;
     this._activeTab=id;this._pageUrl=null;
     this._hist=t.hist||[];this._hpos=(t.hpos==null?this._hist.length-1:t.hpos);
-    const patch={viewMode:t.viewMode||'native',panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,previewWiki:null,siteView:null,sitesDir:false,docView:null,dataView:null,histRev:(this.state.histRev||0)+1};
+    const patch={viewMode:t.viewMode||'native',panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,previewWiki:null,siteView:null,sitesDir:false,explorerView:null,docView:null,dataView:null,histRev:(this.state.histRev||0)+1};
     if(t.kind==='chat'){this.setState({...patch,activeChat:t.chatId,viewUrl:null,selId:null,newTabOpen:false});return;}
     if(t.kind==='new'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,newTabOpen:true});return;}
     const loc=(this._hpos>=0&&this._hist)?this._hist[this._hpos]:null;
@@ -7591,6 +7603,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     else if(loc&&loc.t==='sites'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,sitesDir:true,newTabOpen:false});}
     else if(loc&&loc.t==='doc'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,docView:loc.id,newTabOpen:false});}
     else if(loc&&loc.t==='data'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,dataView:loc.id,newTabOpen:false});}
+    else if(loc&&loc.t==='explorer'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,explorerView:loc.view||'@all',newTabOpen:false});}
     else{this.setState({...patch,activeChat:null,viewUrl:null,selId:null,newTabOpen:true});}
   }
   // Route a chat into a tab: reuse the tab already hosting it, else convert a blank new tab,
@@ -7607,20 +7620,143 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
   // Opening an entity full takes over the centre column, so it closes any active chat the
   // same way navigating to a page does (see goWeb / doReadUrl). Otherwise the chat would keep
   // filling <main> and the centre-fill guard in the view-model would suppress the explorer.
-  selectEntity(id){if(this.state.viewUrl)this._srcUrl=this.state.viewUrl;this._panelStack=[];this._pushLoc({t:'ent',id});this.setState(s=>({selId:id,viewUrl:null,siteView:null,sitesDir:false,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,gz:{k:1,x:0,y:0},histRev:(s.histRev||0)+1}));}
+  selectEntity(id){if(this.state.viewUrl)this._srcUrl=this.state.viewUrl;this._panelStack=[];this._pushLoc({t:'ent',id});this.setState(s=>({selId:id,viewUrl:null,siteView:null,sitesDir:false,explorerView:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,gz:{k:1,x:0,y:0},histRev:(s.histRev||0)+1}));}
   // ---- site profiles: every read source rendered as its own navigable page, and a
   // directory of them all — the way a site that lists sites gives each one a profile. Both
   // are first-class browse LOCATIONS ({t:'site'}/{t:'sites'}), so they ride the same tabs
   // and back/forward as pages and entities. openSite is the "open its profile" action; the
   // profile itself carries a "Read page" that hands off to goWeb for the live reading.
   openSite(url){url=this.norm(url);this._srcUrl=this.state.viewUrl||null;this._pushLoc({t:'site',url});
-    const patch={siteView:url,sitesDir:false,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
+    const patch={siteView:url,sitesDir:false,explorerView:null,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
     if(this.phone())patch.pane='doc';
     this.setState(s=>({...patch,histRev:(s.histRev||0)+1}));this._scrollMainTop();}
   openSitesDir(){this._pushLoc({t:'sites'});
-    const patch={sitesDir:true,siteView:null,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
+    const patch={sitesDir:true,siteView:null,explorerView:null,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
     if(this.phone())patch.pane='doc';
     this.setState(s=>({...patch,histRev:(s.histRev||0)+1}));this._scrollMainTop();}
+
+  // ── THE EVERYTHING WORKSPACE — folders + virtual filing over the Record ──
+  // The pure folder/membership algebra lives in src/workspace, loaded by the
+  // build as the global window.EOWorkspace (the DC app script is inlined, not a
+  // module, so it can't import). This half is the shell: it holds the live
+  // workspace on this._ws, persists it to localStorage, resolves a refKey back to
+  // its live source / chat / document, and builds the explorer + sidebar
+  // view-models. Everything degrades to no-op until the module has loaded.
+  _wsMod(){return (typeof window!=='undefined'&&window.EOWorkspace)||null;}
+  wsGet(){const M=this._wsMod();
+    if(!this._wsLoaded&&M){try{this._ws=M.deserialize(localStorage.getItem('eo_workspace_v1'));}catch(e){this._ws=M.emptyWorkspace();}this._wsLoaded=true;}
+    if(!this._ws)this._ws={folders:{},members:{}};
+    return this._ws;}
+  wsSave(){const M=this._wsMod();if(M&&this._ws){try{localStorage.setItem('eo_workspace_v1',M.serialize(this._ws));}catch(e){}}}
+  _wsApply(next){this._ws=next;this.wsSave();this.setState(s=>({wsRev:(s.wsRev||0)+1}));}
+  _parseRef(key){const s=String(key||'');const i=s.indexOf(':');return i<0?{kind:s,id:''}:{kind:s.slice(0,i),id:s.slice(i+1)};}
+  // Every live item, as {key, ts} — the universe the smart views and "Unfiled"
+  // draw from. Sources carry a read timestamp; chats a creation ts; documents none.
+  _wsUniverse(){const out=[];
+    for(const p of (this.master?this.master.pages:[]))out.push({key:'source:'+p.url,ts:p.ts||0});
+    for(const c of (this.state.chats||[]))out.push({key:'chat:'+c.id,ts:c.ts||0});
+    for(const d of this._docsMap().values())out.push({key:'doc:'+d.id,ts:d.ts||0});
+    return out;}
+  // Resolve a refKey to its live object as a uniform card, reusing the existing
+  // open handlers. null when the item no longer exists (skipped in render).
+  resolveRef(key){const {kind,id}=this._parseRef(key);
+    if(kind==='source'){const p=this.pageOf(id);if(!p)return null;const h=this.short(id),c=this.hashColor(h);
+      return {key,kind,id,label:this.truncLabel(p.title||h,44),host:h,glyph:h.slice(0,2).toUpperCase(),color:c,hasChat:true,
+        onOpen:()=>this.openSite(id),onRead:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.goWeb(id);},onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(id);}};}
+    if(kind==='chat'){const c=(this.state.chats||[]).find(x=>x.id===id);if(!c)return null;
+      return {key,kind,id,label:this.truncLabel(c.title||'New chat',44),host:Math.ceil(c.messages.length/2)+' Q · chat',glyph:'✦',color:this.curAccent(),hasChat:false,
+        onOpen:()=>this.openChat(id),onRead:()=>{},onChat:()=>{}};}
+    if(kind==='doc'){const d=this._docsMap().get(id);if(!d)return null;
+      return {key,kind,id,label:this.truncLabel(d.title||'Untitled document',44),host:'document',glyph:'✎',color:this.curAccent(),hasChat:false,
+        onOpen:()=>this.openDoc(id),onRead:()=>{},onChat:()=>{}};}
+    return null;}
+  // ── open / select ──
+  openExplorer(view){view=view||this.state.explorerView||'@all';this._pushLoc({t:'explorer',view});
+    const patch={explorerView:view,sitesDir:false,siteView:null,viewUrl:null,selId:null,docView:null,dataView:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,wsFileMenu:null};
+    if(this.phone())patch.pane='doc';
+    this.setState(s=>({...patch,histRev:(s.histRev||0)+1}));this._scrollMainTop();}
+  wsSelectView(view){this.setState({explorerView:view,wsFileMenu:null,wsRenaming:null});this._scrollMainTop();}
+  // ── folder mutations (thin wrappers over src/workspace) ──
+  wsCreateFolder(parentId){const M=this._wsMod();if(!M)return;
+    const before=Object.keys(this.wsGet().folders);
+    const next=M.createFolder(this.wsGet(),{name:'',parentId:parentId||null,now:(Date.now?Date.now():0)});
+    const id=Object.keys(next.folders).find(k=>before.indexOf(k)<0);
+    this._ws=next;this.wsSave();
+    this.setState(s=>({wsRev:(s.wsRev||0)+1,wsRenaming:id,wsExpanded:parentId?{...s.wsExpanded,[parentId]:true}:s.wsExpanded}));}
+  wsRenameInput(id,ev){const M=this._wsMod();if(!M)return;const v=ev&&ev.target?ev.target.value:'';this._wsApply(M.renameFolder(this.wsGet(),id,v,(Date.now?Date.now():0)));}
+  wsRenameDone(){this.setState({wsRenaming:null});}
+  wsDeleteFolder(id){const M=this._wsMod();if(!M)return;const f=this.wsGet().folders[id];
+    if(typeof confirm==='function'&&!confirm('Delete the folder "'+((f&&f.name)||'Untitled')+'"? Items filed here stay in the Record — they just lose this folder.'))return;
+    this._ws=M.deleteFolder(this.wsGet(),id);this.wsSave();
+    this.setState(s=>({wsRev:(s.wsRev||0)+1,wsRenaming:s.wsRenaming===id?null:s.wsRenaming,explorerView:s.explorerView===id?'@all':s.explorerView}));}
+  wsToggleFolder(id){this.setState(s=>({wsExpanded:{...s.wsExpanded,[id]:s.wsExpanded[id]===false}}));}
+  // ── filing (an item may live in many folders; toggling is add/remove) ──
+  wsToggleFileMenu(key){this.setState(s=>({wsFileMenu:s.wsFileMenu===key?null:key}));}
+  wsToggleMember(key,folderId){const M=this._wsMod();if(!M)return;const ws=this.wsGet();
+    const filed=M.foldersOf(ws,key).indexOf(folderId)>=0;
+    this._wsApply(filed?M.unfileItem(ws,key,folderId):M.fileItem(ws,key,folderId));}
+  // ── view-model builders ──
+  // The refKeys shown for the current view, in order.
+  _wsViewItems(view){const M=this._wsMod();const ws=this.wsGet();const uni=this._wsUniverse();
+    const recent=a=>a.slice().sort((x,y)=>y.ts-x.ts).map(x=>x.key);
+    if(view==='@all')return recent(uni);
+    if(view==='@sources')return recent(uni.filter(x=>x.key.indexOf('source:')===0));
+    if(view==='@chats')return recent(uni.filter(x=>x.key.indexOf('chat:')===0));
+    if(view==='@docs')return uni.filter(x=>x.key.indexOf('doc:')===0).map(x=>x.key);
+    if(view==='@unfiled'){if(!M)return recent(uni);const set=new Set(M.unfiled(ws,uni.map(x=>x.key)));return recent(uni.filter(x=>set.has(x.key)));}
+    return M?M.itemsIn(ws,view):[];}
+  _wsViewLabel(view){const names={'@all':'Everything','@sources':'All sources','@chats':'All chats','@docs':'Documents','@unfiled':'Unfiled'};
+    if(names[view])return names[view];const f=this.wsGet().folders[view];return f?(f.name||'Untitled folder'):'Everything';}
+  // Top-level folders for the left Record panel's compact "Folders" section.
+  _wsSidebarRows(){const M=this._wsMod();if(!M)return [];const ws=this.wsGet();
+    return M.buildTree(ws).map(n=>{const active=this.state.explorerView===n.folder.id;
+      return {id:n.folder.id,label:this.truncLabel(n.folder.name||'Untitled folder',22),count:n.count,active,
+        onOpen:()=>this.openExplorer(n.folder.id),
+        rowStyle:'display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:9px;margin-bottom:2px;cursor:pointer;border:1px solid '+(active?'var(--accline)':'transparent')+';background:'+(active?'var(--accbg)':'transparent')+';'};});}
+  // The full explorer view-model: smart views, the folder tree, and the resolved
+  // item cards (each with its folder tags and a "File…" membership menu).
+  explorerVals(){const M=this._wsMod();const ws=this.wsGet();const view=this.state.explorerView||'@all';
+    const uni=this._wsUniverse();const total=uni.length;
+    const smartDef=[['@all','Everything','▦'],['@sources','Sources','◍'],['@chats','Chats','✦'],['@docs','Documents','✎'],['@unfiled','Unfiled','◇']];
+    const smart=smartDef.map(([key,label,glyph])=>{const active=view===key;
+      return {key,label,glyph,count:this._wsViewItems(key).length,active,onSelect:()=>this.wsSelectView(key),
+        rowStyle:'display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:8px;cursor:pointer;margin-bottom:2px;font-size:12.5px;font-weight:600;'+(active?'background:var(--accbg);color:var(--acc);':'color:var(--ink2);')};});
+    const tree=[];
+    if(M){const walk=(nodes)=>{for(const n of nodes){const id=n.folder.id,active=view===id,hasKids=n.children.length>0,open=hasKids&&(this.state.wsExpanded[id]!==false);
+      tree.push({id,name:n.folder.name||'',label:this.truncLabel(n.folder.name||'Untitled folder',26),depth:n.depth,count:n.count,active,
+        hasKids,open,caret:open?'▾':'▸',caretStyle:'width:18px;height:18px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:5px;cursor:pointer;font-size:10px;line-height:1;'+(hasKids?'':'visibility:hidden;'),
+        renaming:this.state.wsRenaming===id,notRenaming:this.state.wsRenaming!==id,
+        onSelect:()=>this.wsSelectView(id),onToggle:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.wsToggleFolder(id);},
+        onRenameInput:ev=>this.wsRenameInput(id,ev),onRenameDone:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.wsRenameDone();},
+        onAddChild:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.wsCreateFolder(id);},
+        onDelete:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.wsDeleteFolder(id);},
+        renameStyle:'flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--ink);background:var(--app);border:1px solid var(--accline);border-radius:6px;padding:3px 7px;outline:none;',
+        rowStyle:'display:flex;align-items:center;gap:5px;padding:5px 8px;border-radius:8px;cursor:pointer;margin-bottom:1px;margin-left:'+(n.depth*14)+'px;font-size:12.5px;font-weight:600;'+(active?'background:var(--accbg);color:var(--acc);':'color:var(--ink);')});
+      if(open)walk(n.children);}};
+      walk(M.buildTree(ws));}
+    const keys=this._wsViewItems(view);
+    const items=keys.map(k=>this.resolveRef(k)).filter(Boolean).map(it=>{
+      const tags=(M?M.foldersOf(ws,it.key):[]).map(fid=>({name:this.truncLabel((ws.folders[fid]||{}).name||'Untitled',18),
+        onRemove:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.wsToggleMember(it.key,fid);}}));
+      const menuOpen=this.state.wsFileMenu===it.key;
+      const filedSet=M?new Set(M.foldersOf(ws,it.key)):new Set();
+      const fileTargets=M?M.flatTree(ws).map(n=>{const checked=filedSet.has(n.folder.id);
+        return {id:n.folder.id,label:this.truncLabel(n.folder.name||'Untitled folder',24),checked,mark:checked?'✓':'',
+          onToggle:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.wsToggleMember(it.key,n.folder.id);},
+          rowStyle:'display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;cursor:pointer;margin-left:'+(n.depth*12)+'px;font-size:12px;font-weight:600;color:'+(checked?'var(--acc)':'var(--ink2)')+';'};}):[];
+      return {key:it.key,kind:it.kind,label:it.label,host:it.host,glyph:it.glyph,hasChat:it.hasChat,
+        onOpen:it.onOpen,onRead:it.onRead,onChat:it.onChat,
+        tags,hasTags:tags.length>0,menuOpen,fileTargets,hasFileTargets:fileTargets.length>0,noFileTargets:fileTargets.length===0,
+        onFileMenu:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.wsToggleFileMenu(it.key);},
+        dot:'width:32px;height:32px;flex:0 0 auto;border-radius:8px;background:'+it.color+'1a;color:'+it.color+';display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;',
+        rowStyle:'position:relative;display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:10px;margin-bottom:6px;border:1px solid var(--line2);background:var(--card);'};});
+    const isFolder=!!(M&&ws.folders[view]);
+    return {view,title:this._wsViewLabel(view),countLabel:items.length+' item'+(items.length!==1?'s':''),
+      smart,tree,hasTree:tree.length>0,noTree:tree.length===0,items,itemsEmpty:items.length===0,isFolder,
+      onNewFolder:()=>this.wsCreateFolder(isFolder?view:null),onNewRootFolder:()=>this.wsCreateFolder(null),
+      totalLabel:total+' item'+(total!==1?'s':'')+' in the Record',
+      newFolderLabel:isFolder?'New sub-folder':'New folder',
+      emptyHint:isFolder?'This folder is empty. Open “Everything”, then use “File…” on any item to add it here — an item can sit in several folders at once.':'Nothing here yet. Read a source, start a chat, or write a document — it lands in the Record and can be filed into folders.'};}
   _scrollMainTop(){requestAnimationFrame(()=>{const a=document.getElementById('eo-main-scroll');if(a)a.scrollTop=0;});}
   _scrollPanelTop(){requestAnimationFrame(()=>{const a=document.getElementById('eo-panel-scroll');if(a)a.scrollTop=0;});}
   clickEntity(id){if(this._gzMoved)return;const cur=this.state.panelSel;if(cur&&cur!==id)this._panelStack.push(cur);
@@ -8025,7 +8161,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       onAskDepth:()=>{this.setState({mode:'depth'});this.research(id,'depth');},
       onAskResearch:()=>{this.research(id,this.state.mode||'breadth');}};
   }
-  goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,siteView:null,sitesDir:false,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
+  goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,siteView:null,sitesDir:false,explorerView:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
   processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+(res.propCount!=null?res.propCount:res.sentenceCount)+' propositions');this._busy=false;this.setState({busy:false});
     // Now that the page is read it has propositions — re-render the open view in the
     // chosen mode (reader book, or the native page with its contents + flagged passages),
@@ -9128,6 +9264,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       cursor:{label:ready&&this.master?('line '+this.master.sentences.length):'—',title:ready&&this.master?('Projection at the latest read · '+this.state.pages.length+' pages · '+this.master.sentences.length+' sentences'):'no data yet'},
       liveColor:this.state.busy?'#b45309':'#22a06b',liveLabel:this.state.busy?'Working…':(ready?'Engine ready':'Loading…'),
       hasSel:false,hasSite:false,site:null,sitesDirOn:false,sitesDir:null,onOpenSites:()=>this.openSitesDir(),showPrompt:false,promptTitle:'',promptBody:'',suggestions:[],
+      explorerOn:false,explorer:null,onOpenExplorer:()=>this.openExplorer(),wsFolders:[],hasWsFolders:false,
       newTabLanding:false,simplePrompt:false,landingModeNative:false,landingModeReader:false,landingModePageStyle:'',landingModeReaderStyle:'',onLandingPage:()=>{},onLandingReader:()=>{},
       ledger:[],ledgerCount:0,ledgerEmpty:true,hoverCardOn:false,srcOpen:false,
       direction:this.state.direction,onDirInput:e=>this.onDirInput(e),mode:this.state.mode,
@@ -9307,6 +9444,11 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     base.onSortUpdated=()=>this.setState({sortMode:'updated'});base.onSortTop=()=>this.setState({sortMode:'mentions'});base.onSortAz=()=>this.setState({sortMode:'name'});
 
     if(!ready||!g||this.state.pages.length===0){
+      // The workspace/folders are independent of what's been read — folders can exist
+      // (and persist across reloads) with an empty Record. Build the sidebar folder rows
+      // and, when the explorer is open, take the centre before falling back to the landing.
+      base.wsFolders=this._wsSidebarRows();base.hasWsFolders=base.wsFolders.length>0;
+      if(this.state.explorerView){base.explorerOn=true;base.explorer=this.explorerVals();return base;}
       if(!vu&&!base.chatOn&&!base.gutenOn){
         this.landingVals(base);
       }
@@ -9367,6 +9509,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
         rowStyle:'display:flex;align-items:center;gap:10px;padding:'+(depth?'7px 11px':'9px 11px')+';border-radius:9px;margin-bottom:3px;margin-left:'+(depth*15)+'px;cursor:pointer;border:1px solid '+(isA?'var(--accline)':'transparent')+';background:'+(isA?'var(--accbg)':'transparent')+';'+(depth?'border-left:2px solid '+c+'55;border-radius:0 9px 9px 0;':'')};});
     base.srcCount=this.master.pages.length;base.srcEmpty=this.master.pages.length===0&&(this.state.imports||[]).length===0;
     base.hasSources=this.master.pages.length>0;
+    base.wsFolders=this._wsSidebarRows();base.hasWsFolders=base.wsFolders.length>0;
     base.corpusCount=base.corpusResults.length;base.hasCorpusResults=base.corpusResults.length>0;
     base.corpusPending=base.corpusActive&&this.state.corpusResultsQuery!==(this.state.corpusQuery||'').trim();
     base.corpusEmpty=base.corpusActive&&!base.corpusPending&&!base.hasCorpusResults;
@@ -9408,6 +9551,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       base.docOn=true;return base;
     }
     if(this.state.dataView){ base.dataOn=true;return base; }
+    if(this.state.explorerView){ base.explorerOn=true;base.explorer=this.explorerVals();return base; }
     if(this.state.sitesDir){
       base.sitesDirOn=true;base.sitesDir=this.sitesDirectory(entInSrc);
       return base;
