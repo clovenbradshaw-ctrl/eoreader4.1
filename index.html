@@ -1088,6 +1088,7 @@
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;">
             <button onclick="{{ site.onRead }}" title="Open and read the live page" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:#fff;background:var(--acc);border:1px solid var(--acc);border-radius:8px;padding:7px 14px;cursor:pointer;" style-hover="opacity:.9">Read page ↗</button>
             <button onclick="{{ site.onChat }}" title="Start a chat about this source" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:7px 13px;cursor:pointer;" style-hover="background:var(--card)">✦ Chat about this</button>
+            <button onclick="{{ site.onTiered }}" title="This source's record as a pivotable tiered graph — existence, structure, and significance tiers connected by operator edges; flow, tier-lane, and radial layouts with tier filtering" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:7px 13px;cursor:pointer;" style-hover="background:var(--card)">◈ Graph</button>
             <button onclick="{{ site.onDag }}" title="The causal DAG this source is READ as asserting — every edge a claim traced to its passage, typed by the stance the source proposed and never upgraded; confounders and mechanisms surfaced across your other sources" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:7px 13px;cursor:pointer;" style-hover="background:var(--card)">⛓ Causal DAG</button>
             <button onclick="{{ site.onWeave }}" title="The referent weave of this source — its recurring figures as threads, grouped into storylines by temporal co-activity" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:7px 13px;cursor:pointer;" style-hover="background:var(--card)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:0 0 auto;"><path d="M4 5c4 0 4 14 8 14s4-14 8-14"></path><path d="M4 12c4 0 4 7 8 7"></path><path d="M12 5c4 0 4 7 8 7"></path></svg>Weave</button>
             <button onclick="{{ site.onMute }}" title="Mute stops a source feeding the record" style="{{ site.muteBtnStyle }}" style-hover="filter:brightness(.98)">{{ site.muteBtnLabel }}</button>
@@ -2916,6 +2917,7 @@ class Component extends DCLogic {
     this.incident=new Map();for(const e of this.graph.edges){for(const id of [e.from,e.to])this.incident.set(id,(this.incident.get(id)||0)+(e.weight||0));}
     if(this._graphDock)this._renderGraphDock();   // keep the docked panel live as sources change
     if(this._dagDock)this._renderDagDock();       // and the causal-DAG panel likewise
+    if(this._tgDock)this._renderTgDock();         // and the tiered-graph panel
     // A source was added/removed/muted — the sentence list just changed under the semantic
     // index. Vectors are cached by TEXT (stable across the reshuffle), so this only ever
     // has NEW sentences left to embed; restarting the loop finds them via the fresh scan
@@ -4190,6 +4192,105 @@ class Component extends DCLogic {
     }catch(e){
       const err=document.createElement('div');err.textContent='DAG view failed to load: '+((e&&e.message)||e);
       err.style.cssText='padding:16px 13px;font-size:12.5px;color:#c0344d;';body.appendChild(err);
+    }
+  }
+  // ── TIERED GRAPH PANEL — one source's record as a pivotable helix-tier graph
+  // (src/reader/tiered-graph.js): existence = the source + the figures INSed
+  // from it, structure = the bonds between those figures (reified, each wearing
+  // its operator glyph), significance = the claims those bonds trace to. The
+  // module draws; this builds the data honestly from the record and docks it
+  // over the right panel the same way the Causal DAG panel is.
+  _tieredGraphData(url){
+    const nodes=[],edges=[],seen=new Set();
+    const push=(id,tier,label,kind,ref)=>{if(!seen.has(id)){seen.add(id);nodes.push({id,tier,label,kind,ref});}};
+    const p=this.pageOf(url);
+    push('doc',0,this.truncLabel((p&&p.title)||this.short(url)||'document',24),'doc',url);
+    const ranked=this._siteEntities(url).slice(0,12);
+    const entIds=new Set(ranked.map(r=>r.eid));
+    ranked.forEach(r=>{push('E'+r.eid,0,this.truncLabel(this.labelOf(r.eid),20),'ent',r.eid);
+      edges.push({a:'doc',b:'E'+r.eid,tier:0,gl:'●',code:'INS'});});
+    // bonds between the shown figures, aggregated per directed pair, strongest first
+    const agg=new Map();
+    for(const e of this.graph.edges){
+      if(!entIds.has(e.from)||!entIds.has(e.to)||e.from===e.to)continue;
+      const key=e.from+'→'+e.to;let b=agg.get(key);
+      if(!b){b={from:e.from,to:e.to,w:0,via:null,kind:null,sent:null};agg.set(key,b);}
+      b.w+=((e.weight!=null?e.weight:1)||0)+1e-4;
+      const via=e.relType||e.via;if(!b.via&&via&&!this.junkRel(via))b.via=via;
+      if(!b.kind&&e.kind)b.kind=e.kind;
+      if(b.sent==null&&e.sentIdx!=null)b.sent=e.sentIdx;
+    }
+    const bonds=[...agg.values()].sort((x,y)=>y.w-x.w).slice(0,12);
+    const claims=new Map();
+    bonds.forEach((b,i)=>{
+      const id='B'+i,gl=this.opGlyph(b.kind)||'⋈',code=String(b.kind||'con').toUpperCase();
+      push(id,1,this.truncLabel(b.via||this.opName(b.kind||'con'),18),'bond',b);
+      edges.push({a:'E'+b.from,b:id,tier:1,gl,code});
+      edges.push({a:'E'+b.to,b:id,tier:1,gl,code});
+      if(b.sent!=null&&this.master.sentences[b.sent]){
+        let cid=claims.get(b.sent);
+        if(!cid){cid='C'+b.sent;claims.set(b.sent,cid);
+          push(cid,2,this.truncLabel(this.clean(this.master.sentences[b.sent]),36),'claim',b.sent);}
+        const eva=this.bandOf(b.sent)==='eva';
+        edges.push({a:id,b:claims.get(b.sent),tier:2,gl:eva?'⊨':'⊢',code:eva?'EVA':'DEF'});
+      }
+    });
+    return {nodes,edges,countsLabel:ranked.length+' figures · '+bonds.length+' bonds · '+claims.size+' claims'};
+  }
+  async onOpenTiered(url){
+    if(url)this._tgUrl=url;
+    if(this._tgDock){this._tgDock.style.display='';this._positionTgDock();this._renderTgDock();return;}
+    if(!this.state.rightShow)this.setState({rightShow:true});
+    const dock=document.createElement('div');
+    dock.style.cssText='position:fixed;z-index:20;background:var(--card,#fff);border-left:1px solid var(--line,#e5e7eb);overflow:auto;';
+    document.body.appendChild(dock);
+    this._tgDock=dock;
+    this._positionTgDock();
+    this._tgDockReposition=()=>this._positionTgDock();
+    window.addEventListener('resize',this._tgDockReposition,{passive:true});
+    await this._renderTgDock();
+  }
+  _positionTgDock(){
+    const dock=this._tgDock;if(!dock)return;
+    const panel=document.getElementById('eo-panel-scroll');
+    const r=(panel&&panel.offsetParent!==null)?panel.getBoundingClientRect():null;
+    if(r&&r.width>60){dock.style.top=r.top+'px';dock.style.left=r.left+'px';dock.style.right='auto';dock.style.width=r.width+'px';dock.style.height=r.height+'px';}
+    else{const pw=Math.min(this.state.panelW||380,Math.round((window.innerWidth||420)*0.94));dock.style.top='0';dock.style.right='0';dock.style.left='auto';dock.style.width=pw+'px';dock.style.height='100%';}
+  }
+  closeTgPanel(){
+    if(this._tgDockReposition){window.removeEventListener('resize',this._tgDockReposition);this._tgDockReposition=null;}
+    if(this._tgSurface&&this._tgSurface.destroy){try{this._tgSurface.destroy();}catch(e){}this._tgSurface=null;}
+    if(this._tgDock){this._tgDock.remove();this._tgDock=null;}
+  }
+  async _renderTgDock(){
+    const dock=this._tgDock;if(!dock)return;
+    dock.innerHTML='';
+    const head=document.createElement('div');
+    head.style.cssText='display:flex;align-items:center;gap:8px;padding:11px 13px;border-bottom:1px solid var(--line,#e5e7eb);position:sticky;top:0;background:var(--card,#fff);z-index:1;';
+    const title=document.createElement('span');
+    title.style.cssText='font-size:12px;font-weight:600;color:var(--ink2,#555);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    const close=document.createElement('button');close.textContent='›';close.title='Hide panel';
+    close.style.cssText='margin-left:auto;width:24px;height:24px;border:none;background:transparent;color:var(--ink3,#999);border-radius:6px;cursor:pointer;font-size:14px;line-height:1;';
+    close.onclick=()=>this.closeTgPanel();
+    head.appendChild(title);head.appendChild(close);dock.appendChild(head);
+    const body=document.createElement('div');body.style.cssText='padding:11px 12px;';dock.appendChild(body);
+    const url=this._tgUrl||this.state.viewUrl;
+    const pg=url?this.pageOf(url):null;
+    if(!pg){
+      const pmsg=document.createElement('div');pmsg.textContent='No source in view — open a source profile and try again.';
+      pmsg.style.cssText='padding:16px 2px;font-size:12.5px;color:var(--ink3,#999);';body.appendChild(pmsg);
+      title.textContent='Graph';return;
+    }
+    title.textContent='Graph · '+this.truncLabel(pg.title||url,34);
+    try{
+      const TG=this._TG||(this._TG=await import(new URL('src/reader/tiered-graph.js',document.baseURI).href));
+      if(this._tgSurface&&this._tgSurface.destroy){try{this._tgSurface.destroy();}catch(e){}}
+      const data=this._tieredGraphData(url);
+      this._tgSurface=TG.mountTieredGraph(body,{...data,
+        onOpen:n=>{if(n.kind==='ent')this.clickEntity(n.ref);else if(n.kind==='doc')this.openSite(n.ref);}});
+    }catch(e){
+      const err=document.createElement('div');err.textContent='Graph view failed to load: '+((e&&e.message)||e);
+      err.style.cssText='padding:16px 2px;font-size:12.5px;color:#c0344d;';body.appendChild(err);
     }
   }
   // Repaints the docked panel from the live graph: the open identity questions
@@ -7990,8 +8091,8 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     if(k==='seg'||k==='con'||k==='syn')return 1;
     if(k==='def'||k==='eva'||k==='rec')return 2;
     return 3;}
-  opTriad(k){return [['#6a5acd','#efeafa'],['#0f8a74','#e3f4f0'],['#b8730a','#f9efdd'],null][this.opTier(k)];}
-  tierName(t){return ['identity','structure','interpretation'][t];}
+  opTriad(k){return [['#534AB7','#EEEDFE'],['#0F6E56','#E1F5EE'],['#BA7517','#FAEEDA'],null][this.opTier(k)];}
+  tierName(t){return ['existence','structure','significance'][t];}
   // Point at parameter t along the same cubic _dagEdge draws — used to seat the
   // operator socket out where the fan has opened up instead of at the crowded
   // midpoint.
@@ -8599,7 +8700,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       muteBtnLabel:muted?'Unmute source':'Mute source',
       muteBtnStyle:'display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:8px;padding:7px 13px;cursor:pointer;'+(muted?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);'),
       onRead:()=>this.goWeb(url), onChat:()=>this.newChat(url), onMute:()=>this.muteSrc(url), onDag:()=>this.onOpenDag(url),
-      onWeave:()=>this._openWeave(url),
+      onWeave:()=>this._openWeave(url), onTiered:()=>this.onOpenTiered(url),
       onBackDir:()=>this.openSitesDir()
     };
   }
