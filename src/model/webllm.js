@@ -25,15 +25,28 @@ const WEBLLM_URL = 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2/+esm';
 // a coder passes { id, model } and reuses every line of this path.
 export const makeWebllmBackend = (defaults = {}) => (opts = {}) => {
   const id    = defaults.id || 'webllm';
-  // DEFAULT TO THE q4f16_1 BUILD, not q4f32_1. Both are 4-bit weights; the suffix is the
-  // ACCUMULATION dtype. q4f32_1 accumulates in fp32 — a larger download and a materially slower
-  // WebGPU decode (fp16 is the native fast path on the GPU), which is the "typing is very slow"
-  // the reader feels on every token. q4f16_1 is the fp16-accumulation build the coder models
-  // (model/coders.js) already default to; it decodes faster and downloads smaller on the same
-  // hardware. A caller can still pin either explicitly via opts.model / defaults.model.
-  const model = opts.model || defaults.model || 'Llama-3.2-3B-Instruct-q4f16_1-MLC';
+  // An explicit pin (a caller's opts.model / a coder variant's defaults.model) is honoured as-is;
+  // otherwise the default 3B build is chosen ADAPTIVELY at load, keyed to the GPU (pickModel below).
+  const pinned = opts.model || defaults.model || null;
   let engine  = null;
   let loading = null;
+
+  // PICK THE 3B BUILD BY WHAT THE GPU CAN DO. The suffix is the accumulation dtype, not the weight
+  // width (both are 4-bit): q4f16_1 accumulates in fp16 and decodes fast — but ONLY on a GPU that
+  // exposes the WebGPU `shader-f16` feature. Without it (many integrated/older GPUs, some browsers)
+  // q4f16 runs an emulated path that is SLOWER than q4f32_1, so the fp32-accumulation build is the
+  // right, broadly-portable default there. So: probe the adapter for shader-f16 and take the fast
+  // build only when it's real; fall back to the portable build otherwise. Fail-soft — any detection
+  // fault (no navigator, no adapter, a throw) resolves to the portable build, never a broken fetch.
+  const pickModel = async () => {
+    const PORTABLE = 'Llama-3.2-3B-Instruct-q4f32_1-MLC';
+    const FAST     = 'Llama-3.2-3B-Instruct-q4f16_1-MLC';
+    try {
+      if (typeof navigator === 'undefined' || !navigator.gpu) return PORTABLE;
+      const adapter = await navigator.gpu.requestAdapter();
+      return (adapter && adapter.features && adapter.features.has('shader-f16')) ? FAST : PORTABLE;
+    } catch { return PORTABLE; }
+  };
 
   return {
     id,
@@ -43,6 +56,7 @@ export const makeWebllmBackend = (defaults = {}) => (opts = {}) => {
       if (engine)  return;
       if (loading) return loading;
       loading = (async () => {
+        const model = pinned || await pickModel();
         const mod = await import(/* @vite-ignore */ WEBLLM_URL);
         engine = await mod.CreateMLCEngine(model, {
           initProgressCallback: (p) =>
