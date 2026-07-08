@@ -9848,7 +9848,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       base.chatToggleStyle='display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;'+(chatActive?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);')+'border-radius:7px;padding:5px 10px;flex:0 0 auto;cursor:pointer;';
       // Phone bottom-nav tabs. Chat tab ensures a chat exists before switching pane.
       const pane=this.state.pane||'doc';
-      const navSty=on=>'flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 2px 6px;font-size:10px;font-weight:600;border:none;background:transparent;cursor:pointer;color:'+(on?'var(--acc)':'var(--ink3)')+';';
+      const navSty=on=>'flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:11px 2px 10px;font-size:11px;font-weight:600;border:none;background:transparent;cursor:pointer;color:'+(on?'var(--acc)':'var(--ink3)')+';';
       base.navTabs=[
         {k:'sources',label:'Sources',pane:'sources'},
         {k:'doc',label:'Read',pane:'doc'},
@@ -9867,7 +9867,8 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       // Bottom nav is a real grid row on phone (not a fixed overlay), so it never covers
       // the chat composer. The app shell adds an `auto` row for it on phone.
       base.appRows=isPhone?'auto auto 1fr auto':'auto auto 1fr';
-      base.navStyle='display:'+(isPhone?'flex':'none')+';background:var(--card);border-top:1px solid var(--line);';
+      // padding-bottom keeps the tabs above the iPhone home indicator (viewport-fit=cover).
+      base.navStyle='display:'+(isPhone?'flex':'none')+';background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);';
     }
     base.activity=this.activityVals();
     this.chatVals(base);
