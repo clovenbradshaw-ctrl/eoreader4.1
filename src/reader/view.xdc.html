@@ -1647,8 +1647,8 @@
                 <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--acc);">The web</span>
                 <span style="font-size:10.5px;color:var(--ink3);">{{ panelProfile.webMeta }}</span>
               </div>
-              <div style="font-size:10.5px;color:var(--ink3);line-height:1.4;margin-bottom:6px;">A directed acyclic graph — arrows run in reading order · click a node to open it.</div>
-              <div style="position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px;overflow-x:auto;">
+              <div style="font-size:10.5px;color:var(--ink3);line-height:1.4;margin-bottom:6px;">Figures, the bonds between them, and the claims those bonds trace to — across three tiers. Drag to pan · scroll to zoom · click a node to open.</div>
+              <div style="position:relative;">
                 {{ panelProfile.webViz }}
               </div>
             </div>
@@ -1736,9 +1736,9 @@
           <sc-if value="{{ pageOverview.hasWeb }}" hint-placeholder-val="{{ false }}">
             <div style="display:flex;align-items:baseline;gap:7px;margin:16px 0 4px;flex-wrap:wrap;">
               <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--acc);">The spine</span>
-              <span onclick="{{ pageOverview.onOpenTop }}" style="font-size:10.5px;color:var(--ink3);cursor:pointer;">reading-order DAG from {{ pageOverview.topLab }} →</span>
+              <span onclick="{{ pageOverview.onOpenTop }}" style="font-size:10.5px;color:var(--ink3);cursor:pointer;">tiered graph from {{ pageOverview.topLab }} →</span>
             </div>
-            <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px;">{{ pageOverview.webViz }}</div>
+            <div style="position:relative;">{{ pageOverview.webViz }}</div>
           </sc-if>
           <sc-if value="{{ pageOverview.hasProtagonists }}" hint-placeholder-val="{{ true }}">
             <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin:16px 0 7px;">Main entities</div>

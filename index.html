@@ -1742,8 +1742,8 @@
                 <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--acc);">The web</span>
                 <span style="font-size:10.5px;color:var(--ink3);">{{ panelProfile.webMeta }}</span>
               </div>
-              <div style="font-size:10.5px;color:var(--ink3);line-height:1.4;margin-bottom:6px;">A directed acyclic graph — arrows run in reading order · click a node to open it.</div>
-              <div style="position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px;overflow-x:auto;">
+              <div style="font-size:10.5px;color:var(--ink3);line-height:1.4;margin-bottom:6px;">Figures, the bonds between them, and the claims those bonds trace to — across three tiers. Drag to pan · scroll to zoom · click a node to open.</div>
+              <div style="position:relative;">
                 {{ panelProfile.webViz }}
               </div>
             </div>
@@ -1831,9 +1831,9 @@
           <sc-if value="{{ pageOverview.hasWeb }}" hint-placeholder-val="{{ false }}">
             <div style="display:flex;align-items:baseline;gap:7px;margin:16px 0 4px;flex-wrap:wrap;">
               <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--acc);">The spine</span>
-              <span onclick="{{ pageOverview.onOpenTop }}" style="font-size:10.5px;color:var(--ink3);cursor:pointer;">reading-order DAG from {{ pageOverview.topLab }} →</span>
+              <span onclick="{{ pageOverview.onOpenTop }}" style="font-size:10.5px;color:var(--ink3);cursor:pointer;">tiered graph from {{ pageOverview.topLab }} →</span>
             </div>
-            <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px;">{{ pageOverview.webViz }}</div>
+            <div style="position:relative;">{{ pageOverview.webViz }}</div>
           </sc-if>
           <sc-if value="{{ pageOverview.hasProtagonists }}" hint-placeholder-val="{{ true }}">
             <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin:16px 0 7px;">Main entities</div>
@@ -4432,6 +4432,87 @@ class Component extends DCLogic {
       }
     });
     return {nodes,edges,countsLabel:ranked.length+' figures · '+bonds.length+' bonds · '+claims.size+' claims'};
+  }
+  // The web graph for a single entity, shaped for the interactive tiered surface
+  // (src/reader/tiered-graph.js) — the same flow/tiers/radial graph the source
+  // profile's "Graph" dock draws, rooted at an entity instead of a document. The
+  // focus is the centre; its neighbours are tier-0 figures, the bonds among them
+  // tier-1, and the claims those bonds trace to tier-2. Returns null when the
+  // entity has no showable neighbourhood.
+  _entityTieredData(id){
+    const nodes=[],edges=[],seen=new Set();
+    const push=(nid,tier,label,kind,ref)=>{if(!seen.has(nid)){seen.add(nid);nodes.push({id:nid,tier,label,kind,ref});}};
+    const nbrs=this.neighbors(id).filter(n=>n&&n.id!=null&&!this.isURLish(this.labelOf(n.id))).slice(0,14);
+    if(!nbrs.length)return null;
+    // the focus is the centre — kind 'doc' earns it the radial centre, the larger
+    // node, and label priority in tiered-graph.js's readability pass.
+    push('E'+id,0,this.truncLabel(this.labelOf(id),22),'doc',id);
+    const entIds=new Set([id]);
+    nbrs.forEach(n=>{entIds.add(n.id);push('E'+n.id,0,this.truncLabel(this.labelOf(n.id),20),'ent',n.id);});
+    // bonds among the shown entities (focus↔neighbour and neighbour↔neighbour),
+    // aggregated per directed pair, strongest first — the same reading
+    // _tieredGraphData gives a source.
+    const agg=new Map();
+    for(const e of this.graph.edges){
+      if(!entIds.has(e.from)||!entIds.has(e.to)||e.from===e.to)continue;
+      const key=e.from+'→'+e.to;let b=agg.get(key);
+      if(!b){b={from:e.from,to:e.to,w:0,via:null,kind:null,sent:null};agg.set(key,b);}
+      b.w+=((e.weight!=null?e.weight:1)||0)+1e-4;
+      const via=e.relType||e.via;if(!b.via&&via&&!this.junkRel(via))b.via=via;
+      if(!b.kind&&e.kind)b.kind=e.kind;
+      if(b.sent==null&&e.sentIdx!=null)b.sent=e.sentIdx;
+    }
+    const bonds=[...agg.values()].sort((x,y)=>y.w-x.w).slice(0,16);
+    const claims=new Map();
+    bonds.forEach((b,i)=>{
+      const bid='B'+i,gl=this.opGlyph(b.kind)||'⋈',code=String(b.kind||'con').toUpperCase();
+      push(bid,1,this.truncLabel(b.via||this.opName(b.kind||'con'),18),'bond',b);
+      edges.push({a:'E'+b.from,b:bid,tier:1,gl,code});
+      edges.push({a:'E'+b.to,b:bid,tier:1,gl,code});
+      if(b.sent!=null&&this.master.sentences[b.sent]){
+        let cid=claims.get(b.sent);
+        if(!cid){cid='C'+b.sent;claims.set(b.sent,cid);
+          push(cid,2,this.truncLabel(this.clean(this.master.sentences[b.sent]),36),'claim',b.sent);}
+        const eva=this.bandOf(b.sent)==='eva';
+        edges.push({a:bid,b:claims.get(b.sent),tier:2,gl:eva?'⊨':'⊢',code:eva?'EVA':'DEF'});
+      }
+    });
+    return {nodes,edges,countsLabel:nbrs.length+' connected · '+bonds.length+' bonds · '+claims.size+' claims'};
+  }
+  // A stable ref handler per focus id. React re-invokes a ref only when its
+  // identity changes or the element unmounts, so caching by id (and never dropping
+  // the cache) keeps the panel's hover re-renders from tearing the surface down.
+  // Mounts the surface on the node, destroys it on null.
+  _tgRefFor(id){
+    this._tgRefs=this._tgRefs||{};
+    if(this._tgRefs[id])return this._tgRefs[id];
+    const self=this;
+    const ref=(node)=>{
+      if(ref._surface&&ref._surface.destroy){try{ref._surface.destroy();}catch(e){}ref._surface=null;}
+      ref._node=node||null;
+      if(node)self._mountEntityTiered(node,id,ref);
+    };
+    this._tgRefs[id]=ref;return ref;
+  }
+  async _mountEntityTiered(node,id,ref){
+    try{
+      const TG=this._TG||(this._TG=await import(new URL('src/reader/tiered-graph.js',document.baseURI).href));
+      if(ref._node!==node||!node.isConnected)return;   // superseded while the module loaded
+      const data=this._entityTieredData(id);
+      node.textContent='';
+      if(!data)return;
+      if(ref._surface&&ref._surface.destroy){try{ref._surface.destroy();}catch(e){}}
+      ref._surface=TG.mountTieredGraph(node,{...data,onOpen:n=>{if(n&&n.ref!=null)this.clickEntity(n.ref);}});
+    }catch(e){node.textContent='Graph failed to load: '+((e&&e.message)||e);}
+  }
+  // The web graph as a React element: a stable container the tiered surface mounts
+  // into. The key folds in the neighbour count so a research pass that grows the
+  // neighbourhood re-mounts a fresh graph, while plain hover re-renders never do.
+  _entityTieredEl(id){
+    if(id==null)return null;
+    const nb=this.neighbors(id).filter(n=>n&&n.id!=null&&!this.isURLish(this.labelOf(n.id)));
+    if(!nb.length)return null;
+    return React.createElement('div',{key:'tgm-'+id+'-'+nb.length,ref:this._tgRefFor(id),style:{width:'100%'}});
   }
   async onOpenTiered(url){
     if(url)this._tgUrl=url;
@@ -8981,7 +9062,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
         barStyle:'height:3px;border-radius:2px;margin-top:4px;background:'+this.hashColor(nl)+';width:'+Math.max(8,Math.round(n/maxN*100))+'%;',
         onSelect:()=>this.clickEntity(eid),onEnter:ev=>this.entHover(eid,ev),onLeave:()=>this.entLeave()};});
     const topId=ranked.length?ranked[0].eid:null;
-    const webViz=topId?this.relDag(topId,this.neighbors(topId),{compact:true}):null;
+    const webViz=topId?this._entityTieredEl(topId):null;
     const c=this.hashColor(this.short(url)),fmtDate=ts=>{try{return new Date(ts).toLocaleDateString([],{month:'short',day:'numeric'});}catch(e){return '';}};
     return {title:p.title,host:this.short(url),url,when:fmtDate(p.ts),
       av:this.short(url).slice(0,2).toUpperCase(),
@@ -10317,7 +10398,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     const linksMore=Math.max(0,nbrs.filter(n=>!this.isURLish(this.labelOf(n.id))).length-nbrShown.length);
     const lr=this.state.liveResearch||{},researching=!!(lr.on&&lr.focal===id),justDone=(!lr.on&&lr.focal===id&&lr.phase==='done');
     const researchMsg=researching?(lr.phase==='read'?('Reading '+(lr.host||'a new source')+'…'):('Searching the web for more on '+lab+'…')):(justDone?((lr.addedFocal>0)?('Added '+lr.addedFocal+' new line'+(lr.addedFocal!==1?'s':'')+' about '+lab+(lr.srcFocal>0?(' · +'+lr.srcFocal+' source'+(lr.srcFocal!==1?'s':'')):'')+'.'):('Read '+(lr.added||0)+' lines into memory — but nothing new about '+lab+' yet. The new sources were about something else.')):'');
-    const webViz=this.relDag(id,nbrs,{compact:true});
+    const webViz=this._entityTieredEl(id);
     const lens=this.lensBlock(id,vu,leadDef,leadCites);
     return {name:lab,av:this.initials(lab),avStyle:this.avatar(lab,40),avStyleSm:this.avatar(lab,30),
       webViz:webViz, hasWeb:!!webViz, webMeta:nbrs.filter(n=>!this.isURLish(this.labelOf(n.id))).length+' connected', lens:lens,
