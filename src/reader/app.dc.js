@@ -585,7 +585,7 @@ class Component extends DCLogic {
     n=n||3;
     const page=1+Math.floor(Math.random()*40);
     let data;
-    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent('https://gutendex.com/books/?languages=en&page='+page));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
+    try{const r=await this.proxyFetch('https://gutendex.com/books/?languages=en&page='+page);if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
     catch(e){return [];}
     const books=this._gutenBooks(data);
     for(let i=books.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=books[i];books[i]=books[j];books[j]=t;}
@@ -707,7 +707,50 @@ class Component extends DCLogic {
     return {title,text:this.paras(t).replace(/<[^>]*>/g,' ').replace(/\[(?:\d+|citation needed|edit)\]/gi,'').slice(0,60000),image:null};
   }
   paras(t){ return String(t||'').split(/\n\s*\n/).map(p=>this.norm(p.replace(/\n/g,' '))).filter(p=>p.length>2).join('\n'); }
-  async fetchPage(url){const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(url));if(!r.ok)throw new Error('HTTP '+r.status);const html=await r.text();if(html.trim().length<60)throw new Error('empty page');if(/<title>\s*(?:just a moment|attention required|access denied|verify you are human|are you a robot|enable javascript|please wait\b|checking your browser)/i.test(html))throw new Error('blocked by anti-bot check');return this.extract(html,r.headers.get('content-type')||'',url);}
+  // Every live-web read funnels through the feed proxy. It used to do so with a bare fetch() —
+  // no timeout, no retry, no fallback — so a slow or hung proxy connection stranded the UI on
+  // "Fetching…" indefinitely (the network tab shows a request that never settles), and a single
+  // transient hiccup surfaced as a hard failure. proxyFetch hardens every proxied read:
+  //  · a hard TIMEOUT (AbortController) cuts a stalled connection loose instead of hanging forever;
+  //  · a few RETRIES with backoff ride out a transient network drop or a 5xx/429 from the proxy;
+  //  · on the last attempt it ROTATES to a public CORS fallback so a fully-down primary proxy still
+  //    has a chance. Returns a real Response, so callers keep using .ok / .status / .headers /
+  //    .text() / .body exactly as before. A caller-supplied `signal` (user cancel) is honoured and,
+  //    unlike a timeout, is never retried.
+  _proxyUrls(target){
+    const u=encodeURIComponent(target);
+    return [
+      this.PROXY+'/feed?url='+u,                 // primary — the reader's own feed proxy
+      'https://corsproxy.io/?url='+u,            // fallbacks, only reached after the primary fails
+      'https://api.allorigins.win/raw?url='+u,
+    ];
+  }
+  async proxyFetch(target,{timeout=25000,retries=2,signal=null,init=null}={}){
+    const urls=this._proxyUrls(target);
+    let lastErr=null;
+    for(let attempt=0;attempt<=retries;attempt++){
+      const url=urls[Math.min(attempt,urls.length-1)];
+      const ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+      const relay=()=>{try{ctrl&&ctrl.abort();}catch(e){}};
+      if(signal&&ctrl){ if(signal.aborted)relay(); else signal.addEventListener('abort',relay); }
+      const timer=(ctrl&&timeout)?setTimeout(relay,timeout):null;
+      try{
+        const r=await fetch(url,{...(init||{}),...(ctrl?{signal:ctrl.signal}:{})});
+        if(timer)clearTimeout(timer); if(signal)signal.removeEventListener('abort',relay);
+        // A 5xx or 429 from a proxy is transient — retry it; hand back 4xx and success as-is.
+        if((r.status>=500||r.status===429)&&attempt<retries){lastErr=new Error('HTTP '+r.status);await this.sleep(400*(attempt+1));continue;}
+        return r;
+      }catch(e){
+        if(timer)clearTimeout(timer); if(signal)signal.removeEventListener('abort',relay);
+        // A caller-initiated cancel is final; a timeout/network fault falls through to a retry.
+        if(signal&&signal.aborted)throw e;
+        lastErr=e;
+        if(attempt<retries){await this.sleep(400*(attempt+1));continue;}
+      }
+    }
+    throw lastErr||new Error('proxy fetch failed');
+  }
+  async fetchPage(url){const r=await this.proxyFetch(url);if(!r.ok)throw new Error('HTTP '+r.status);const html=await r.text();if(html.trim().length<60)throw new Error('empty page');if(/<title>\s*(?:just a moment|attention required|access denied|verify you are human|are you a robot|enable javascript|please wait\b|checking your browser)/i.test(html))throw new Error('blocked by anti-bot check');return this.extract(html,r.headers.get('content-type')||'',url);}
   // Candidate URLs for a query — the entry point both research paths (the ✦ button and the
   // chat research mode) walk from. PRIMARY: DuckDuckGo's HTML endpoint via the proxy. FALLBACK:
   // Wikipedia's search API, which is CORS-direct (no proxy) through _wikiJSON. A research walk
@@ -723,7 +766,7 @@ class Component extends DCLogic {
     return out;
   }
   async _searchDDG(query,n){
-    const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent('https://html.duckduckgo.com/html/?q='+encodeURIComponent(query)));
+    const r=await this.proxyFetch('https://html.duckduckgo.com/html/?q='+encodeURIComponent(query));
     if(!r.ok)throw new Error('HTTP '+r.status);
     const doc=new DOMParser().parseFromString(await r.text(),'text/html');const out=[];
     const grab=a=>{let h=a.getAttribute&&a.getAttribute('href');if(!h)return;const m=h.match(/[?&]uddg=([^&]+)/);if(m)h=decodeURIComponent(m[1]);if(/^https?:\/\//i.test(h)&&!/duckduckgo\.com/i.test(h))out.push(h);};
@@ -5542,7 +5585,7 @@ class Component extends DCLogic {
   async searchGutenberg(query){
     const api='https://gutendex.com/books/?search='+encodeURIComponent(query);
     let data;
-    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(api));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
+    try{const r=await this.proxyFetch(api);if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
     catch(e){this.feedLine('warn','Gutenberg search failed — '+(e&&e.message||e));return [];}
     return this._gutenBooks(data).slice(0,16);
   }
@@ -5618,7 +5661,7 @@ class Component extends DCLogic {
     this.setState({gutenReading:book.id});
     this.feedSep('Project Gutenberg');this.feedLine('read','Fetching “'+book.title+'”…');
     let text;
-    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(book.txtUrl));if(!r.ok)throw new Error('HTTP '+r.status);text=await r.text();}
+    try{const r=await this.proxyFetch(book.txtUrl,{timeout:60000});if(!r.ok)throw new Error('HTTP '+r.status);text=await r.text();}
     catch(e){this.feedLine('warn','Could not fetch the book — '+(e&&e.message||e));this.setState({gutenReading:null});return;}
     const meta=this.bookMeta(book,text);                   // read title/author/date from the raw header
     text=this.stripGutenberg(text);
@@ -6734,7 +6777,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     // api.php (origin=*) are CORS-open, but THIS preview frame blocks cross-origin fetch,
     // so on failure we fall back to the very same proxy the reader uses for page fetches.
     try{ const r=await fetch(url,{headers:{accept:'application/json'}}); if(r.ok) return await r.json(); }catch(e){}
-    const r2=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(url));
+    const r2=await this.proxyFetch(url);
     if(!r2.ok) throw new Error('HTTP '+r2.status);
     const txt=await r2.text();
     try{ return JSON.parse(txt); }catch(e){ throw new Error('non-JSON from proxy'); }
@@ -8075,7 +8118,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
   // shows live progress instead of a silent spinner. Streams the response body when the
   // platform gives a reader; falls back to a one-shot read otherwise. Returns {text,ctype}.
   async _fetchProxied(url,onBytes){
-    const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(url));
+    const r=await this.proxyFetch(url,{timeout:60000});
     if(!r.ok)throw new Error('HTTP '+r.status);
     const ctype=r.headers.get('content-type')||'';
     const total=Number(r.headers.get('content-length'))||0;
@@ -8135,7 +8178,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     try{return await this._searchWikiRich(query,n);}catch(e){return [];}
   }
   async _searchDDGRich(query,n){
-    const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent('https://html.duckduckgo.com/html/?q='+encodeURIComponent(query)));
+    const r=await this.proxyFetch('https://html.duckduckgo.com/html/?q='+encodeURIComponent(query));
     if(!r.ok)throw new Error('HTTP '+r.status);
     const doc=new DOMParser().parseFromString(await r.text(),'text/html');const out=[];const seen=new Set();
     doc.querySelectorAll('.result, .web-result').forEach(res=>{
@@ -8196,7 +8239,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     if(!url||/^text:/i.test(url)){this.setState({srcDoc:null,srcLoading:false,srcErr:null});return;}
     if(this._embedUrl===url&&this.state.srcDoc)return;
     this._embedUrl=url; this.setState({srcLoading:true,srcDoc:null,srcErr:null});
-    fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);const ctype=r.headers.get('content-type')||'';return r.text().then(text=>({text,ctype}));}).then(({text,ctype})=>{
+    this.proxyFetch(url).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);const ctype=r.headers.get('content-type')||'';return r.text().then(text=>({text,ctype}));}).then(({text,ctype})=>{
       if(this.state.openSrc!==url)return;
       // A plain-text source renders as paragraphs, not raw-as-HTML (which collapses it).
       if(this._isPlainText(ctype,text)){this.setState({srcDoc:this._plainTextDoc(text,url),srcLoading:false,srcErr:null});return;}
@@ -8535,7 +8578,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
         thumb:(d.thumbnail&&d.thumbnail.source)||null,
         url:(d.content_urls&&d.content_urls.desktop&&d.content_urls.desktop.page)||href};
     }else{
-      const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(href));
+      const r=await this.proxyFetch(href);
       if(!r.ok)throw new Error('HTTP '+r.status);
       const ex=this.extract(await r.text(),r.headers.get('content-type')||'',href);
       // The lede is the first few real blocks of the extracted body, abbreviation-safe.
