@@ -49,7 +49,7 @@ export const seedCorpus = (log, spec = [], { enactment = 'ingest' } = {}) => {
   const prov = fromPerceiver(enactment);
   for (const e of spec) {
     if (e.op === 'INS') log.append({ op: 'INS', id: e.id, label: String(e.label), prov });
-    else if (e.op === 'CON') log.append({ op: 'CON', src: e.src, dst: e.dst, via: String(e.via || 'rel'), prov });
+    else if (e.op === 'CON') log.append({ op: 'CON', src: e.src, tgt: e.tgt ?? e.dst, via: String(e.via || 'rel'), prov });
     else log.append({ ...e, prov });
   }
   return log;
@@ -59,6 +59,12 @@ export const seedCorpus = (log, spec = [], { enactment = 'ingest' } = {}) => {
 // A figure minted by a WALK step (enactor INS/SYN) is admitted exactly as a corpus figure is, so
 // the next step can bond to it (the accumulation). What differs is the DOOR, which the grade
 // consults, never the reach.
+//
+// The live parser (perceiver/parse) writes a bond's object as `tgt`, and attributes speech and
+// stance as SIG events beside the CONs; both count as exafferent witnesses here. `dst` is read
+// as a fallback so a hand-seeded corpus still parses. Each bond keeps the `sentIdx` its
+// witnessing event was read from — the citation bindCitations wants when a walk step turns out
+// to be grounded.
 const readGraph = (log) => {
   const events = log.snapshot();
   const figures = new Map();
@@ -67,8 +73,9 @@ const readGraph = (log) => {
     if ((e.op === 'INS' || e.op === 'SYN') && e.id != null && !figures.has(e.id)) {
       figures.set(e.id, { id: e.id, label: String(e.label ?? e.id), door: e.prov?.door ?? 'perceiver', grain: e.grain | 0, seq: e.seq });
     }
-    if (e.op === 'CON' && e.src != null && e.dst != null) {
-      bonds.push({ src: e.src, dst: e.dst, via: String(e.via || 'rel'), door: e.prov?.door ?? 'perceiver', canWitness: canWitness(e.prov ?? null) });
+    if ((e.op === 'CON' || e.op === 'SIG') && e.src != null && (e.tgt ?? e.dst) != null) {
+      bonds.push({ src: e.src, dst: e.tgt ?? e.dst, via: String(e.via || 'rel'), door: e.prov?.door ?? 'perceiver',
+        canWitness: canWitness(e.prov ?? null), sentIdx: e.sentIdx ?? null, seq: e.seq });
     }
   }
   const grains = new Set([...figures.values()].map((f) => f.grain));
@@ -81,8 +88,8 @@ const pairKey = (a, b) => (String(a) < String(b) ? `${a}~${b}` : `${b}~${a}`);
 // ── The grade, read off the log (never elected) ───────────────────────────────
 const gradeBond = ({ src, dst, via }, { bonds, rules }) => {
   const key = bondKey(src, dst, via);
-  const witnessed = bonds.some((b) => b.canWitness && bondKey(b.src, b.dst, b.via) === key);
-  if (witnessed) return { grade: 'grounded', band: firm() };
+  const witness = bonds.find((b) => b.canWitness && bondKey(b.src, b.dst, b.via) === key);
+  if (witness) return { grade: 'grounded', band: firm(), witness: { seq: witness.seq, sentIdx: witness.sentIdx } };
   const rule = rules.find((r) => r.via === via && r.support >= 2);
   if (rule) return { grade: 'warranted-ungrounded', band: voidRes(0.6), warrant: { rule: rule.via, support: rule.support } };
   return { grade: 'idle-ungrounded', band: voidRes() };
@@ -195,7 +202,7 @@ export const walkReasoning = async (log, {
     const cand = choice.c;
     const prov = fromEnactor(enactment);   // mine — canWitness will be false, by type
 
-    let event, grade, warrant = null, sites = [];
+    let event, grade, warrant = null, witness = null, sites = [];
     if (cand.op === 'REC') {
       rules.push({ via: cand.via, support: cand.support });
       event = { op: 'REC', via: cand.via, support: cand.support, prov };
@@ -210,15 +217,15 @@ export const walkReasoning = async (log, {
     } else { // CON
       bondsSeen.add(pairKey(cand.src, cand.dst));
       const g = gradeBond({ src: cand.src, dst: cand.dst, via: cand.via }, { bonds: graph.bonds, rules });
-      event = { op: 'CON', src: cand.src, dst: cand.dst, via: cand.via, prov };
-      grade = g.grade; warrant = g.warrant ?? null; sites = [cand.src, cand.dst];
+      event = { op: 'CON', src: cand.src, tgt: cand.dst, via: cand.via, prov };
+      grade = g.grade; warrant = g.warrant ?? null; witness = g.witness ?? null; sites = [cand.src, cand.dst];
     }
 
     const sealed = log.append(event);   // COMMIT — step i+1 reads it back off the log
 
     const builtOnSelf = sites.some((id) => graph.figures.get(id)?.door === 'enactor');
     steps.push(Object.freeze({
-      i, op: cand.op, note: cand.note, sites, seq: sealed.seq, grade, warrant,
+      i, op: cand.op, note: cand.note, sites, seq: sealed.seq, grade, warrant, witness,
       prov: sealed.prov, classified: classify(sealed.prov),
       canWitness: canWitness(sealed.prov),   // FALSE, by type — the firewall
       builtOnSelf, bits: round3(choice.bits),
