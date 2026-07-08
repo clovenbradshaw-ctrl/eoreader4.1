@@ -561,11 +561,14 @@ class Component extends DCLogic {
       window.addEventListener('resize',this._onResize,{passive:true});
     }
     this._initCiteHover();
+    this._initSelPop();
   }
   componentWillUnmount(){
     if(this._onResize&&typeof window!=='undefined') window.removeEventListener('resize',this._onResize);
     if(this._citeHoverInit){document.removeEventListener('mouseover',this._onCiteOver);document.removeEventListener('mouseout',this._onCiteOut);}
     if(this._citeCard&&this._citeCard.parentNode)this._citeCard.parentNode.removeChild(this._citeCard);
+    if(this._selPopInit){document.removeEventListener('mouseup',this._onSelUp);document.removeEventListener('mousedown',this._onSelDown,true);window.removeEventListener('scroll',this._onSelScroll,true);document.removeEventListener('keydown',this._onSelKey);}
+    if(this._selPop&&this._selPop.parentNode)this._selPop.parentNode.removeChild(this._selPop);
   }
   // ── Responsive tiers ──────────────────────────────────────────────────────
   // Wide (≥1180): chat can dock as its own column. Mid (760–1179): chat reverts to the
@@ -8991,7 +8994,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
         if(id!=null)a.setAttribute('data-eo-ent',String(this._frameIds.push(id)-1));
       });}catch(e){}
       // delegated listeners — rebindable so hot-reloads/new instances take effect
-      if(d.__eoHandlers){d.removeEventListener('click',d.__eoHandlers.click,true);d.removeEventListener('mouseover',d.__eoHandlers.over,true);d.removeEventListener('mouseout',d.__eoHandlers.out,true);if(d.__eoHandlers.move)d.removeEventListener('mousemove',d.__eoHandlers.move,true);}
+      if(d.__eoHandlers){d.removeEventListener('click',d.__eoHandlers.click,true);d.removeEventListener('mouseover',d.__eoHandlers.over,true);d.removeEventListener('mouseout',d.__eoHandlers.out,true);if(d.__eoHandlers.move)d.removeEventListener('mousemove',d.__eoHandlers.move,true);if(d.__eoHandlers.up)d.removeEventListener('mouseup',d.__eoHandlers.up);}
       const onClick=ev=>{const s=ev.target.closest&&ev.target.closest('[data-eo-ent]');
         if(s){ev.preventDefault();ev.stopPropagation();const id=this._frameIds[+s.getAttribute('data-eo-ent')];if(id==null)return;this.entLeave();
           // An entity that is ALSO a hyperlink has two actions — open its profile, or follow
@@ -9018,8 +9021,11 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
         // it rests so the card lands at the settled spot — sweeping never pops anything.
         if(this._pendHover&&this.state.hoverEnt!==this._pendHover.id){const o=this._frameOffset();this._pendHover.x=o.x+ev.clientX;this._pendHover.y=o.y+ev.clientY;this._armHoverCard();}
         if((this.state.hoverPivot||'dwell')==='dwell')this._armPivot(this._hovEnt);};
-      d.addEventListener('click',onClick,true);d.addEventListener('mouseover',onOver,true);d.addEventListener('mouseout',onOut,true);d.addEventListener('mousemove',onMove,true);
-      d.__eoHandlers={click:onClick,over:onOver,out:onOut,move:onMove};d.__eoBound=true;
+      // Select-to-entity inside the reading surface: the iframe has its own selection, so
+      // read it from d and translate its geometry through _frameOffset() into the top viewport.
+      const onUp=ev=>{setTimeout(()=>{try{this._handleSelection(d.getSelection?d.getSelection():null,this._frameOffset());}catch(e){}},0);};
+      d.addEventListener('click',onClick,true);d.addEventListener('mouseover',onOver,true);d.addEventListener('mouseout',onOut,true);d.addEventListener('mousemove',onMove,true);d.addEventListener('mouseup',onUp);
+      d.__eoHandlers={click:onClick,over:onOver,out:onOut,move:onMove,up:onUp};d.__eoBound=true;
     }catch(e){}
   }
   _armPivot(id){
@@ -9201,6 +9207,128 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     this._busy=false;this.setState(s=>({busy:false,researched:{...s.researched,[id]:true},liveResearch:{on:false,focal:id,phase:'done',host:'',added:this.master.sentences.length-preSent,addedFocal:this.mentionsOf(id).length-preMF,srcFocal:this.sourcesOf(id).length-preSF}}));
     setTimeout(()=>{ if(this.state.liveResearch&&this.state.liveResearch.phase==='done')this.setState({liveResearch:{on:false}}); },4000);
   }
+
+  // ── Select-to-entity: promote an arbitrary text string into a first-class entity ──
+  // A phrase becomes a graph entity only as a projection of a parsed source (there is no
+  // synthetic-entity door). So promoting a selection means READING the web about it: search
+  // its exact wording, fold a few relevant pages into memory as REAFFERENCE (the same door
+  // the entity Research button uses), and the perceiver mints the referent. Once minted it is
+  // clickable everywhere via buildLinkIndex — identical to any other entity. We then open it.
+  async promoteSelection(rawText){
+    const clean=this.norm(String(rawText||'')).replace(/\s+/g,' ').trim();
+    if(this._busy||!this.E||clean.length<2||clean.length>90||!/[a-z]/i.test(clean))return;
+    // Already an entity? Just open it and (re)research it — no need to mint.
+    let id=this._resolveEntity(clean);
+    if(id!=null){this.clickEntity(id);this.research(id,this.state.mode||'breadth');return;}
+    this._feedEnt=null;this._busy=true;
+    const preSent=this.master.sentences.length;
+    const parentUrl=this.state.viewUrl||null;
+    this.setState({busy:true,liveResearch:{on:true,focal:null,label:clean,phase:'search',host:'',added:0}});
+    this.feedSep('make entity · '+clean);
+    this.feedLine('search','Researching “'+clean+'” to make it an entity');await this.sleep(200);
+    let links;try{links=await this.searchLinks(clean,8);}catch(e){links=[];}
+    links=(links||[]).filter(u=>!this.state.pages.find(p=>p.url===u||p.url==='https://'+u));
+    if(!links.length){this.feedLine('warn','No sources found for “'+clean+'” — nothing to build the entity from.');this._busy=false;this.setState({busy:false,liveResearch:{on:false}});return;}
+    this.feedLine('found','Found '+links.length+' sources: '+links.map(l=>this.short(l)).join(', '));await this.sleep(150);
+    // Relevance is gated on the phrase's own significant words (the focal-proper set an entity
+    // Research would carry). Short titles fall under pageRelevant's 4-token floor and keep every
+    // page, which is what we want when the phrase is exactly the subject we searched for.
+    const proper=new Set(clean.toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2));
+    const want=3;let got=0,attempts=0;
+    for(let i=0;i<links.length&&got<want&&attempts<8;i++){const url=links[i];attempts++;
+      this.setState(s=>({liveResearch:{...(s.liveResearch||{}),on:true,focal:null,label:clean,phase:'read',host:this.short(url)}}));
+      this.feedLine('read','Reading '+this.short(url)+' …');await this.sleep(150);
+      const res=await this.readURL(url,'REAFFERENCE',parentUrl);await this.sleep(150);
+      if(!res){continue;}
+      if(!this.pageRelevant(url,proper)){this.tossPage(url);this.feedLine('warn','Set aside '+this.short(url)+' — not about '+clean);await this.sleep(120);continue;}
+      got++;this.feedLine('graph','Read “'+res.title+'”');
+      this.setState(s=>({liveResearch:{...(s.liveResearch||{}),added:this.master.sentences.length-preSent}}));
+      // Stop as soon as the phrase has been admitted as its own referent.
+      id=this._resolveEntity(clean);if(id!=null)break;
+    }
+    if(id==null)id=this._resolveEntity(clean);
+    this._busy=false;
+    if(id!=null){
+      this.feedLine('done','“'+this.labelOf(id)+'” is now an entity · '+this.sourcesOf(id).length+' source'+(this.sourcesOf(id).length!==1?'s':''));
+      this.setState(s=>({busy:false,researched:{...s.researched,[id]:true},liveResearch:{on:false,focal:id,phase:'done',host:'',added:this.master.sentences.length-preSent}}));
+      this.clickEntity(id);
+      setTimeout(()=>{ if(this.state.liveResearch&&this.state.liveResearch.phase==='done')this.setState({liveResearch:{on:false}}); },4000);
+    }else{
+      this.feedLine('warn','Read '+got+' source'+(got!==1?'s':'')+', but couldn’t pin “'+clean+'” as its own entity. Try selecting the fuller name.');
+      this.setState({busy:false,liveResearch:{on:false}});
+    }
+  }
+  // Resolve a text string to a graph entity id: exact label/alias via the link index first,
+  // then the best-matching entity label (containment, else token overlap) above a threshold —
+  // so a slightly-normalized mint ("Five Go Mad in Dorset (1982)") still opens the right entity.
+  _resolveEntity(clean){
+    if(!this.graph)return null;
+    const lc=clean.toLowerCase();
+    let id=this.buildLinkIndex().get(lc);if(id!=null)return id;
+    const toks=new Set(lc.split(/[^a-z0-9]+/).filter(w=>w.length>2));
+    if(!toks.size)return null;
+    let best=null,bestScore=0;
+    for(const e of this.graph.entities.values()){
+      if(!this.showable(e.id))continue;
+      const lab=this.labelOf(e.id);if(!lab)continue;const ll=lab.toLowerCase();
+      let score;
+      if(ll===lc)score=1;
+      else if(ll.includes(lc)||lc.includes(ll))score=0.85;
+      else{const lt=new Set(ll.split(/[^a-z0-9]+/).filter(w=>w.length>2));let inter=0;toks.forEach(t=>{if(lt.has(t))inter++;});const uni=new Set([...toks,...lt]).size||1;score=inter/uni;}
+      if(score>bestScore){bestScore=score;best=e.id;}
+    }
+    return bestScore>=0.6?best:null;
+  }
+  // ── the select-to-entity popover (imperative, like the cite card) ─────────────
+  // Built on document.body, not the template, so ONE affordance serves both the chat
+  // bubbles (top document) and the reading surface (the same-origin center iframe).
+  _initSelPop(){
+    if(this._selPopInit||typeof document==='undefined')return;this._selPopInit=true;
+    this._onSelUp=()=>{setTimeout(()=>{try{this._handleSelection(window.getSelection&&window.getSelection(),{x:0,y:0});}catch(e){}},0);};
+    this._onSelDown=(e)=>{const el=this._selPop;if(el&&el.contains(e.target))return;this._hideSelPop();};
+    this._onSelScroll=()=>this._hideSelPop();
+    this._onSelKey=(e)=>{if(e.key==='Escape')this._hideSelPop();};
+    document.addEventListener('mouseup',this._onSelUp);
+    document.addEventListener('mousedown',this._onSelDown,true);
+    window.addEventListener('scroll',this._onSelScroll,true);
+    document.addEventListener('keydown',this._onSelKey);
+  }
+  _handleSelection(sel,offset){
+    if(this._busy){this._hideSelPop();return;}
+    if(!sel||sel.isCollapsed||!sel.rangeCount){this._hideSelPop();return;}
+    const clean=this.norm(String(sel.toString()||'')).replace(/\s+/g,' ').trim();
+    if(clean.length<2||clean.length>90||!/[a-z]/i.test(clean)){this._hideSelPop();return;}
+    const anc=sel.anchorNode,ael=anc&&(anc.nodeType===1?anc:anc.parentElement);
+    if(ael&&ael.closest&&ael.closest('input,textarea,select,[contenteditable],.eo-sel-pop,.eo-cite-card')){this._hideSelPop();return;}
+    let rect;try{rect=sel.getRangeAt(0).getBoundingClientRect();}catch(e){rect=null;}
+    if(!rect||(!rect.width&&!rect.height)){this._hideSelPop();return;}
+    const o=offset||{x:0,y:0};
+    const box={left:rect.left+o.x,right:rect.right+o.x,top:rect.top+o.y,bottom:rect.bottom+o.y};
+    this._showSelPop(box,clean,this._resolveEntity(clean)!=null);
+  }
+  _selPopEl(){
+    if(this._selPop)return this._selPop;
+    const el=document.createElement('div');
+    el.className='eo-sel-pop';
+    el.style.cssText='position:fixed;z-index:9200;display:none;align-items:center;gap:6px;background:var(--acc,#5b34d6);color:#fff;border:none;border-radius:9px;box-shadow:0 8px 24px rgba(20,24,30,.28);padding:7px 11px;font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;user-select:none;animation:eopop .12s ease-out;';
+    el.innerHTML='<span style="font-size:14px;line-height:1;flex:0 0 auto;">✦</span><span data-sel-label>Research &amp; make entity</span>';
+    // Keep the selection alive when the button is pressed: a plain click would collapse it
+    // before our handler runs. preventDefault on mousedown holds it; the click then fires.
+    el.addEventListener('mousedown',(e)=>{e.preventDefault();e.stopPropagation();});
+    el.addEventListener('click',(e)=>{e.preventDefault();e.stopPropagation();const t=this._selText;this._hideSelPop();this._clearSelection();if(t)this.promoteSelection(t);});
+    document.body.appendChild(el);this._selPop=el;return el;
+  }
+  _showSelPop(box,clean,existing){
+    const el=this._selPopEl();this._selText=clean;
+    const lab=el.querySelector('[data-sel-label]');if(lab)lab.textContent=existing?'Open & research entity':'Research & make entity';
+    el.style.visibility='hidden';el.style.display='inline-flex';
+    const pw=el.offsetWidth,ph=el.offsetHeight,vw=window.innerWidth,vh=window.innerHeight;
+    const left=Math.min(Math.max(8,(box.left+box.right)/2-pw/2),Math.max(8,vw-pw-8));
+    let top=box.top-ph-8;if(top<8)top=Math.min(Math.max(8,vh-ph-8),box.bottom+8);
+    el.style.left=left+'px';el.style.top=top+'px';el.style.visibility='visible';
+  }
+  _hideSelPop(){const el=this._selPop;if(el)el.style.display='none';}
+  _clearSelection(){try{const s=window.getSelection&&window.getSelection();if(s)s.removeAllRanges();}catch(e){}try{const d=this._bookDoc&&this._bookDoc();if(d&&d.getSelection)d.getSelection().removeAllRanges();}catch(e){}}
 
   chip(url,active){const c=this.hashColor(this.short(url));return {style:'display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;border-radius:6px;padding:2px 7px;cursor:pointer;transition:all .12s;'+(active?'color:var(--ink);background:#eef3fc;border:1px solid '+c+';':'color:var(--ink2);background:#f4f5f7;border:1px solid var(--line2);'),dot:'width:7px;height:7px;border-radius:50%;background:'+c+';display:inline-block;flex-shrink:0;'};}
   avatar(label,size){const c=this.hashColor(label);return 'width:'+size+'px;height:'+size+'px;flex:0 0 auto;border-radius:'+(size*0.28)+'px;background:'+c+'1a;color:'+c+';display:flex;align-items:center;justify-content:center;font-size:'+(size*0.34)+'px;font-weight:700;letter-spacing:-.02em;';}
