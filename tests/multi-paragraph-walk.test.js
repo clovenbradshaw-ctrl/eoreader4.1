@@ -171,3 +171,72 @@ test('walk honours an already-aborted signal without generating', async () => {
   const res = await walk({ fold: foldOf(), design: { demand: 3, question: 'falcons' }, model, signal: ac.signal });
   assert.equal(res.paragraphs.length, 0);
 });
+
+// ── the live walk: the self-read weld — generation drives retrieval per beat ────
+
+test('a refold hook runs the walk live — each paragraph refolds for a new part of the fold', async () => {
+  const model = createModel('echo');
+  await model.load();
+
+  // The reader's role: hand back a fresh, uncovered slice each beat, focused by the
+  // prior paragraph. Here we just serve the fold in order, skipping what's covered —
+  // the mechanical stand-in for a re-query that the reader does with groundNotes.
+  const pool = foldOf();
+  const refoldCalls = [];
+  const refold = async ({ prior, index, seen }) => {
+    refoldCalls.push({ index, prior });
+    const fresh = pool.filter(s => !seen.has(String(s.idx)));
+    return fresh.slice(0, 3);
+  };
+
+  const seenParagraphs = [];
+  const res = await walk({
+    fold: [], design: { demand: 4 }, question: 'falcons', model, refold,
+    onParagraph: (rec) => seenParagraphs.push(rec.text),
+  });
+
+  assert.ok(res.paragraphs.length >= 1 && res.paragraphs.length <= 4, 'the demand caps the live run');
+  assert.ok(res.paragraphs.every(p => p.sources.length >= 1), 'every live paragraph is grounded');
+  assert.equal(res.design.live, true, 'the design is marked live (self-read weld)');
+  assert.deepEqual(seenParagraphs, res.paragraphs.map(p => p.text), 'onParagraph streamed each accepted paragraph');
+  // The weld: the FIRST refold opens cold (no prior); every later one is handed the
+  // paragraph before it as the retrieval cue.
+  assert.equal(refoldCalls[0].prior, '', 'the first beat opens cold — no prior paragraph');
+  if (refoldCalls.length > 1) assert.ok(refoldCalls[1].prior.length > 0, 'later beats refold focused by the prior paragraph');
+});
+
+test('an empty refold is saturation — the live walk stops and does not pad', async () => {
+  const model = createModel('echo');
+  await model.load();
+
+  const pool = foldOf().slice(0, 2);                    // only two regions to serve
+  const refold = async ({ seen }) => pool.filter(s => !seen.has(String(s.idx)));
+
+  const res = await walk({ fold: [], design: { demand: 5 }, question: 'falcons', model, refold });
+  assert.ok(res.paragraphs.length <= 2, 'the fold is spent after its regions — no padding to the demand of 5');
+  assert.ok(res.trace.some(t => t.kind === 'saturated'), 'the empty refold is recorded as saturation, honestly');
+});
+
+test('the live walk resumes from state — the discovered continuation seeds accepted paragraphs', async () => {
+  const model = createModel('echo');
+  await model.load();
+
+  // The "discover" path: a single answer already came back as these paragraphs; we
+  // continue the walk from them, refolding for more. The seeded paragraphs count as
+  // the run's history, so the next beat opens on the LAST of them.
+  const seedPara = { beat: 'b0', role: 'open', sources: [0], text: 'The peregrine falcon reaches speeds over three hundred kilometres per hour in its stoop.' };
+  const pool = foldOf();
+  const refold = async ({ prior, seen }) => {
+    // exclude the seeded source too
+    return pool.filter(s => !seen.has(String(s.idx)) && s.idx !== 0).slice(0, 3);
+  };
+  let firstPrior = null;
+  const res = await walk({
+    fold: [], design: { demand: 3 }, question: 'falcons', model, refold,
+    state: { design: buildSkeleton({ ground: pool, demand: 3 }), accepted: [seedPara], covered: [0], done: ['b0'] },
+    onParagraph: () => {},
+  });
+
+  assert.ok(res.paragraphs.length >= 2, 'the seeded paragraph is kept and the walk continues past it');
+  assert.equal(res.paragraphs[0].text, seedPara.text, 'the discovered paragraph leads the continued run');
+});

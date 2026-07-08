@@ -142,6 +142,48 @@ const carveDesign = ({ design, fold, question }) => {
   });
 };
 
+// composeBeat — write ONE beat: render the continuation, phrase it, bind and veto
+// at claim grain, splice the ungrounded tail, regenerate once below threshold,
+// strike a frame leak at EVA. The coarse-generate / fine-verify body shared by the
+// static walk and the live (self-read) walk, so both hold the SAME grounding floor.
+// Returns { paragraph|null, gated, action, leak, seed }.
+const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal }) => {
+  const seed = seedFor({ beat, slice });
+  const ceiling = ceilingFor({ mass: slice.reduce((m, s) => m + (s.score || 0), 0) / slice.length, spans: slice });
+  let paragraph = null, gated = null, action = 'regen', leak = null;
+  for (let attempt = 0; attempt <= MAX_REGEN; attempt++) {
+    // The design is the length spec: stop at the next heading marker so the model
+    // bridges one paragraph's worth to the gap, never a "one paragraph" instruction.
+    // A backend without stop sequences ignores it, byte-identical.
+    const messages = renderContinuation({ beat, slice, prior, coldStart, genre });
+    const raw = await model.phrase(messages, { maxTokens: ceiling, minTokens: FLOOR_TOKENS, stop: ['\n##'], signal });
+    // The paragraph is the seed (the DEF the model was handed) plus its
+    // continuation — the topic sentence the model finished.
+    const continuation = String(raw || '').trim();
+    const full = seed ? `${seed} ${continuation}`.trim() : continuation;
+    gated = bindAndVeto(full, slice, { question: beat.topic, task: 'answer' });
+    let eva = evaSplice(gated);
+    // A frame leak that bound lexically is struck here — the grounding floor cannot
+    // see it (it rides on a grounded claim), so EVA must.
+    leak = eva.action !== 'regen' ? frameLeak(eva.text) : null;
+    if (leak) eva = { action: 'regen', text: '' };
+    action = eva.action;
+    if (eva.action !== 'regen') { paragraph = eva.text; break; }
+  }
+  return { paragraph, gated, action, leak, seed };
+};
+
+// recordFor — the accepted-paragraph record (the shape the progress fold and the
+// caller read). Frozen so a walked paragraph is never mutated after the fact.
+const recordFor = (beat, seed, paragraph, gated, action) => Object.freeze({
+  beat: beat.id, sectionId: beat.sectionId, role: beat.role, heading: beat.heading,
+  topic: beat.topic, kind: beat.kind, seed, text: paragraph,
+  sources: gated.sources, boundFraction: gated.boundFraction, action, closes: false,
+});
+
+const LIVE_WIDTH = 3;         // spans per live slice (anchor + strongest fresh neighbours)
+const LOAD_BEARING = 0.6;     // score at or above which a live anchor is pinned tight
+
 export const walk = async ({
   fold = [],              // the running situation: ranked evidence spans (the ground pool)
   design = null,          // ordered beats, or a { demand, outline } the walk carves once
@@ -150,6 +192,11 @@ export const walk = async ({
   maxBeats = Infinity,    // beats to write this call. v1: the whole design.
   question = '',          // carried into the carve when design is a { demand, outline } spec
   state = null,           // resumable state — the SEAM; v1 produces no caller that feeds it back
+  refold = null,          // the SELF-READ WELD (deferred capacity #3): async ({ prior, accepted,
+                          // covered, index, question, seen }) -> fresh spans for the next beat.
+                          // When set, the walk runs LIVE — generation drives retrieval, each beat's
+                          // fold re-focused by the paragraph before it, rather than one static pool.
+  onParagraph = null,     // (record, i) -> void — called as each paragraph is accepted (UI streaming)
   signal = null,
 } = {}) => {
   // Normalise the fold idx so a span's identity is stable across calls.
@@ -165,6 +212,54 @@ export const walk = async ({
   const done = new Set(state?.done || accepted.map(p => p.beat));   // beats already walked (accepted or held)
   const trace = [];
   let wrote = 0;
+
+  // ── LIVE WALK — the self-read weld (refold provided) ──────────────────────────
+  // No pre-carved beat list: each paragraph refolds for a NEW part of the fold,
+  // focused by the paragraph before it (the last accepted text is the retrieval
+  // cue). The demand caps the run; an empty refold IS saturation — the fold is
+  // spent, so stop and report the shortfall rather than pad. This is the shape the
+  // reader drives: it owns retrieval, the walk owns the grounded-paragraph floor.
+  if (typeof refold === 'function') {
+    const demandCap = Number.isInteger(design?.demand) && design.demand > 0 ? design.demand : maxBeats;
+    // Seed `seen` from BOTH the carried coverage and the accepted paragraphs' cites,
+    // so a discovered continuation (state.covered = the fold the single call already
+    // drank) refolds for genuinely NEW spans instead of re-serving them.
+    const seen = new Set([...covered, ...accepted.flatMap(p => (p.sources || []))].map(String));
+    let idx = accepted.length;
+    while (idx < demandCap && wrote < maxBeats) {
+      if (signal?.aborted) { trace.push({ beat: `b${idx}`, kind: 'aborted' }); break; }
+      const prior = accepted.length ? accepted[accepted.length - 1].text : '';
+      const fresh = (await refold({ prior, accepted: [...accepted], covered: new Set(covered), index: idx, question, seen })) || [];
+      if (!fresh.length) { trace.push({ beat: `b${idx}`, kind: 'saturated' }); break; }  // the fold is spent
+      const slice = fresh.slice(0, LIVE_WIDTH).map((s, j) => ({ ...s, idx: s.idx ?? `L${idx}.${j}` }));
+      const anchor = slice[0];
+      const beat = {
+        id: `b${idx}`, order: idx, sectionId: 's0', idx: anchor.idx,
+        topic: anchor.text || question, kind: (anchor.score || 0) >= LOAD_BEARING ? 'load-bearing' : 'connective',
+        role: idx === 0 ? 'open' : 'continue', heading: null,
+      };
+      const coldStart = accepted.length === 0;
+      const { paragraph, gated, action, leak, seed } = await composeBeat(model, { beat, slice, prior, coldStart, genre, signal });
+      for (const s of slice) { covered.add(s.idx); seen.add(String(s.idx)); }
+      done.add(beat.id); wrote += 1; idx += 1;
+      if (!paragraph || !gated.sources.length) {
+        trace.push({ beat: beat.id, kind: 'nul', boundFraction: round3(gated?.boundFraction ?? 0), leak });
+        continue;
+      }
+      const record = recordFor(beat, seed, paragraph, gated, action);
+      accepted.push(record);
+      trace.push({ beat: beat.id, kind: action, cited: gated.sources.length, boundFraction: round3(gated.boundFraction) });
+      if (onParagraph) { try { onParagraph(record, accepted.length - 1); } catch (e) { /* UI hook, never fatal */ } }
+    }
+    const answerLive = accepted.map(p => p.text).filter(Boolean).join('\n\n');
+    const sourcesLive = [...new Set(accepted.flatMap(p => p.sources || []))].sort();
+    return {
+      answer: answerLive, paragraphs: accepted, sources: sourcesLive,
+      design: Object.freeze({ ...carved, live: true }),
+      progress: progressAgainst(carved, accepted), trace,
+      state: { design: carved, accepted, covered: [...covered], done: [...done] },
+    };
+  }
 
   for (const beat of carved.beats) {
     if (signal?.aborted) { trace.push({ beat: beat.id, kind: 'aborted' }); break; }
@@ -182,29 +277,7 @@ export const walk = async ({
 
     const prior = accepted.length ? accepted[accepted.length - 1].text : '';
     const coldStart = accepted.length === 0;
-    const seed = seedFor({ beat, slice });
-    const ceiling = ceilingFor({ mass: slice.reduce((m, s) => m + (s.score || 0), 0) / slice.length, spans: slice });
-
-    let paragraph = null, gated = null, action = 'regen', leak = null;
-    for (let attempt = 0; attempt <= MAX_REGEN; attempt++) {
-      // The design is the length spec: stop at the next heading marker so the
-      // model bridges one paragraph's worth to the gap, never a "one paragraph"
-      // instruction. A backend without stop sequences ignores it, byte-identical.
-      const messages = renderContinuation({ beat, slice, prior, coldStart, genre });
-      const raw = await model.phrase(messages, { maxTokens: ceiling, minTokens: FLOOR_TOKENS, stop: ['\n##'], signal });
-      // The paragraph is the seed (the DEF the model was handed) plus its
-      // continuation — the topic sentence the model finished.
-      const continuation = String(raw || '').trim();
-      const full = seed ? `${seed} ${continuation}`.trim() : continuation;
-      gated = bindAndVeto(full, slice, { question: beat.topic, task: 'answer' });
-      let eva = evaSplice(gated);
-      // A frame leak that bound lexically is struck here — the grounding floor
-      // cannot see it (it rides on a grounded claim), so EVA must.
-      leak = eva.action !== 'regen' ? frameLeak(eva.text) : null;
-      if (leak) eva = { action: 'regen', text: '' };
-      action = eva.action;
-      if (eva.action !== 'regen') { paragraph = eva.text; break; }
-    }
+    const { paragraph, gated, action, leak, seed } = await composeBeat(model, { beat, slice, prior, coldStart, genre, signal });
 
     // Cover the slice whether the beat held or not — a walked beat is not retried
     // against the same slice (monotone coverage), and the beat is marked done.
@@ -219,21 +292,10 @@ export const walk = async ({
       continue;
     }
 
-    accepted.push(Object.freeze({
-      beat: beat.id,
-      sectionId: beat.sectionId,
-      role: beat.role,
-      heading: beat.heading,
-      topic: beat.topic,
-      kind: beat.kind,
-      seed,
-      text: paragraph,
-      sources: gated.sources,
-      boundFraction: gated.boundFraction,
-      action,
-      closes: false,
-    }));
+    const record = recordFor(beat, seed, paragraph, gated, action);
+    accepted.push(record);
     trace.push({ beat: beat.id, kind: action, cited: gated.sources.length, boundFraction: round3(gated.boundFraction) });
+    if (onParagraph) { try { onParagraph(record, accepted.length - 1); } catch (e) { /* UI hook, never fatal */ } }
   }
 
   const progress = progressAgainst(carved, accepted);

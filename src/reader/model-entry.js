@@ -8,6 +8,11 @@
 export { createModel } from '../model/interface.js';
 export { streamPhrase } from '../model/stream.js';
 export { buildChatMessages, buildGroundedMessages, shapeForScope, LIBRARIAN_CUE, GROUNDING_CUE, CAPABILITY_CUE } from '../model/prompt.js';
+// The multi-paragraph walk (docs/paragraph-at-a-time.md, the multi-paragraph-walk
+// spec): one paragraph per model call, each a CONTINUATION over a shifting fold,
+// bound and vetoed at claim grain. The reader drives it with a `refold` hook (the
+// self-read weld — generation drives retrieval) and streams via `onParagraph`.
+export { walk, frameLeak, progressAgainst, buildSkeleton } from '../longgen/index.js';
 export { CODER_MODELS, browserCoders } from '../model/coders.js';
 import '../model/echo.js';
 import '../model/webllm.js';
