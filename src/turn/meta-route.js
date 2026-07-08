@@ -611,9 +611,13 @@ export const discoursePrompt = (message, fold = null, { exchange = '', now = nul
     'The user just said: "' + String(message || '') + '"\n' +
     'In two or three plain sentences, say what the user is doing, what would satisfy them, ' +
     'and what — if anything — would have to be found out that neither the conversation nor ' +
-    'the loaded reading already holds. If that gap is something only the user can settle — ' +
-    'their request is ambiguous or underspecified and you would have to ask them to clarify ' +
-    'which one, whose, or what exactly they mean — say so. Speak naturally.'
+    'the loaded reading already holds. A broad, open request — "research X", "tell me about X" — ' +
+    'is satisfied by a general overview of what the reading holds; that is not a gap, and their ' +
+    'possibly wanting some specific aspect they never named is not something that has to be found ' +
+    'out or clarified. Name a gap only when the ask genuinely turns on a choice the reading cannot ' +
+    'settle. If that gap is something only the user can settle — their request is ambiguous or ' +
+    'underspecified and you would have to ask them to clarify which one, whose, or what exactly ' +
+    'they mean — say so. Speak naturally.'
   );
 };
 

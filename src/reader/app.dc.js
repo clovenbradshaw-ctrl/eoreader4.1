@@ -3165,7 +3165,11 @@ class Component extends DCLogic {
     // narration; folding it in as the brief just gets echoed back as the answer's opening line. When
     // it abstained, drop the speech steer and let the plain librarian answer stand; anchorGap (a
     // mechanical named-subject gap) is reliable and still rides below.
-    if(meta.speech&&!meta.abstained)bits.push('What this turn is really for — read it as your brief for what the user wants, and let it decide what you foreground and how you shape the reply (a note to you, not the user; don’t quote it or say you were told it): '+meta.speech+' Aim the answer squarely at that. Lead with the part of what you read that actually speaks to what they’re after; where what you read only glances their question, say so plainly rather than serving the nearest passage as though it were the answer.');
+    // On a broad research/overview turn (route==='research') the reading IS the answer — surfacing
+    // what it holds is the whole point — so drop the "only glances → say so plainly" tail, which on
+    // an open "research X" turns the overview into an apology for the specific aspect the user never
+    // named. Keep the tail for pointed questions the reading may genuinely miss.
+    if(meta.speech&&!meta.abstained)bits.push('What this turn is really for — read it as your brief for what the user wants, and let it decide what you foreground and how you shape the reply (a note to you, not the user; don’t quote it or say you were told it): '+meta.speech+' Aim the answer squarely at that. Lead with the part of what you read that actually speaks to what they’re after'+(meta.route==='research'?'.':'; where what you read only glances their question, say so plainly rather than serving the nearest passage as though it were the answer.'));
     if(meta.anchorGap)bits.push('What you’ve read does not mention '+meta.anchorGap.missing.join(', ')+' — where the answer needs that, say so plainly and in the first person ("I didn’t find that in what I read", never "the reading doesn’t mention…") instead of filling it in from memory.');
     return bits.join(' ');
   }
