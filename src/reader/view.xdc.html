@@ -866,7 +866,7 @@
           <sc-if value="{{ hasEgo }}" hint-placeholder-val="{{ true }}">
             <div style="background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 8px 4px;margin-bottom:8px;">
               <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 6px 6px;">
-                <span style="font-size:10.5px;color:var(--ink3);">Connected records — click any node to open it · dashed = another name for the same thing</span>
+                <span style="font-size:10.5px;color:var(--ink3);">Relations as a directed acyclic graph — arrows run in reading order (whoever is introduced first leads to whom) · click any node to open it</span>
                 <span style="font-size:10.5px;color:var(--ink3);">{{ egoMeta }}</span>
               </div>
               {{ egoViz }}
@@ -1002,7 +1002,6 @@
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;">
             <button onclick="{{ site.onRead }}" title="Open and read the live page" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:#fff;background:var(--acc);border:1px solid var(--acc);border-radius:8px;padding:7px 14px;cursor:pointer;" style-hover="opacity:.9">Read page ↗</button>
             <button onclick="{{ site.onChat }}" title="Start a chat about this source" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:7px 13px;cursor:pointer;" style-hover="background:var(--card)">✦ Chat about this</button>
-            <button onclick="{{ site.onWeave }}" title="The referent weave of this source — its recurring figures as threads, grouped into storylines by temporal co-activity" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:7px 13px;cursor:pointer;" style-hover="background:var(--card)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:0 0 auto;"><path d="M4 5c4 0 4 14 8 14s4-14 8-14"></path><path d="M4 12c4 0 4 7 8 7"></path><path d="M12 5c4 0 4 7 8 7"></path></svg>Weave</button>
             <button onclick="{{ site.onMute }}" title="Mute stops a source feeding the record" style="{{ site.muteBtnStyle }}" style-hover="filter:brightness(.98)">{{ site.muteBtnLabel }}</button>
           </div>
           <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">
@@ -1533,15 +1532,9 @@
                 <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--acc);">The web</span>
                 <span style="font-size:10.5px;color:var(--ink3);">{{ panelProfile.webMeta }}</span>
               </div>
-              <div style="font-size:10.5px;color:var(--ink3);line-height:1.4;margin-bottom:6px;">Drag to pan · ⌘-scroll or +/− to zoom · click a node to open it.</div>
-              <div style="position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px;overflow:hidden;">
+              <div style="font-size:10.5px;color:var(--ink3);line-height:1.4;margin-bottom:6px;">A directed acyclic graph — arrows run in reading order · click a node to open it.</div>
+              <div style="position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px;overflow-x:auto;">
                 {{ panelProfile.webViz }}
-                <div style="position:absolute;top:7px;right:7px;display:flex;align-items:center;gap:2px;background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:8px;padding:2px;box-shadow:0 1px 3px rgba(0,0,0,.06);">
-                  <button onclick="{{ panelProfile.onGzOut }}" title="Zoom out" style="width:22px;height:22px;border:none;background:transparent;color:var(--ink2);border-radius:6px;cursor:pointer;font-size:16px;line-height:1;" style-hover="background:#eef0f3">−</button>
-                  <span style="font-size:9.5px;font-weight:700;color:var(--ink3);min-width:30px;text-align:center;">{{ panelProfile.gzLabel }}</span>
-                  <button onclick="{{ panelProfile.onGzIn }}" title="Zoom in" style="width:22px;height:22px;border:none;background:transparent;color:var(--ink2);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3">+</button>
-                  <button onclick="{{ panelProfile.onGzReset }}" title="Reset view" style="width:22px;height:22px;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3">⟲</button>
-                </div>
               </div>
             </div>
           </sc-if>
@@ -1628,7 +1621,7 @@
           <sc-if value="{{ pageOverview.hasWeb }}" hint-placeholder-val="{{ false }}">
             <div style="display:flex;align-items:baseline;gap:7px;margin:16px 0 4px;flex-wrap:wrap;">
               <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--acc);">The spine</span>
-              <span onclick="{{ pageOverview.onOpenTop }}" style="font-size:10.5px;color:var(--ink3);cursor:pointer;">centred on {{ pageOverview.topLab }} →</span>
+              <span onclick="{{ pageOverview.onOpenTop }}" style="font-size:10.5px;color:var(--ink3);cursor:pointer;">reading-order DAG from {{ pageOverview.topLab }} →</span>
             </div>
             <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px;">{{ pageOverview.webViz }}</div>
           </sc-if>
