@@ -35,6 +35,11 @@ export {
   SYSTEM_CONTINUE, DEFAULT_GENRE,
 } from './render.js';
 export { progressAgainst } from './progress.js';
+// The walk — the in-run multi-paragraph loop (the multi-paragraph-walk spec): given
+// a fold, a design, and a model, it emits paragraphs until the design is filled or
+// the fold is spent. `composeParagraphs` is the older ground/skeleton-named face
+// over the same walk (compose.js).
+export { walk, sliceFor } from './walk.js';
 export { composeParagraphs, evaSplice, frameLeak } from './compose.js';
 // The prompt as a FOLD, and multi-response generation as variation + selection
 // (docs/multi-response-folds.md): the arc-gap move deriver, the live-thread reader,
