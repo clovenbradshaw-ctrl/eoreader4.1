@@ -170,6 +170,22 @@ const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal
     action = eva.action;
     if (eva.action !== 'regen') { paragraph = eva.text; break; }
   }
+  // SALVAGE — the regenerate also under-bound (a small model drifting off a thin
+  // slice: bound fraction < threshold, so evaSplice never reached its splice arm).
+  // The bound PREFIX is still real grounded material — on a load-bearing beat the
+  // seed is grounded by construction — so ship it rather than hold a NUL that
+  // wastes the slice (the batman run's 0/5: every beat held, nothing shipped).
+  // The floor does not move: only cited claims survive (re-gated for accurate
+  // sources), a leaked prefix is struck, and a beat where NOTHING bound — a
+  // connective seed with a drifting continuation — still holds as NUL. Never
+  // confabulation; at worst the beat is the anchor's own topic sentence.
+  if (!paragraph && gated) {
+    const prefix = boundPrefix(gated.bound);
+    if (prefix && !frameLeak(prefix)) {
+      const regated = bindAndVeto(prefix, slice, { question: beat.topic, task: 'answer' });
+      if (regated.sources.length) { paragraph = prefix; gated = regated; action = 'salvage'; leak = null; }
+    }
+  }
   return { paragraph, gated, action, leak, seed };
 };
 
@@ -240,7 +256,15 @@ export const walk = async ({
       };
       const coldStart = accepted.length === 0;
       const { paragraph, gated, action, leak, seed } = await composeBeat(model, { beat, slice, prior, coldStart, genre, signal });
-      for (const s of slice) { covered.add(s.idx); seen.add(String(s.idx)); }
+      // Spend only what the beat CONSUMED: its anchor (a walked beat is never
+      // retried against the same anchor — monotone), plus every span the accepted
+      // paragraph actually CITED (re-anchoring a cited span later would restate
+      // it — the spec's first failure mode). Context neighbours that merely rode
+      // along stay available to anchor a later beat: spending the whole slice
+      // capped the walk at floor(pool/LIVE_WIDTH) paragraphs and reported an
+      // honest-sounding "saturated" over a fold with plenty of fresh ground.
+      covered.add(anchor.idx); seen.add(String(anchor.idx));
+      for (const src of ((gated && gated.sources) || [])) { covered.add(src); seen.add(String(src)); }
       done.add(beat.id); wrote += 1; idx += 1;
       if (!paragraph || !gated.sources.length) {
         trace.push({ beat: beat.id, kind: 'nul', boundFraction: round3(gated?.boundFraction ?? 0), leak });
@@ -252,7 +276,10 @@ export const walk = async ({
       if (onParagraph) { try { onParagraph(record, accepted.length - 1); } catch (e) { /* UI hook, never fatal */ } }
     }
     const answerLive = accepted.map(p => p.text).filter(Boolean).join('\n\n');
-    const sourcesLive = [...new Set(accepted.flatMap(p => p.sources || []))].sort();
+    // Numeric-aware: live sources are global sentence indices (ints) — a bare sort
+    // would order them lexicographically ("10" before "9").
+    const sourcesLive = [...new Set(accepted.flatMap(p => p.sources || []))]
+      .sort((a, b) => (typeof a === 'number' && typeof b === 'number') ? a - b : String(a).localeCompare(String(b)));
     return {
       answer: answerLive, paragraphs: accepted, sources: sourcesLive,
       design: Object.freeze({ ...carved, live: true }),

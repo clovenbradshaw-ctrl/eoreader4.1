@@ -172,6 +172,35 @@ test('walk honours an already-aborted signal without generating', async () => {
   assert.equal(res.paragraphs.length, 0);
 });
 
+// ── the salvage floor: a drifting model ships the bound prefix, never a padded NUL ──
+
+// A model that always continues with prose from nowhere — the small-model failure
+// the batman essay run hit (every beat regen'd twice, then held, 0/5 shipped).
+const driftingModel = () => ({
+  phrase: async () => 'The weather over the distant mountains was lovely that afternoon. Nothing in this line relates to the record above.',
+});
+
+test('a load-bearing beat whose continuation never binds ships its grounded seed (salvage), not a NUL', async () => {
+  const res = await walk({ fold: foldOf(), design: { demand: 3, question: 'falcons' }, model: driftingModel() });
+
+  assert.ok(res.paragraphs.length >= 1, 'the walk ships grounded material even when the model drifts');
+  for (const p of res.paragraphs) {
+    assert.equal(p.action, 'salvage', 'the bound prefix is salvaged after the regen also under-binds');
+    assert.ok(p.sources.length >= 1, 'a salvaged paragraph still cites its span');
+    assert.ok(!/weather|mountains/i.test(p.text), 'no drifted (unbound) sentence survives into the answer');
+  }
+});
+
+test('a connective beat where NOTHING binds still holds as NUL — salvage never invents', async () => {
+  // One developable-but-thin span (score < 0.6): the beat is connective, so its seed
+  // is a dangling connective with no claim — a drifting continuation binds nothing.
+  const thin = [{ idx: 0, score: 0.5, text: 'Falcons show a marked affinity for tall cliffs away from human establishments.' }];
+  const res = await walk({ fold: thin, design: { demand: 1, question: 'falcons' }, model: driftingModel() });
+
+  assert.equal(res.paragraphs.length, 0, 'nothing bound → nothing shipped');
+  assert.ok(res.trace.some(t => t.kind === 'nul'), 'the miss is held honestly in the trace');
+});
+
 // ── the live walk: the self-read weld — generation drives retrieval per beat ────
 
 test('a refold hook runs the walk live — each paragraph refolds for a new part of the fold', async () => {
@@ -203,6 +232,41 @@ test('a refold hook runs the walk live — each paragraph refolds for a new part
   // paragraph before it as the retrieval cue.
   assert.equal(refoldCalls[0].prior, '', 'the first beat opens cold — no prior paragraph');
   if (refoldCalls.length > 1) assert.ok(refoldCalls[1].prior.length > 0, 'later beats refold focused by the prior paragraph');
+});
+
+test('context neighbours are not spent — a demand of N over a pool of M > N fills the demand', async () => {
+  // Each beat's slice is its anchor plus two context neighbours. Only what the
+  // paragraph CONSUMED (anchor + cited spans) is spent; the drifting model's beats
+  // salvage to the anchor's seed alone, so each beat spends exactly one span —
+  // 8 spans fill a demand of 5 instead of capping at floor(8/3) and reporting
+  // "saturated" over a fold with fresh ground left (the bookkeeping bug).
+  const pool = foldOf();
+  const refold = async ({ seen }) => pool.filter(s => !seen.has(String(s.idx))).slice(0, 3);
+
+  const res = await walk({ fold: [], design: { demand: 5 }, question: 'falcons', model: driftingModel(), refold });
+
+  assert.equal(res.paragraphs.length, 5, 'five distinct anchors from eight spans — the demand is met');
+  const anchors = new Set(res.paragraphs.map(p => p.sources[0]));
+  assert.equal(anchors.size, 5, 'every paragraph consumed a distinct span');
+  assert.ok(!res.trace.some(t => t.kind === 'saturated'), 'no false saturation while fresh ground remains');
+});
+
+test('a cited neighbour IS spent — no later beat re-anchors it into a restatement', async () => {
+  // Echo phrases the whole slice back, so each paragraph cites all three of its
+  // spans. Those are consumed — the next beat must anchor on genuinely new ground,
+  // even at the cost of fewer paragraphs than the demand.
+  const model = createModel('echo');
+  await model.load();
+  const pool = foldOf();
+  const refold = async ({ seen }) => pool.filter(s => !seen.has(String(s.idx))).slice(0, 3);
+
+  const res = await walk({ fold: [], design: { demand: 5 }, question: 'falcons', model, refold });
+
+  const perBeat = res.paragraphs.map(p => new Set(p.sources));
+  for (let a = 0; a < perBeat.length; a++)
+    for (let b = a + 1; b < perBeat.length; b++)
+      for (const s of perBeat[b])
+        assert.ok(!perBeat[a].has(s), `beat ${b} re-cites span ${s} already consumed by beat ${a} — restatement`);
 });
 
 test('an empty refold is saturation — the live walk stops and does not pad', async () => {

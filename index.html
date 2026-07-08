@@ -6278,9 +6278,12 @@ class Component extends DCLogic {
       // to the single grounded call below, unchanged.
       // An explicit paragraph count ("5 paragraphs") is a strong longform seed the essay/
       // word-count floor misses — it names the shape outright, so it cues the walk directly.
-      if(grounded&&amode!=='creative'&&(this._paragraphDemand(q)||this._wantsLongform(q,read||meta))){
+      // So is the metacognition's own settled compose·essay verdict (route=compose,
+      // kind=essay), for the paraphrased essay ask no regex floor catches.
+      {const rd=read||meta;
+      if(grounded&&amode!=='creative'&&(this._paragraphDemand(q)||this._wantsLongform(q,rd)||(rd&&rd.route==='compose'&&rd.kind==='essay'))){
         return await this._walkReply(id,q,sources,{model,guard,finish,ground,meta,read,prev});
-      }
+      }}
       let messages;
       // The reader answers as a research LIBRARIAN — sources foregrounded, attributed, quoted —
       // not an expert holding forth (the librarian cue, every grounded turn). A broad / explanatory
@@ -6560,8 +6563,9 @@ class Component extends DCLogic {
       return {...c,messages:m};})}));
     // Answer about the SUBJECT (not the literal "do more research" message) grounded in what was
     // read. The longform intent rides from the ORIGINAL turn ("write me an essay…") so stripping
-    // the framing off the subject (now just "dolphins") doesn't lose the essay shape.
-    await this._answerInto(id,formulated,[...new Set(walk.readUrls)],{meta:pre&&pre.meta});
+    // the framing off the subject (now just "dolphins") doesn't lose the essay shape — `orig`
+    // carries it explicitly (the batman essay run lost it: "They asked you: batman").
+    await this._answerInto(id,formulated,[...new Set(walk.readUrls)],{meta:pre&&pre.meta,orig:q});
   }
   // Synthesize the grounded answer into the existing pending bubble (which already carries the
   // research trail). Mirrors sendChat's answer path; grounded in whatever the chat is About
@@ -6613,13 +6617,19 @@ class Component extends DCLogic {
   // bind + veto at claim grain, splice the ungrounded tail, hold a NUL rather than confabulate,
   // stop and report the shortfall when the fold is spent rather than pad to length. An empty
   // refold IS saturation. Streams each paragraph into the bubble as it lands.
-  //   o = { model, guard, finish, ground, meta, read, prev, seed?, shown? }
+  //   o = { model, guard, finish, ground, meta, read, prev, seed?, shown?, ask? }
   //   seed  — already-written paragraph records (the DISCOVERED continuation); the walk resumes
   //           from them, refolding for more, handing their LAST as the left-context.
+  //   ask   — the ORIGINAL ask when q was reformulated (the research path strips "write me an
+  //           essay about batman" to "batman"); the demand is read off the ask, retrieval off q.
   async _walkReply(id,q,sources,o){
     if(!this._ME)this._ME=await import((typeof window!=='undefined'&&window.__resources&&window.__resources.eoModel)||'./model-entry.js');
     const seed=(o.seed||[]).filter(p=>p&&p.text);
-    const demand=this._paragraphDemand(q)||((o.read||o.meta)&&(o.read||o.meta).lengthDemand==='develop'?6:5);
+    const ask=o.ask||q;
+    const demand=this._paragraphDemand(ask)||((o.read||o.meta)&&(o.read||o.meta).lengthDemand==='develop'?6:5);
+    // renderBound tags an accepted claim with its cite ([s123]); provenance already rides in
+    // `sources`/passages, so the tags never reach the bubble.
+    const untag=t=>String(t||'').replace(/\s*\[s[^\]\s]*\]/g,'');
     this._setThink(id,this._composeOpen(true,o.ground));
     // Stream: the accepted paragraphs plus the paragraph currently decoding, painted token by
     // token into the pending bubble (the same rAF-batched paint the single-call path uses).
@@ -6634,12 +6644,23 @@ class Component extends DCLogic {
     // REFOLD — the self-read weld. Re-query the reading for the next beat, focused by the prior
     // paragraph (its tail) plus the ask, and hand back only spans not already drunk. Each span's
     // idx is its GLOBAL sentence index, so a cite (s{idx}) maps straight back to master.sentences.
+    // The pointed retrieval runs thin on a broad ask (the batman essay run: groundNotes held the
+    // same 2 passages every beat, so beat 2 refolded to nothing and the walk "saturated" over a
+    // 1294-entity corpus) — so when it serves fewer than a slice's worth of FRESH spans, the
+    // corpus fallback ranks the in-scope sentences against the focus and tops the slice up. An
+    // empty refold then honestly means the READING is spent, not that one query went dry.
     const refold=async ({prior,index,seen})=>{
-      const focus=(index>0&&prior)?(this.norm(prior).split(/\s+/).slice(-40).join(' ')+' '+q):this._groundingQuery(q,o.prev,null);
-      let g; try{ g=this.groundNotes(focus,sources); }catch(e){ g=null; }
-      const out=[];
-      for(const s of ((g&&g.spans)||[])){ const i=s.i; if(!Number.isInteger(i)||seen.has(String(i)))continue; out.push({...s,idx:i}); if(out.length>=6)break; }
-      return out;
+      try{
+        const focus=(index>0&&prior)?(this.norm(prior).split(/\s+/).slice(-40).join(' ')+' '+q):this._groundingQuery(q,o.prev,null);
+        let g; try{ g=this.groundNotes(focus,sources); }catch(e){ g=null; }
+        const out=[];
+        for(const s of ((g&&g.spans)||[])){ const i=s.i; if(!Number.isInteger(i)||seen.has(String(i)))continue; if(out.some(x=>x.idx===i))continue; out.push({...s,idx:i}); if(out.length>=6)break; }
+        if(out.length<3){
+          const ex=new Set(seen); for(const s of out)ex.add(String(s.idx));
+          out.push(...this._walkFallbackSpans((index>0&&prior)?(this.norm(prior).split(/\s+/).slice(-24).join(' ')+' '+q):q,sources,ex,6-out.length));
+        }
+        return out;
+      }catch(e){ return []; }
     };
     // Seed the resume state from the discovered paragraphs: their coverage is the fold the single
     // call already drank, so the walk refolds for genuinely NEW spans (never re-serves them).
@@ -6652,7 +6673,7 @@ class Component extends DCLogic {
     this._auditRec(id,'answer-prompt',{prompt:'[walk] '+(seed.length?'discovered continuation':'developed piece')+' — up to '+demand+' paragraphs, one model call each, refolding per paragraph.'});
     let res;
     try{
-      res=await this._ME.walk({fold:[],design:{demand},question:q,model:streamModel,refold,onParagraph:(rec)=>{accParas.push(rec.text);partial='';schedule();},state,signal:o.guard.signal});
+      res=await this._ME.walk({fold:[],design:{demand},question:q,model:streamModel,refold,onParagraph:(rec)=>{accParas.push(untag(rec.text));partial='';schedule();},state,signal:o.guard.signal});
     }catch(e){ o.guard.clear(); if((e&&e.stopped)||this._stopGen)return; res=null; }
     o.guard.clear();
     // The walk failed (model stalled, import error, …) — the bubble must still settle,
@@ -6679,9 +6700,9 @@ class Component extends DCLogic {
     const used=[...new Set(passages.map(p=>p.u).filter(Boolean))];
     const saturated=res.trace.some(t=>t.kind==='saturated');
     const shortNote=(paras.length<demand&&(saturated||demand-paras.length>=1))
-      ? '\n\nThat is '+paras.length+' grounded paragraph'+(paras.length!==1?'s':'')+(this._paragraphDemand(q)?(' of the '+demand+' you asked for'):'')+' — the reading ran out of new ground, so I stopped rather than pad the rest.'
+      ? '\n\nThat is '+paras.length+' grounded paragraph'+(paras.length!==1?'s':'')+(this._paragraphDemand(ask)?(' of the '+demand+' you asked for'):'')+' — the reading ran out of new ground, so I stopped rather than pad the rest.'
       : '';
-    const text=res.answer;
+    const text=untag(res.answer);
     o.finish({text:this._withOfficeNote(text,sources)+shortNote,sources:used,passages,groundKind:'matched',
       related:this.relatedDocs(q,sources),register:'grounded',reflection:this._reflect(text)});
     if(!o.shown)this._pivotChatPanel(q+' '+text);
@@ -6708,6 +6729,32 @@ class Component extends DCLogic {
   _seedParasFrom(text){
     const paras=String(text||'').split(/\n\s*\n/).map(s=>this.norm(s)).filter(Boolean);
     return paras.map((t,i)=>({beat:'b'+i,role:i?'continue':'open',heading:null,topic:'',kind:'connective',seed:'',text:t,sources:[],boundFraction:1,action:'discovered',closes:false}));
+  }
+  // _walkFallbackSpans — the corpus-level retrieval floor for the walk's refold. The pointed
+  // grounding (propositions, then keyword refs) serves a handful of spans for a broad ask and
+  // then repeats itself, so the walk saturated after one beat over a corpus of thousands of
+  // sentences. Here the in-scope prose sentences are ranked by content-term overlap with the
+  // focus and the strongest UNSEEN ones top the slice up. Scores ride 0.6–0.8: developable and
+  // load-bearing, so the beat is pinned by a grounded topic sentence (the seed is the anchor's
+  // own lead sentence — grounded by construction, which is what the salvage floor rests on).
+  _walkFallbackSpans(focus,sources,seen,need){
+    if(!this.master||!this.master.sentences||!this.master.sentences.length||!(need>0))return [];
+    const scope=(Array.isArray(sources)&&sources.length)?new Set(sources):null;
+    const qt=new Set(this.norm(focus).toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>3&&!this.STOP.has(w)));
+    if(!qt.size)return [];
+    const scored=[];
+    for(let i=0;i<this.master.sentences.length;i++){
+      if(seen.has(String(i)))continue;
+      const u=this.master.sentenceSource[i];if(scope&&!scope.has(u))continue;
+      const s=this.norm(this.master.sentences[i]);
+      const low=s.toLowerCase();
+      if(s.length<60||s.length>360||!this._proseOk(low))continue;
+      let hit=0;for(const w of new Set(low.split(/[^a-z0-9]+/)))if(qt.has(w))hit++;
+      if(hit>=1)scored.push({i,u,s,hit});
+    }
+    // Strongest term contact first; document order breaks ties (a wiki lead outranks trivia).
+    scored.sort((a,b)=>b.hit-a.hit||a.i-b.i);
+    return scored.slice(0,need).map(x=>({text:this._clipPassage(x.s),score:Math.min(0.8,0.6+0.05*x.hit),i:x.i,u:x.u,idx:x.i}));
   }
   // ── COMPOSE: make the artifact, get out of the model's way ────────────────────────────────
   // A small model writes in a named style — Dickinson's dashes, a haiku's 5-7-5, a limerick's bounce
@@ -6894,10 +6941,11 @@ class Component extends DCLogic {
     // steered by the discourse read (_answerSingle folds in _steerLine(meta)), not a
     // facet-decomposed grounded report. The old opt-in longform fork into the grounded
     // projection is retired here; length and shape stay emergent from the steer, never
-    // from a form/type dial.
-    return this._answerSingle(id,q,gathered,opts&&opts.meta);
+    // from a form/type dial. `orig` — the pre-reformulation ask — rides through so the
+    // walk cue below still sees the developed shape the subject-stripping removed.
+    return this._answerSingle(id,q,gathered,opts&&opts.meta,opts&&opts.orig);
   }
-  async _answerSingle(id,q,gathered,meta){
+  async _answerSingle(id,q,gathered,meta,orig){
     // A grounded answer over the gathered/scoped reading — tag `ground` for the fold.
     const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;
       if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,stance:'ground',...patch};return {...c,messages:m};})}),()=>this._scrollChat());
@@ -6925,6 +6973,16 @@ class Component extends DCLogic {
         finish({text:'Grounded mode: even after looking, nothing read covers this — I won’t answer from the model alone. Switch the register to Auto or Creative to hear its best guess.',
           groundKind:'model',register:'grounded'});
         return;}
+      // THE WALK CUE, after research (the multi-paragraph-walk spec). This is the path
+      // "write me an essay about X" actually takes with the web on (compose·essay →
+      // web-as-brain → research → answer HERE), and it previously had no cue — the
+      // essay run answered as one padded single call, frame leaks and all. The
+      // developed shape rides from the ORIGINAL turn: the walk's reformulation strips
+      // it to the bare subject ("They asked you: batman"), so cue on `orig` first.
+      const ask=orig||q;
+      if(grounded&&amode!=='creative'&&(this._paragraphDemand(ask)||this._wantsLongform(ask,meta)||(meta&&meta.route==='compose'&&meta.kind==='essay'))){
+        return await this._walkReply(id,q,sources,{model,guard,finish,ground,meta,read:meta,prev:_prev,ask});
+      }
       let messages;
       // The research/web chat path: same librarian register (+ sectioned shape on a broad question),
       // plus the discourse read's steering line when the turn carried one (what would satisfy the
