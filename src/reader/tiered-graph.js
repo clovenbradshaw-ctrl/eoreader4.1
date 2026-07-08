@@ -1,9 +1,27 @@
 // mountTieredGraph — the pivotable tiered graph surface. Entities as nodes
 // across the three helix tiers — existence (the source and the figures INSed
-// from it), structure (the bonds between them, each reified and wearing its
-// operator), significance (the claims those bonds trace to) — connected by
-// operator edges. Three switchable layouts (flow · tiers · radial) with
-// animated pivoting, tier filtering, pan/zoom/fit, and click-to-inspect.
+// from it), structure (the bonds between them), significance (the claims
+// those bonds trace to) — connected by operator edges, each edge wearing its
+// glyph ON the line. Three switchable layouts (flow · tiers · radial, radial
+// default) with animated pivoting, tier filtering, a names toggle, pan/zoom/
+// fit, and click-to-inspect.
+//
+// READABILITY RULES (the point of this surface — it must never read as a
+// hairball):
+//   · operator glyphs sit bare on the line with a paper-coloured halo, and
+//     HIDE on edges too short to carry them (screen-space test, re-run on
+//     every zoom) — a glyph never smothers the edge it annotates;
+//   · labels are collision-culled: candidates are placed by priority (the
+//     document first, then degree) and any label whose box would overlap an
+//     already-placed one is dropped, not drawn;
+//   · label and glyph sizes are zoom-invariant (font-size 11/k) — zooming in
+//     reveals more culled labels rather than inflating the ones you have;
+//   · a de-overlap pass separates any two nodes closer than a minimum
+//     distance, then clamps into the canvas;
+//   · rings/ranks are ordered by where their neighbours sit (angular mean in
+//     radial, barycentre in flow), and the document sits at the radial centre;
+//   · names toggles persistent labels; the hovered node's full name always
+//     shows, whatever the toggle says.
 //
 // The host builds the {nodes, edges} data honestly from the record
 // (app.dc.js _tieredGraphData); this module only draws. Pure DOM + SVG, no
@@ -32,6 +50,8 @@ const CSS = `
 .eo-tg .tg-seg .tg-btn{border:none;border-radius:0;}
 .eo-tg .tg-node{cursor:pointer;}
 .eo-tg .tg-node circle{transition:r .15s;}
+.eo-tg .tg-plabel{paint-order:stroke;stroke:var(--card,#fff);stroke-linejoin:round;fill:var(--ink,#15181e);pointer-events:none;}
+.eo-tg .tg-eglyph{paint-order:stroke;stroke:var(--card,#fff);stroke-linejoin:round;pointer-events:none;font-family:var(--mono,ui-monospace,Menlo,monospace);}
 `;
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -44,9 +64,12 @@ export function mountTieredGraph(root, { nodes: inNodes = [], edges: inEdges = [
   const sv = (t, a = {}) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  const nodes = inNodes.map((n) => ({ ...n, x: 340, y: 220, px: 340, py: 220, tx: 340, ty: 220, rank: 0 }));
+  const nodes = inNodes.map((n) => ({ ...n, x: 340, y: 220, px: 340, py: 220, tx: 340, ty: 220, rank: 0, _ang: 0 }));
   const byId = {}; nodes.forEach((n) => byId[n.id] = n);
   const edges = inEdges.filter((e) => byId[e.a] && byId[e.b]);
+  const inN = {}, deg = {};
+  nodes.forEach((n) => { inN[n.id] = []; deg[n.id] = 0; });
+  edges.forEach((e) => { inN[e.b].push(e.a); deg[e.a]++; deg[e.b]++; });
 
   // rank = longest path from a root, over the (acyclic by construction) DAG
   const indeg = {}; nodes.forEach((n) => indeg[n.id] = 0);
@@ -57,7 +80,7 @@ export function mountTieredGraph(root, { nodes: inNodes = [], edges: inEdges = [
   order.forEach((id) => { const n = byId[id]; edges.forEach((e) => { if (e.b === id) n.rank = Math.max(n.rank, byId[e.a].rank + 1); }); });
   let maxRank = 0; nodes.forEach((n) => maxRank = Math.max(maxRank, n.rank));
 
-  const W = 680, H = 440, state = { layout: 'radial', orient: 'h', rot: 0, tiers: { 0: true, 1: true, 2: true }, sel: null };
+  const W = 680, H = 440, state = { layout: 'radial', orient: 'h', rot: 0, tiers: { 0: true, 1: true, 2: true }, sel: null, names: false, hover: null };
 
   // ── shell ────────────────────────────────────────────────────────────────
   const wrap = el('div', { class: 'eo-tg', role: 'region', 'aria-label': 'Interactive record graph: nodes across three helix tiers, connected by operator edges' });
@@ -70,13 +93,14 @@ export function mountTieredGraph(root, { nodes: inNodes = [], edges: inEdges = [
         '<button class="tg-btn on" data-layout="radial">◎ radial</button>' +
       '</div>' +
       '<button class="tg-btn" data-pivot>⟲ <span data-pivot-lbl>rotate</span></button>' +
+      '<button class="tg-btn" data-names title="Toggle persistent node names — hover always shows the full name">names</button>' +
       '<div style="display:flex;gap:5px;margin-left:auto;">' +
         '<button class="tg-btn" data-zin aria-label="zoom in">+</button>' +
         '<button class="tg-btn" data-zout aria-label="zoom out">−</button>' +
         '<button class="tg-btn" data-fit>⌖ fit</button>' +
       '</div>' +
     '</div>' +
-    '<div style="display:flex;align-items:center;gap:7px;padding:8px 12px;border-bottom:1px solid var(--line,#e5e7eb);">' +
+    '<div style="display:flex;align-items:center;gap:7px;padding:8px 12px;border-bottom:1px solid var(--line,#e5e7eb);flex-wrap:wrap;">' +
       '<span style="font-size:11px;color:var(--ink3,#999);letter-spacing:.04em;margin-right:2px;">tiers</span>' +
       [0, 1, 2].map((t) => '<span class="tg-chip" data-tier="' + t + '" style="background:' + TIER[t].chipBg + ';color:' + TIER[t].chipFg + ';"><span class="gl">' + TIER[t].glyphs + '</span>' + TIER[t].name + '</span>').join('') +
     '</div>' +
@@ -87,7 +111,7 @@ export function mountTieredGraph(root, { nodes: inNodes = [], edges: inEdges = [
       '</svg>' +
     '</div>' +
     '<div style="display:flex;align-items:center;justify-content:space-between;gap:9px;padding:9px 13px;border-top:1px solid var(--line,#e5e7eb);background:var(--app,#f7f8fb);font-size:12px;color:var(--ink2,#555);min-height:20px;">' +
-      '<div data-detail style="display:flex;align-items:center;gap:9px;min-width:0;flex:1;"><span style="color:var(--ink3,#999);">click a node to inspect · drag to pan · scroll to zoom</span></div>' +
+      '<div data-detail style="display:flex;align-items:center;gap:9px;min-width:0;flex:1;flex-wrap:wrap;"><span style="color:var(--ink3,#999);">click a node to inspect · drag to pan · scroll to zoom</span></div>' +
       '<span data-counts style="font-family:var(--mono,ui-monospace,monospace);color:var(--ink3,#999);flex:0 0 auto;">' + esc(countsLabel) + '</span>' +
     '</div>' +
     '</div>';
@@ -101,62 +125,120 @@ export function mountTieredGraph(root, { nodes: inNodes = [], edges: inEdges = [
   const detail = wrap.querySelector('[data-detail]'), countsEl = wrap.querySelector('[data-counts]');
 
   // ── layouts ──────────────────────────────────────────────────────────────
+  // De-overlap: any two nodes closer than minD are pushed apart, then clamped
+  // into the canvas — no layout is allowed to stack nodes.
+  function separate(iters, minD) {
+    for (let it = 0; it < iters; it++) {
+      for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
+        const a = nodes[i], b = nodes[j]; let dx = b.tx - a.tx, dy = b.ty - a.ty;
+        const d = Math.hypot(dx, dy) || 0.01;
+        if (d < minD) { const f = (minD - d) / 2 / d; dx *= f; dy *= f; a.tx -= dx; a.ty -= dy; b.tx += dx; b.ty += dy; }
+      }
+    }
+    nodes.forEach((n) => { n.tx = Math.max(28, Math.min(W - 28, n.tx)); n.ty = Math.max(22, Math.min(H - 22, n.ty)); });
+  }
+  // Rank/band ordering by barycentre of in-neighbours: nodes land near what
+  // they hang from, so edges run short and cross rarely.
+  const orderBy = (arr, posOf) => {
+    const scored = arr.map((n, i) => { const ps = inN[n.id].map(posOf).filter((v) => v != null);
+      return [n, ps.length ? ps.reduce((s, v) => s + v, 0) / ps.length : i, i]; });
+    scored.sort((a, b) => (a[1] - b[1]) || (a[2] - b[2]));
+    return scored.map((s) => s[0]);
+  };
   function layoutFlow() {
     const byRank = {}; nodes.forEach((n) => (byRank[n.rank] = byRank[n.rank] || []).push(n));
+    const ranks = Object.keys(byRank).map(Number).sort((a, b) => a - b);
+    const pos = {}; ranks.forEach((r) => byRank[r].forEach((n, i) => pos[n.id] = i));
+    ranks.forEach((r, k) => { if (!k) return;
+      byRank[r] = orderBy(byRank[r], (id) => pos[id]);
+      byRank[r].forEach((n, i) => pos[n.id] = i); });
     const horiz = state.orient === 'h';
-    nodes.forEach((n) => {
-      const arr = byRank[n.rank], idx = arr.indexOf(n), cnt = arr.length;
-      const along = 60 + (n.rank / (maxRank || 1)) * ((horiz ? W : H) - 120);
-      const cross = cnt < 2 ? (horiz ? H : W) / 2 : 40 + (idx / (cnt - 1)) * ((horiz ? H : W) - 80);
-      if (horiz) { n.tx = along; n.ty = cross; } else { n.tx = cross; n.ty = along; }
-    });
+    ranks.forEach((r) => { const arr = byRank[r], cnt = arr.length;
+      arr.forEach((n, idx) => {
+        const along = 55 + (n.rank / (maxRank || 1)) * ((horiz ? W : H) - 110);
+        const cross = cnt < 2 ? (horiz ? H : W) / 2 : 34 + (idx / (cnt - 1)) * ((horiz ? H : W) - 68);
+        if (horiz) { n.tx = along; n.ty = cross; } else { n.tx = cross; n.ty = along; }
+      }); });
+    separate(60, 30);
   }
   function layoutTiers() {
     const horiz = state.orient === 'h';
     const groups = { 0: [], 1: [], 2: [] }; nodes.forEach((n) => groups[n.tier].push(n));
+    const pos = {}; [0, 1, 2].forEach((t) => groups[t].forEach((n, i) => pos[n.id] = i));
+    [1, 2].forEach((t) => { groups[t] = orderBy(groups[t], (id) => pos[id]); groups[t].forEach((n, i) => pos[n.id] = i); });
     [0, 1, 2].forEach((t) => {
       const arr = groups[t], n = arr.length;
       if (horiz) {
-        const bandY = 70 + t * ((H - 140) / 2), perRow = Math.ceil(n / 2);
+        const bandY = 68 + t * ((H - 136) / 2), perRow = Math.ceil(n / 2);
         arr.forEach((nd, k) => { const row = Math.floor(k / perRow), col = k % perRow, rc = Math.min(perRow, n - row * perRow);
-          nd.tx = 70 + (rc < 2 ? 0.5 : col / (rc - 1)) * (W - 140) * (rc < 2 ? 0 : 1) + (rc < 2 ? (W - 140) / 2 : 0);
-          nd.ty = bandY - 16 + row * 40; });
+          nd.tx = rc < 2 ? W / 2 : 60 + (col / (rc - 1)) * (W - 120);
+          nd.ty = bandY - 18 + row * 44; });
       } else {
-        const bandX = 90 + t * ((W - 180) / 2), perCol = Math.ceil(n / 2);
+        const bandX = 88 + t * ((W - 176) / 2), perCol = Math.ceil(n / 2);
         arr.forEach((nd, k) => { const col = Math.floor(k / perCol), row = k % perCol, cc = Math.min(perCol, n - col * perCol);
-          nd.ty = 60 + (cc < 2 ? 0.5 : row / (cc - 1)) * (H - 120) * (cc < 2 ? 0 : 1) + (cc < 2 ? (H - 120) / 2 : 0);
-          nd.tx = bandX - 16 + col * 40; });
+          nd.ty = cc < 2 ? H / 2 : 52 + (row / (cc - 1)) * (H - 104);
+          nd.tx = bandX - 18 + col * 46; });
       }
     });
   }
   function layoutRadial() {
-    const cx = W / 2, cy = H / 2, groups = { 0: [], 1: [], 2: [] }; nodes.forEach((n) => groups[n.tier].push(n));
+    // The document is the root of the record — it sits at the centre. Each
+    // ring is ordered by the circular mean angle of its neighbours in the
+    // ring below (a bond between its participants, a claim over its bond),
+    // with a small phase offset per ring so spokes never align.
+    const cx = W / 2, cy = H / 2;
+    const groups = { 0: [], 1: [], 2: [] };
+    nodes.forEach((n) => { if (n.kind === 'doc') { n.tx = cx; n.ty = cy; n._ang = 0; } else groups[n.tier].push(n); });
+    const meanAng = (ids) => { let sx = 0, sy = 0, c = 0;
+      ids.forEach((id) => { const m = byId[id]; if (m && m.kind !== 'doc') { sx += Math.cos(m._ang); sy += Math.sin(m._ang); c++; } });
+      return c ? Math.atan2(sy, sx) : null; };
     [0, 1, 2].forEach((t) => {
-      const arr = groups[t], n = arr.length, r = 55 + t * 78;
-      arr.forEach((nd, k) => { const a = state.rot * Math.PI / 180 + (k / Math.max(1, n)) * Math.PI * 2; nd.tx = cx + Math.cos(a) * r; nd.ty = cy + Math.sin(a) * r; });
+      const arr = groups[t], n = arr.length, r = 62 + t * 84;
+      if (t > 0) {
+        arr.forEach((nd) => { const a = meanAng(inN[nd.id]); nd._want = a == null ? 0 : a; });
+        arr.sort((a, b) => (a._want - b._want));
+      }
+      arr.forEach((nd, k) => {
+        const ang = state.rot * Math.PI / 180 + t * 0.4 + (k / Math.max(1, n)) * Math.PI * 2;
+        nd._ang = ang; nd.tx = cx + Math.cos(ang) * r; nd.ty = cy + Math.sin(ang) * r; });
     });
+    separate(50, 28);
   }
   function relayout() {
     if (state.layout === 'flow') layoutFlow(); else if (state.layout === 'tiers') layoutTiers(); else layoutRadial();
     animate();
   }
 
-  // ── marks ────────────────────────────────────────────────────────────────
+  // ── marks: each edge is a group of path + bare glyph with a paper halo ───
   const nodeEls = {}, edgeEls = [];
   nodes.forEach((n) => {
     const g = sv('g', { class: 'tg-node' }); g.style.transform = 'translate(' + n.x + 'px,' + n.y + 'px)';
     const c = sv('circle', { r: n.kind === 'doc' ? 9 : 7, fill: TIER[n.tier].fill, stroke: TIER[n.tier].stroke, 'stroke-width': 1.2 });
     g.appendChild(c);
     g.addEventListener('click', (ev) => { ev.stopPropagation(); select(n.id); });
-    g.addEventListener('mouseenter', () => hover(n)); g.addEventListener('mouseleave', () => { if (!state.sel) clearLabels(); });
+    g.addEventListener('mouseenter', () => { if (!state.sel) { state.hover = n.id; refine(); } });
+    g.addEventListener('mouseleave', () => { if (!state.sel) { state.hover = null; refine(); } });
     gN.appendChild(g); nodeEls[n.id] = { g, c };
   });
-  edges.forEach((e) => { const p = sv('path', { fill: 'none', stroke: TIER[e.tier].edge, 'stroke-width': 1, 'stroke-opacity': 0.45, 'marker-end': 'url(#' + mk + ')' }); gE.appendChild(p); edgeEls.push({ p, e }); });
+  edges.forEach((e) => {
+    const g = sv('g', {});
+    const p = sv('path', { fill: 'none', stroke: TIER[e.tier].edge, 'stroke-width': 1.1, 'stroke-opacity': 0.42, 'marker-end': 'url(#' + mk + ')' });
+    const mt = sv('text', { 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-size': 11, fill: TIER[e.tier].stroke, class: 'tg-eglyph' });
+    mt.textContent = e.gl || '·';
+    g.appendChild(p); g.appendChild(mt); gE.appendChild(g);
+    edgeEls.push({ g, p, mt, e });
+  });
 
-  function edgePath(a, b) {
-    const dx = b.tx - a.tx, dy = b.ty - a.ty, mx = (a.tx + b.tx) / 2 - dy * 0.08, my = (a.ty + b.ty) / 2 + dx * 0.08;
-    const ux = b.tx - mx, uy = b.ty - my, L = Math.hypot(ux, uy) || 1, ex = b.tx - ux / L * 9, ey = b.ty - uy / L * 9;
-    return 'M' + a.tx.toFixed(1) + ',' + a.ty.toFixed(1) + ' Q' + mx.toFixed(1) + ',' + my.toFixed(1) + ' ' + ex.toFixed(1) + ',' + ey.toFixed(1);
+  function draw(mid) {
+    edgeEls.forEach((o) => {
+      const a = byId[o.e.a], b = byId[o.e.b];
+      const ax = mid ? a.x : a.tx, ay = mid ? a.y : a.ty, bx = mid ? b.x : b.tx, by = mid ? b.y : b.ty;
+      const dx = bx - ax, dy = by - ay, cx = (ax + bx) / 2 - dy * 0.08, cy = (ay + by) / 2 + dx * 0.08;
+      const ux = bx - cx, uy = by - cy, L = Math.hypot(ux, uy) || 1, ex = bx - ux / L * 9, ey = by - uy / L * 9;
+      o.p.setAttribute('d', 'M' + ax.toFixed(1) + ',' + ay.toFixed(1) + ' Q' + cx.toFixed(1) + ',' + cy.toFixed(1) + ' ' + ex.toFixed(1) + ',' + ey.toFixed(1));
+      o.mt.setAttribute('x', (ax * 0.25 + cx * 0.5 + bx * 0.25).toFixed(1));
+      o.mt.setAttribute('y', (ay * 0.25 + cy * 0.5 + by * 0.25).toFixed(1));
+    });
   }
 
   let animT = null;
@@ -164,41 +246,73 @@ export function mountTieredGraph(root, { nodes: inNodes = [], edges: inEdges = [
     nodes.forEach((n) => { n.px = n.x; n.py = n.y; });
     const start = performance.now(), dur = 460;
     if (animT) cancelAnimationFrame(animT);
+    gL.innerHTML = '';   // labels re-seat once the motion settles
     function frame(t) {
       const k = Math.min(1, (t - start) / dur), e = 1 - Math.pow(1 - k, 3);
       nodes.forEach((n) => { n.x = n.px + (n.tx - n.px) * e; n.y = n.py + (n.ty - n.py) * e;
         nodeEls[n.id].g.style.transform = 'translate(' + n.x.toFixed(1) + 'px,' + n.y.toFixed(1) + 'px)'; });
-      drawEdges(true);
-      if (k < 1) animT = requestAnimationFrame(frame); else drawEdges(false);
+      draw(true);
+      if (k < 1) animT = requestAnimationFrame(frame); else { draw(false); refine(); }
     }
     animT = requestAnimationFrame(frame);
   }
-  function drawEdges(mid) {
+
+  function neighborSet(id) { const s = {}; edges.forEach((e) => { if (e.a === id) s[e.b] = 1; if (e.b === id) s[e.a] = 1; }); return s; }
+
+  // ── refine: the readability pass. Zoom-invariant sizes, short-edge glyph
+  // culling, and greedy collision-culled labels placed by priority ──────────
+  function refine() {
+    const k = view.k, fs = (11 / k).toFixed(2), sw = (3 / k).toFixed(2), gsw = (3.4 / k).toFixed(2), minLen = 24;
     edgeEls.forEach((o) => { const a = byId[o.e.a], b = byId[o.e.b];
-      const A = mid ? { tx: a.x, ty: a.y } : a, B = mid ? { tx: b.x, ty: b.y } : b;
-      o.p.setAttribute('d', edgePath(A, B)); });
+      const vis = (Math.hypot(b.x - a.x, b.y - a.y) * k > minLen) && state.tiers[a.tier] && state.tiers[b.tier];
+      const inc = !state.sel || o.e.a === state.sel || o.e.b === state.sel;
+      o.mt.style.display = (vis && inc) ? '' : 'none';
+      o.mt.setAttribute('font-size', fs); o.mt.style.strokeWidth = gsw + 'px'; });
+    gL.innerHTML = '';
+    let cands = [];
+    if (state.sel) {
+      const nb = neighborSet(state.sel);
+      cands = [byId[state.sel]].concat(Object.keys(nb).map((x) => byId[x]).filter((n) => state.tiers[n.tier]));
+    } else if (state.names) {
+      cands = nodes.filter((n) => state.tiers[n.tier])
+        .sort((x, y) => (x.kind === 'doc' ? -1 : y.kind === 'doc' ? 1 : deg[y.id] - deg[x.id]));
+    }
+    // the hovered node's full name ALWAYS shows, whatever the names toggle says
+    if (state.hover && !state.sel) {
+      const hn = byId[state.hover];
+      cands = [hn].concat(cands.filter((n) => n.id !== hn.id));
+      nodeEls[hn.id].c.setAttribute('r', hn.kind === 'doc' ? 11 : 9);
+    } else if (!state.sel) {
+      nodes.forEach((n) => nodeEls[n.id].c.setAttribute('r', n.kind === 'doc' ? 9 : 7));
+    }
+    const placed = [];
+    cands.forEach((n) => {
+      const left = n.x > W * 0.62;
+      const t = sv('text', { 'font-size': fs, 'text-anchor': left ? 'end' : 'start', class: 'tg-plabel' });
+      t.style.strokeWidth = sw + 'px';
+      t.setAttribute('x', (n.x + (left ? -11 : 11)).toFixed(1)); t.setAttribute('y', (n.y + 3.5).toFixed(1));
+      t.textContent = n.label; gL.appendChild(t);
+      const bb = t.getBBox(), box = { x: bb.x - 1, y: bb.y - 1, w: bb.width + 2, h: bb.height + 2 };
+      const hit = placed.some((pp) => !(box.x + box.w < pp.x || pp.x + pp.w < box.x || box.y + box.h < pp.y || pp.y + pp.h < box.y));
+      if (hit) gL.removeChild(t); else placed.push(box);
+    });
   }
 
   function applyFilter() {
-    nodes.forEach((n) => { nodeEls[n.id].g.style.opacity = state.tiers[n.tier] ? 1 : 0.08; nodeEls[n.id].g.style.pointerEvents = state.tiers[n.tier] ? 'auto' : 'none'; });
-    edgeEls.forEach((o) => { const vis = state.tiers[byId[o.e.a].tier] && state.tiers[byId[o.e.b].tier]; o.p.style.opacity = vis ? 1 : 0.05; });
+    nodes.forEach((n) => { const on = state.tiers[n.tier]; nodeEls[n.id].g.style.opacity = on ? 1 : 0.08; nodeEls[n.id].g.style.pointerEvents = on ? 'auto' : 'none'; });
+    edgeEls.forEach((o) => { const vis = state.tiers[byId[o.e.a].tier] && state.tiers[byId[o.e.b].tier]; o.g.style.opacity = vis ? 1 : 0.06; });
+    refine();
   }
-
-  function neighborSet(id) { const s = {}; edges.forEach((e) => { if (e.a === id) s[e.b] = 1; if (e.b === id) s[e.a] = 1; }); return s; }
-  function clearLabels() { gL.innerHTML = ''; nodes.forEach((n) => nodeEls[n.id].c.setAttribute('r', n.kind === 'doc' ? 9 : 7)); }
-  function label(n) {
-    const g = sv('g', {}); let tx = n.x + 11, anchor = 'start'; if (n.x > W - 90) { tx = n.x - 11; anchor = 'end'; }
-    const t = sv('text', { x: tx, y: n.y + 3.5, 'text-anchor': anchor, 'font-size': 11, fill: 'var(--ink,#15181e)' }); t.textContent = n.label;
-    const bg = sv('rect', { fill: 'var(--card,#fff)', 'fill-opacity': 0.85 }); g.appendChild(bg); g.appendChild(t); gL.appendChild(g);
-    const bb = t.getBBox(); bg.setAttribute('x', bb.x - 2); bg.setAttribute('y', bb.y - 1); bg.setAttribute('width', bb.width + 4); bg.setAttribute('height', bb.height + 2); bg.setAttribute('rx', 3);
-  }
-  function hover(n) { if (state.sel) return; clearLabels(); nodeEls[n.id].c.setAttribute('r', 9); label(n); }
 
   function select(id) {
-    state.sel = id; const nb = neighborSet(id); clearLabels();
-    nodes.forEach((n) => { nodeEls[n.id].g.style.opacity = (n.id === id || nb[n.id]) ? 1 : 0.12; });
-    edgeEls.forEach((o) => { const inc = o.e.a === id || o.e.b === id; o.p.setAttribute('stroke-width', inc ? 2 : 1); o.p.setAttribute('stroke-opacity', inc ? 0.9 : 0.08); });
-    nodeEls[id].c.setAttribute('r', 9); label(byId[id]); Object.keys(nb).forEach((k) => label(byId[k]));
+    state.sel = id; state.hover = null;
+    const nb = neighborSet(id);
+    nodes.forEach((n) => { nodeEls[n.id].g.style.opacity = (n.id === id || nb[n.id]) ? 1 : 0.1;
+      nodeEls[n.id].c.setAttribute('r', n.id === id ? 9 : (n.kind === 'doc' ? 9 : 7)); });
+    edgeEls.forEach((o) => { const inc = o.e.a === id || o.e.b === id;
+      o.g.style.opacity = inc ? 1 : 0.12;
+      o.p.setAttribute('stroke-width', inc ? 2 : 1.1); o.p.setAttribute('stroke-opacity', inc ? 0.85 : 0.3); });
+    refine();
     const n = byId[id], ins = edges.filter((e) => e.b === id), outs = edges.filter((e) => e.a === id);
     const glyphs = (arr) => arr.map((e) => e.gl).join(' ') || '—';
     countsEl.style.display = 'none';   // the inspector needs the full footer row
@@ -213,19 +327,23 @@ export function mountTieredGraph(root, { nodes: inNodes = [], edges: inEdges = [
     }
   }
   function deselect() {
-    state.sel = null; clearLabels();
-    edgeEls.forEach((o) => { o.p.setAttribute('stroke-width', 1); o.p.setAttribute('stroke-opacity', 0.45); }); applyFilter();
+    state.sel = null;
+    nodes.forEach((n) => nodeEls[n.id].c.setAttribute('r', n.kind === 'doc' ? 9 : 7));
+    edgeEls.forEach((o) => { o.p.setAttribute('stroke-width', 1.1); o.p.setAttribute('stroke-opacity', 0.42); });
+    applyFilter();
     detail.innerHTML = '<span style="color:var(--ink3,#999);">click a node to inspect · drag to pan · scroll to zoom</span>';
     countsEl.style.display = '';
   }
 
-  // ── pan / zoom ───────────────────────────────────────────────────────────
+  // ── pan / zoom (labels re-refine after zoom so culling tracks scale) ─────
   const view = { x: 0, y: 0, k: 1 };
+  let refineT = null;
   function apply() { vp.setAttribute('transform', 'translate(' + view.x.toFixed(1) + ',' + view.y.toFixed(1) + ') scale(' + view.k.toFixed(3) + ')'); }
+  function schedule() { if (refineT) clearTimeout(refineT); refineT = setTimeout(refine, 110); }
   function fit() {
     const xs = nodes.map((n) => n.tx), ys = nodes.map((n) => n.ty);
-    const minx = Math.min.apply(0, xs) - 30, maxx = Math.max.apply(0, xs) + 30, miny = Math.min.apply(0, ys) - 30, maxy = Math.max.apply(0, ys) + 30;
-    const k = Math.min(W / (maxx - minx), H / (maxy - miny), 1.6); view.k = k; view.x = (W - (minx + maxx) * k) / 2; view.y = (H - (miny + maxy) * k) / 2; apply();
+    const a = Math.min.apply(0, xs) - 45, b = Math.max.apply(0, xs) + 45, c = Math.min.apply(0, ys) - 28, d = Math.max.apply(0, ys) + 28;
+    const k = Math.min(W / (b - a), H / (d - c), 1.5); view.k = k; view.x = (W - (a + b) * k) / 2; view.y = (H - (c + d) * k) / 2; apply(); refine();
   }
 
   let drag = null;
@@ -235,7 +353,7 @@ export function mountTieredGraph(root, { nodes: inNodes = [], edges: inEdges = [
   const onUp = () => { if (drag && !drag.moved) deselect(); drag = null; svg.style.cursor = 'grab'; };
   const onWheel = (e) => { e.preventDefault(); const r = svg.getBoundingClientRect(), sc = W / r.width;
     const mx = (e.clientX - r.left) * sc, my = (e.clientY - r.top) * sc, f = e.deltaY < 0 ? 1.12 : 1 / 1.12, nk = Math.max(0.4, Math.min(3, view.k * f));
-    view.x = mx - (mx - view.x) * (nk / view.k); view.y = my - (my - view.y) * (nk / view.k); view.k = nk; apply(); };
+    view.x = mx - (mx - view.x) * (nk / view.k); view.y = my - (my - view.y) * (nk / view.k); view.k = nk; apply(); schedule(); };
   svg.addEventListener('pointerdown', onDown); svg.addEventListener('pointermove', onMove); svg.addEventListener('pointerup', onUp);
   svg.addEventListener('wheel', onWheel, { passive: false });
 
@@ -244,22 +362,26 @@ export function mountTieredGraph(root, { nodes: inNodes = [], edges: inEdges = [
     wrap.querySelectorAll('[data-layout]').forEach((x) => x.classList.remove('on')); b.classList.add('on');
     state.layout = b.dataset.layout;
     wrap.querySelector('[data-pivot-lbl]').textContent = state.layout === 'radial' ? 'rotate' : 'pivot';
+    if (state.sel) deselect();
     relayout(); setTimeout(fit, 470);
   }));
   wrap.querySelector('[data-pivot]').addEventListener('click', () => {
     if (state.layout === 'radial') state.rot = (state.rot + 45) % 360; else state.orient = state.orient === 'h' ? 'v' : 'h';
+    if (state.sel) deselect();
     relayout(); setTimeout(fit, 470);
   });
+  const namesBtn = wrap.querySelector('[data-names]');
+  namesBtn.addEventListener('click', () => { state.names = !state.names; namesBtn.classList.toggle('on', state.names); if (state.sel) deselect(); else refine(); });
   wrap.querySelectorAll('[data-tier]').forEach((ch) => ch.addEventListener('click', () => {
     const t = ch.dataset.tier; state.tiers[t] = !state.tiers[t]; ch.classList.toggle('off', !state.tiers[t]);
     if (state.sel) deselect(); else applyFilter();
   }));
-  wrap.querySelector('[data-zin]').addEventListener('click', () => { view.k = Math.min(3, view.k * 1.2); apply(); });
-  wrap.querySelector('[data-zout]').addEventListener('click', () => { view.k = Math.max(0.4, view.k / 1.2); apply(); });
+  wrap.querySelector('[data-zin]').addEventListener('click', () => { view.k = Math.min(3, view.k * 1.2); apply(); schedule(); });
+  wrap.querySelector('[data-zout]').addEventListener('click', () => { view.k = Math.max(0.4, view.k / 1.2); apply(); schedule(); });
   wrap.querySelector('[data-fit]').addEventListener('click', fit);
 
   layoutRadial(); nodes.forEach((n) => { n.x = n.tx; n.y = n.ty; nodeEls[n.id].g.style.transform = 'translate(' + n.x + 'px,' + n.y + 'px)'; });
-  drawEdges(false); applyFilter(); fit();
+  draw(false); applyFilter(); fit();
 
-  return { destroy() { if (animT) cancelAnimationFrame(animT); wrap.remove(); } };
+  return { destroy() { if (animT) cancelAnimationFrame(animT); if (refineT) clearTimeout(refineT); wrap.remove(); } };
 }
