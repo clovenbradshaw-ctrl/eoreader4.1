@@ -866,8 +866,11 @@
           <sc-if value="{{ hasEgo }}" hint-placeholder-val="{{ true }}">
             <div style="background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 8px 4px;margin-bottom:8px;">
               <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 6px 6px;">
-                <span style="font-size:10.5px;color:var(--ink3);">Relations as a directed acyclic graph — arrows run in reading order (whoever is introduced first leads to whom) · click any node to open it</span>
-                <span style="font-size:10.5px;color:var(--ink3);">{{ egoMeta }}</span>
+                <span style="font-size:10.5px;color:var(--ink3);">Connected records as a DAG — arrows read subject → object · click any node to open it · dashed = another name for the same thing</span>
+                <span style="display:inline-flex;align-items:center;gap:8px;">
+                  <button onclick="{{ onEgoLabels }}" title="Toggle the edge chips between relation words and EO operator glyphs" style="font-size:10px;font-weight:700;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;" style-hover="border-color:var(--accline);color:var(--acc)">{{ egoLabelsLabel }}</button>
+                  <span style="font-size:10.5px;color:var(--ink3);">{{ egoMeta }}</span>
+                </span>
               </div>
               {{ egoViz }}
             </div>
@@ -1002,6 +1005,9 @@
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;">
             <button onclick="{{ site.onRead }}" title="Open and read the live page" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:#fff;background:var(--acc);border:1px solid var(--acc);border-radius:8px;padding:7px 14px;cursor:pointer;" style-hover="opacity:.9">Read page ↗</button>
             <button onclick="{{ site.onChat }}" title="Start a chat about this source" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:7px 13px;cursor:pointer;" style-hover="background:var(--card)">✦ Chat about this</button>
+            <button onclick="{{ site.onTiered }}" title="This source's record as a pivotable tiered graph — existence, structure, and significance tiers connected by operator edges; flow, tier-lane, and radial layouts with tier filtering" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:7px 13px;cursor:pointer;" style-hover="background:var(--card)">◈ Graph</button>
+            <button onclick="{{ site.onDag }}" title="The causal DAG this source is READ as asserting — every edge a claim traced to its passage, typed by the stance the source proposed and never upgraded; confounders and mechanisms surfaced across your other sources" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:7px 13px;cursor:pointer;" style-hover="background:var(--card)">⛓ Causal DAG</button>
+            <button onclick="{{ site.onWeave }}" title="The referent weave of this source — its recurring figures as threads, grouped into storylines by temporal co-activity" style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:8px;padding:7px 13px;cursor:pointer;" style-hover="background:var(--card)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex:0 0 auto;"><path d="M4 5c4 0 4 14 8 14s4-14 8-14"></path><path d="M4 12c4 0 4 7 8 7"></path><path d="M12 5c4 0 4 7 8 7"></path></svg>Weave</button>
             <button onclick="{{ site.onMute }}" title="Mute stops a source feeding the record" style="{{ site.muteBtnStyle }}" style-hover="filter:brightness(.98)">{{ site.muteBtnLabel }}</button>
           </div>
           <div style="display:flex;gap:10px;margin-top:20px;flex-wrap:wrap;">

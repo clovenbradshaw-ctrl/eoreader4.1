@@ -454,11 +454,11 @@ Helix order; Triad = Domain. Exact `[α, η, Ω]` coordinates are a fixed lookup
 | # | Op | Glyph | Greek | Triad (Domain) | Surface origin |
 |---|---|---|---|---|---|
 | 1 | NUL | ∅ | ν | Existence | `= nil` / `!nul` |
-| 2 | SIG | ⊡ | σ | Existence | repeat `:` / `!sig` / `!clm` |
-| 3 | INS | △ | α | Existence | first `:` |
+| 2 | SIG | ○ | σ | Existence | repeat `:` / `!sig` / `!clm` |
+| 3 | INS | ● | α | Existence | first `:` |
 | 4 | SEG | ｜ | κ | Structure | `\|` / `!seg` |
 | 5 | CON | ⋈ | ε | Structure | `-> :` |
-| 6 | SYN | ∨ | η | Structure | `<-` / `==` / `!syn` |
+| 6 | SYN | △ | η | Structure | `<-` / `==` / `!syn` |
 | 7 | DEF | ⊢ | δ | Significance | `=` |
 | 8 | EVA | ⊨ | ψ | Significance | `!eva` / boundary-crossing `=` |
 | 9 | REC | ⊛ | Ω | Significance | `!rec ... =>` |

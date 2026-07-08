@@ -181,13 +181,21 @@ function buildCursor2(root, a, dist) {
   const bc = (k) => { const ps = (parents[k] || []).filter((p) => layer[p] === layer[k] - 1); return ps.length ? ps.reduce((s, p) => s + idx[p], 0) / ps.length : idx[k]; };
   for (let L = 1; L <= maxL; L++) { rows[L].sort((x, y) => bc(x) - bc(y)); rows[L].forEach((k, i) => idx[k] = i); }
 
-  const W = 340, PADX = 12, ROW = 82, TOP = 30, NH = 34;
+  // Rows are sized to their actual node widths and the SVG renders 1:1 — a
+  // dense row scrolls sideways instead of crushing every box into the panel
+  // width and clipping the labels to confetti.
+  const PADX = 14, ROW = 86, TOP = 30, NH = 34, GAPX = 16;
   const nw = (k) => Math.max(54, k.length * 7.4 + 18);
+  const rowW = rows.map((col) => col.reduce((s, k) => s + nw(k), 0) + GAPX * Math.max(0, col.length - 1));
+  const W = Math.max(360, ...rowW.map((w) => w + 2 * PADX));
   const pos = {};
-  rows.forEach((col, L) => { const n = col.length;
-    col.forEach((k, i) => pos[k] = { x: PADX + (i + 0.5) * ((W - 2 * PADX) / n), y: TOP + L * ROW }); });
+  rows.forEach((col, L) => {
+    let xc = (W - rowW[L]) / 2;
+    col.forEach((k) => { pos[k] = { x: xc + nw(k) / 2, y: TOP + L * ROW }; xc += nw(k) + GAPX; });
+  });
   const H = TOP + maxL * ROW + 42;
   const svg = S('svg', { class: 'dg-graph', viewBox: `0 0 ${W} ${H}`, role: 'img', 'aria-label': 'causal DAG' });
+  svg.style.width = W + 'px';   // natural size; .dg-scroll pans when the panel is narrower
   scroll.appendChild(svg); stage.appendChild(scroll);
   const insp = el('div', { class: 'dg-insp' }, [el('div', { class: 'dg-insp-empty', text: 'Tap an arrow to read the sentences behind it.' })]);
   stage.appendChild(insp); root.appendChild(stage);
