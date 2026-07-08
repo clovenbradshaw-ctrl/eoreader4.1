@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="theme-color" content="#f5f6f8">
 <title>EO Reader</title>
 <link rel="icon" href="favicon.ico" sizes="any">
@@ -117,6 +117,16 @@
     .eo-askfab:hover,.eo-askfab:focus-visible{opacity:1;padding:9px 16px 9px 13px;border-radius:22px;}
     .eo-askfab .eo-askfab-lbl{max-width:0;overflow:hidden;opacity:0;white-space:nowrap;transition:max-width .22s ease,opacity .15s ease,margin-left .22s ease;}
     .eo-askfab:hover .eo-askfab-lbl,.eo-askfab:focus-visible .eo-askfab-lbl{max-width:220px;opacity:1;margin-left:8px;}
+    /* Phone (matches phone() in app.dc.js). 16px floors every text field — iOS Safari
+       auto-zooms the whole page on focusing any input below 16px, and the layout never
+       recovers; !important is needed to beat the inline per-field sizes. */
+    @media (max-width:759px){
+      input,textarea{font-size:16px !important;}
+    }
+    /* No hover on touch — the collapsed ask-FAB can never expand, so don't fade it. */
+    @media (hover:none){
+      .eo-askfab{opacity:.92;}
+    }
     ::-webkit-scrollbar{width:10px;height:10px}
     ::-webkit-scrollbar-thumb{background:#d4d8de;border-radius:6px;border:2px solid #fff}
     ::-webkit-scrollbar-track{background:transparent}
@@ -151,20 +161,26 @@
   </style>
 </helmet>
 
-<div data-acc="" data-prov="{{ provMode }}" style="--acc:{{ accentVar }};--accbg:{{ accbgVar }};--accline:{{ acclineVar }};height:100vh;background:var(--app);color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased;display:grid;grid-template-rows:{{ appRows }};grid-template-columns:minmax(0,1fr);position:relative;">
+<div data-acc="" data-prov="{{ provMode }}" style="--acc:{{ accentVar }};--accbg:{{ accbgVar }};--accline:{{ acclineVar }};height:100vh;height:100dvh;background:var(--app);color:var(--ink);font-family:var(--sans);font-size:13.5px;line-height:1.5;-webkit-font-smoothing:antialiased;display:grid;grid-template-rows:{{ appRows }};grid-template-columns:minmax(0,1fr);position:relative;">
 
   <div style="background:#dee1e6;border-bottom:1px solid var(--line);">
     <div style="display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--card);">
       <div style="display:flex;align-items:center;gap:6px;flex:0 0 auto;margin-right:4px;">
         <div style="width:21px;height:21px;border-radius:6px;background:var(--acc);display:flex;align-items:center;justify-content:center;color:#fff;font-size:10px;font-weight:800;letter-spacing:.02em;box-shadow:0 1px 2px rgba(91,52,214,.35);">EO</div>
-        <span style="font-size:12.5px;font-weight:700;color:var(--ink);letter-spacing:-.01em;">Reader</span>
+        <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
+          <span style="font-size:12.5px;font-weight:700;color:var(--ink);letter-spacing:-.01em;">Reader</span>
+        </sc-if>
       </div>
       <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
         <button onclick="{{ toggleLeft }}" title="{{ leftTitle }}" style="width:27px;height:27px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:7px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:#eef0f3">{{ leftIcon }}</button>
       </sc-if>
       <button onclick="{{ onBack }}" title="Back" style="{{ backStyle }}">‹</button>
-      <button onclick="{{ onForward }}" title="Forward" style="{{ fwdStyle }}">›</button>
-      <button onclick="{{ onReloadTop }}" title="Refresh" style="width:27px;height:27px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:7px;color:var(--ink2);font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:#eef0f3;color:var(--ink)">⟳</button>
+      <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
+        <button onclick="{{ onForward }}" title="Forward" style="{{ fwdStyle }}">›</button>
+      </sc-if>
+      <sc-if value="{{ notPhone }}" hint-placeholder-val="{{ true }}">
+        <button onclick="{{ onReloadTop }}" title="Refresh" style="width:27px;height:27px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:7px;color:var(--ink2);font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:#eef0f3;color:var(--ink)">⟳</button>
+      </sc-if>
       <div style="display:flex;align-items:center;flex:1;min-width:0;background:var(--app);border:1px solid var(--line2);border-radius:16px;padding:0 5px 0 13px;" style-focus-within="border-color:var(--accline);background:var(--card)">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9aa1ab" stroke-width="2" style="flex:0 0 auto;"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18"></path></svg>
         <input value="{{ url }}" oninput="{{ onUrlInput }}" onkeydown="{{ onUrlKey }}" placeholder="Search or read a URL into memory…" style="flex:1;min-width:0;font-size:12.5px;color:var(--ink);background:transparent;border:none;padding:7px 10px;outline:none;">
@@ -186,7 +202,7 @@
         <button onclick="{{ onToggleSettings }}" title="EO settings" style="width:30px;height:30px;border:1px solid var(--line2);background:var(--app);border-radius:8px;color:var(--ink2);display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:#eef0f3;color:var(--ink)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
         <sc-if value="{{ settingsOpen }}" hint-placeholder-val="{{ false }}">
           <div onclick="{{ onCloseSettings }}" style="position:fixed;inset:0;z-index:44;"></div>
-          <div style="position:absolute;top:38px;right:0;width:266px;max-height:calc(100vh - 92px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:0 16px 44px rgba(20,24,30,.2);padding:14px;z-index:45;animation:eopop .12s ease-out;">
+          <div style="position:absolute;top:38px;right:0;width:266px;max-height:calc(100vh - 92px);max-height:calc(100dvh - 92px);overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:13px;box-shadow:0 16px 44px rgba(20,24,30,.2);padding:14px;z-index:45;animation:eopop .12s ease-out;">
             <div style="display:flex;align-items:center;gap:7px;margin-bottom:13px;"><div style="width:19px;height:19px;border-radius:5px;background:var(--acc);display:flex;align-items:center;justify-content:center;color:#fff;font-size:9px;font-weight:800;">EO</div><span style="font-size:13px;font-weight:700;">EO settings</span></div>
 
             <div style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:8px;">Accent</div>
@@ -11954,7 +11970,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       base.chatToggleStyle='display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;'+(chatActive?'color:var(--acc);background:var(--accbg);border:1px solid var(--accline);':'color:var(--ink2);background:var(--app);border:1px solid var(--line2);')+'border-radius:7px;padding:5px 10px;flex:0 0 auto;cursor:pointer;';
       // Phone bottom-nav tabs. Chat tab ensures a chat exists before switching pane.
       const pane=this.state.pane||'doc';
-      const navSty=on=>'flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 2px 6px;font-size:10px;font-weight:600;border:none;background:transparent;cursor:pointer;color:'+(on?'var(--acc)':'var(--ink3)')+';';
+      const navSty=on=>'flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:11px 2px 10px;font-size:11px;font-weight:600;border:none;background:transparent;cursor:pointer;color:'+(on?'var(--acc)':'var(--ink3)')+';';
       base.navTabs=[
         {k:'sources',label:'Sources',pane:'sources'},
         {k:'doc',label:'Read',pane:'doc'},
@@ -11973,7 +11989,8 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       // Bottom nav is a real grid row on phone (not a fixed overlay), so it never covers
       // the chat composer. The app shell adds an `auto` row for it on phone.
       base.appRows=isPhone?'auto auto 1fr auto':'auto auto 1fr';
-      base.navStyle='display:'+(isPhone?'flex':'none')+';background:var(--card);border-top:1px solid var(--line);';
+      // padding-bottom keeps the tabs above the iPhone home indicator (viewport-fit=cover).
+      base.navStyle='display:'+(isPhone?'flex':'none')+';background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);';
     }
     base.activity=this.activityVals();
     this.chatVals(base);

@@ -74,12 +74,20 @@ const CSS = `
 .eotl-row.eotl-x .eotl-raw{display:block;}
 .eotl-row.eotl-clk{cursor:pointer;}
 .eotl-empty{color:#55606e;padding:14px 16px;}
-.eotl-fab{position:fixed;right:16px;bottom:16px;z-index:2147482999;display:inline-flex;align-items:center;gap:7px;
+.eotl-fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:2147482999;display:inline-flex;align-items:center;gap:7px;
   background:#0b0f14;color:#c7d0da;border:1px solid #24303d;border-radius:9px;padding:8px 12px;cursor:pointer;
   font:12px/1 ui-monospace,Menlo,Consolas,monospace;box-shadow:0 4px 14px rgba(0,0,0,.35);}
 .eotl-fab:hover{border-color:#2f6feb;color:#e6edf4;}
 .eotl-fab .eotl-fdot{width:7px;height:7px;border-radius:50%;background:#2ea043;box-shadow:0 0 6px #2ea043;}
 .eotl-badge{background:#182634;border-radius:20px;padding:1px 7px;color:#9db3d0;font-size:11px;min-width:14px;text-align:center;}
+/* Phone (the reader's <760px tier has a bottom nav row + chat composer along the
+   bottom): collapse to a dot+badge handle hugging the right edge, raised clear of
+   both, instead of a text pill that would cover the Ask button or the nav tabs. */
+@media (max-width:759px){
+  .eotl-fab{right:0;bottom:calc(118px + env(safe-area-inset-bottom));border-radius:10px 0 0 10px;padding:8px 9px;}
+  .eotl-fab .eotl-fab-lbl{display:none;}
+  .eotl-root{padding-bottom:env(safe-area-inset-bottom);}
+}
 `;
 
 export const mountEotTerminal = (ledger, { hotkey = true, startOpen = false } = {}) => {
@@ -113,7 +121,7 @@ export const mountEotTerminal = (ledger, { hotkey = true, startOpen = false } = 
   const fab = document.createElement('button');
   fab.className = 'eotl-fab';
   fab.type = 'button';
-  fab.innerHTML = `<span class="eotl-fdot"></span>EOT ledger<span class="eotl-badge" data-badge>0</span>`;
+  fab.innerHTML = `<span class="eotl-fdot"></span><span class="eotl-fab-lbl">EOT ledger</span><span class="eotl-badge" data-badge>0</span>`;
   document.body.appendChild(fab);
 
   const body = root.querySelector('[data-body]');
