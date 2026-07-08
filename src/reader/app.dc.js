@@ -3771,6 +3771,36 @@ class Component extends DCLogic {
     return true;
   }
 
+  // Did this answer just tell you, in the model's OWN words, that what you've read doesn't cover
+  // the question — a not-found / need-more-context abstention? The coverage heuristic (_shouldWeb →
+  // groundNotes.relevant) admits a turn offline on term overlap alone, but the ANSWER is the ground
+  // truth of whether the reading actually held the answer: when the model says it "didn't find any
+  // information", that "the article doesn't provide …", or that the user "needs to provide more
+  // context / clarify", the reading fell short and a web walk is the honest next move. Kept tight to
+  // FIRST-PERSON / SOURCE-shortfall phrasings so a factual "there is no evidence X" claim in an
+  // otherwise-grounded answer doesn't trip it.
+  _answerAbstains(text){
+    const t=String(text||'').toLowerCase();
+    if(!t)return false;
+    return /\b(?:i (?:did(?:n'?t| not)|could(?:n'?t| not)|was(?:n'?t| not) able to|do(?:n'?t| not)(?:\s+(?:have|see))?|can(?:'?t|not))\s+(?:find|see|locate|access|provide|determine|answer)\b|i (?:do(?:n'?t| not)|don'?t) (?:have|possess)\s+(?:any\s+|the\s+)?(?:information|details?|data|answer|specifics?)\b|(?:no|not any|didn'?t find any|couldn'?t find any|little to no)\s+(?:information|details?|mention|reference|evidence|data|insight|specifics?)\b|(?:the (?:article|text|reading|document|source|passage|excerpt|book|page)s?)\s+(?:do(?:es)?n'?t|do not|does not|doesn'?t)\s+(?:provide|mention|contain|include|cover|say|specify|discuss|address|offer|give|go into)\b|(?:is|are|was|were)(?:n'?t|\s+not)\s+(?:mentioned|discussed|covered|addressed|provided|specified|included|described)\b|(?:need|would need)\s+(?:to provide\s+)?more\s+(?:context|information|detail)|provide more context|clarify what (?:they|you) mean)\b/.test(t);
+  }
+  // AUTO-CUE RESEARCH — the reader's own "do more research", fired on its behalf. The offline
+  // grounded answer just abstained (_answerAbstains), so instead of leaving the reader to type
+  // "do more research", continue straight into a web walk on the same question. A fresh assistant
+  // bubble carries it — NO synthetic user turn, so it reads as the reader picking the thread back
+  // up on its own — and chatResearch reuses that pending bubble (pre.id) to narrate the walk into
+  // it. Fires at most once per settled answer; the walk itself is a separate path that never
+  // re-enters this branch, so there is no loop.
+  _kickAutoResearch(q,meta){
+    const id=this.state.activeChat;
+    if(!id||this._busy||this._stopGen)return;
+    this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;
+      return {...c,messages:[...c.messages,{role:'asst',text:'',pending:true,think:'',
+        research:{steps:[{kind:'think',text:'That isn’t in what you’ve read — going to the web to find it.'}],done:false,mode:'think',t0:Date.now()}}]};})}),
+      ()=>this._scrollChat());
+    this.chatResearch(q,{id,meta:meta||null,auto:true});
+  }
+
   async sendChat(qArg){
     // qArg lets an internal caller re-drive a turn; the composer's Enter/Ask pass nothing
     // and read the input box.
@@ -4088,6 +4118,13 @@ class Component extends DCLogic {
         groundKind:gr.groundKind,disclosure:gr.disclosure,related:(isolated||amode==='creative')?[]:this.relatedDocs(q,sources),
         register:grounded?'grounded':'creative',reflection:grounded?this._reflect(text):null});
       if(!isolated)this._pivotChatPanel(q+' '+text);
+      // AUTO-CUE RESEARCH: the answer just said, in its own words, that what you've read doesn't
+      // cover this — so escalate to a web walk automatically (the "do more research" the reader
+      // would otherwise have to ask for by hand). Only a contentful, non-creative turn with a
+      // subject to chase; never after a Stop; once per settled answer.
+      if(!isolated&&amode!=='creative'&&!this._stopGen&&this._answerAbstains(text)&&this._researchTerms(q).length){
+        this._kickAutoResearch(q,meta);
+      }
     }catch(e){
       guard.clear();
       // User stop — stopGeneration already finalized the bubble with whatever streamed. Don't
