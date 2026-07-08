@@ -1195,7 +1195,17 @@ class Component extends DCLogic {
   openChat(id){this._chatTab(id);this.setState(s=>({activeChat:id,viewUrl:null,selId:null,hoverEnt:null,chatAddOpen:false,rightOpen:true,newTabOpen:false,histRev:(s.histRev||0)+1}));}
   // Closing a chat closes its tab (the chip goes too); the neighbour tab takes over.
   closeChat(){this._ensureTabs();const t=this._liveTab();if(t&&t.kind==='chat')this.closeTab(t.id);else this.setState({activeChat:null,chatAddOpen:false});}
-  onChatInput(ev){this.setState({chatInput:ev&&ev.target?ev.target.value:''});}
+  // KEYSTROKES DO NOTHING BUT REMEMBER. The composer is UNCONTROLLED: typing a character used to
+  // setState({chatInput}), and every setState re-runs the whole app's renderVals() (dc-runtime
+  // bumps a version → full React reconcile), so each keypress synchronously rebuilt thousands of
+  // props (source rows, entity panels, corpus results) — the "typing is very slow". Now a keystroke
+  // only stashes the live value on the instance (no setState, no render); the DOM input keeps the
+  // text itself. sendChat reads _chatDraft at Enter/Ask and clears the element. Nothing routes,
+  // grounds, or renders until the turn is actually sent.
+  onChatInput(ev){const el=ev&&ev.target;if(el)this._chatEl=el;this._chatDraft=el?el.value:'';}
+  // Clear the uncontrolled composer's DOM value (used on send / new chat / close) — best-effort,
+  // the element is the last one typed into.
+  _clearComposer(){this._chatDraft='';if(this._chatEl){try{this._chatEl.value='';}catch(e){}}}
   onChatKey(ev){if(ev&&ev.key==='Enter'&&!ev.shiftKey){if(ev.preventDefault)ev.preventDefault();this.sendChat();}}
   // Per-answer grounding strip: collapsed by default (not overwhelming), one tap reveals
   // the passages/entities the answer is grounded in. Keyed by chat id + message index.
@@ -3817,8 +3827,10 @@ class Component extends DCLogic {
 
   async sendChat(qArg){
     // qArg lets an internal caller re-drive a turn; the composer's Enter/Ask pass nothing
-    // and read the input box.
-    const q=this.norm(qArg!=null?qArg:this.state.chatInput);if(!q)return;
+    // and read the uncontrolled input's stashed draft (onChatInput). No setState fires while
+    // typing, so the box's live text lives on the instance, not in state.
+    const q=this.norm(qArg!=null?qArg:(this._chatDraft||''));if(!q)return;
+    this._clearComposer();  // empty the DOM box now that the turn is committed
     this._stopGen=false;   // a fresh turn clears any prior stop
     // THE TURN'S CONFIG IS DERIVED, not stored (design/chat-redesign/REVISIONS.md):
     // one emergent read of the ask replaces the old composer mode state. It rides
