@@ -82,4 +82,41 @@ for (const page of ['src/reader/app.dc.js', 'index.html']) {
     const gq = h._groundingQuery('do they have one?', [], { focus: { subject: 'dolphin sociality' } });
     assert.match(gq, /dolphin/i, 'an anaphoric turn with no prior user text still inherits the fold focus');
   });
+
+  // RELATIONAL FOLLOW-UPS (the Captain-Kangaroo run). A turn whose only content words name a
+  // RELATION to the subject — "versions similar", "a parody", "a … type character" — is not
+  // self-contained: its topic lives in the thread, and retrieving on the bare relational words
+  // pulls generic noise (Wonder Woman, a rabbit god). The carry must fire even though the string
+  // carries its own (relational) content words.
+  const K0 = 'tell me about captain kangaroo';
+
+  test(`${page}: a "versions similar" follow-up carries the thread subject`, () => {
+    const h = harness(src);
+    const prev = [{ role: 'user', text: K0 }];
+    const gq = h._groundingQuery('what fictional versions exist that are similar?', prev, null);
+    assert.match(gq, /captain/i, 'the relational follow-up inherits the thread subject "captain"');
+    assert.match(gq, /kangaroo/i, 'the relational follow-up inherits the thread subject "kangaroo"');
+    assert.ok(gq.startsWith('what fictional versions'), 'the original question is preserved verbatim');
+  });
+
+  test(`${page}: a bare "a parody" follow-up carries the thread subject`, () => {
+    const h = harness(src);
+    const prev = [{ role: 'user', text: K0 }];
+    const gq = h._groundingQuery('a parody', prev, null);
+    assert.match(gq, /kangaroo/i, 'a purely relational "a parody" inherits the thread subject');
+  });
+
+  test(`${page}: a "type character" follow-up carries the thread subject`, () => {
+    const h = harness(src);
+    const prev = [{ role: 'user', text: K0 }];
+    const gq = h._groundingQuery('are there movies with that kind of character?', prev, null);
+    assert.match(gq, /kangaroo/i, 'a relational "kind of character" follow-up inherits the thread subject');
+  });
+
+  test(`${page}: a genuine topic-shift is still NOT treated as relational`, () => {
+    const h = harness(src);
+    const prev = [{ role: 'user', text: K0 }];
+    assert.equal(h._groundingQuery('what about whales?', prev, null), 'what about whales?',
+      'a real named subject ("whales") stays self-contained — relational carry must not over-fire');
+  });
 }
