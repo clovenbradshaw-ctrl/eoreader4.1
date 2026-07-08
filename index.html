@@ -103,8 +103,12 @@
     @keyframes eopop{from{transform:translateY(5px);opacity:0}to{transform:translateY(0);opacity:1}}
     @keyframes eoswap{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
     @keyframes eoflow{0%{transform:translateX(-110%)}100%{transform:translateX(420%)}}
-    /* "Ask about this page" FAB — collapsed to a small, faded ✦ icon by default; expands to the full pill on hover/focus. */
-    .eo-askfab{opacity:.6;padding:9px;border-radius:50%;transition:opacity .18s ease,padding .2s ease,border-radius .2s ease;}
+    /* "Ask about this page" FAB — collapsed to a small, faded ✦ icon by default; expands to the full pill on hover/focus.
+       Collapsed, the box is content-sized: its width tracks the ✦ glyph's advance (< the 15px font-size) while its
+       height is the line box + padding (15 + 2×9 = 33px). Those differ, so border-radius:50% would render an ellipse.
+       min-width floors the width to the height (33px, border-box) so it stays a true circle; justify-content centers
+       the glyph. On hover the content grows past 33px and the pill expands via padding + the label's max-width. */
+    .eo-askfab{opacity:.6;padding:9px;min-width:33px;justify-content:center;border-radius:50%;transition:opacity .18s ease,padding .2s ease,border-radius .2s ease;}
     .eo-askfab:hover,.eo-askfab:focus-visible{opacity:1;padding:9px 16px 9px 13px;border-radius:22px;}
     .eo-askfab .eo-askfab-lbl{max-width:0;overflow:hidden;opacity:0;white-space:nowrap;transition:max-width .22s ease,opacity .15s ease,margin-left .22s ease;}
     .eo-askfab:hover .eo-askfab-lbl,.eo-askfab:focus-visible .eo-askfab-lbl{max-width:220px;opacity:1;margin-left:8px;}
@@ -680,6 +684,9 @@
             <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;color:var(--ink3);">
               <span style="width:30px;height:30px;border-radius:50%;border:3px solid var(--accline);border-top-color:var(--acc);animation:eospin .8s linear infinite;display:inline-block;box-sizing:border-box;"></span>
               <span style="font-size:13px;">Opening {{ web.host }}…</span>
+              <sc-if value="{{ web.loadingProgress }}" hint-placeholder-val="{{ false }}">
+                <span style="font-size:11.5px;color:var(--ink3);opacity:.85;font-variant-numeric:tabular-nums;">{{ web.loadingProgress }}</span>
+              </sc-if>
             </div>
           </sc-if>
           <sc-if value="{{ web.err }}" hint-placeholder-val="{{ false }}">
@@ -1621,15 +1628,9 @@
                 <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--acc);">The web</span>
                 <span style="font-size:10.5px;color:var(--ink3);">{{ panelProfile.webMeta }}</span>
               </div>
-              <div style="font-size:10.5px;color:var(--ink3);line-height:1.4;margin-bottom:6px;">Drag to pan · ⌘-scroll or +/− to zoom · click a node to open it.</div>
-              <div style="position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px;overflow:hidden;">
+              <div style="font-size:10.5px;color:var(--ink3);line-height:1.4;margin-bottom:6px;">A directed acyclic graph — arrows run in reading order · click a node to open it.</div>
+              <div style="position:relative;background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px;overflow-x:auto;">
                 {{ panelProfile.webViz }}
-                <div style="position:absolute;top:7px;right:7px;display:flex;align-items:center;gap:2px;background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:8px;padding:2px;box-shadow:0 1px 3px rgba(0,0,0,.06);">
-                  <button onclick="{{ panelProfile.onGzOut }}" title="Zoom out" style="width:22px;height:22px;border:none;background:transparent;color:var(--ink2);border-radius:6px;cursor:pointer;font-size:16px;line-height:1;" style-hover="background:#eef0f3">−</button>
-                  <span style="font-size:9.5px;font-weight:700;color:var(--ink3);min-width:30px;text-align:center;">{{ panelProfile.gzLabel }}</span>
-                  <button onclick="{{ panelProfile.onGzIn }}" title="Zoom in" style="width:22px;height:22px;border:none;background:transparent;color:var(--ink2);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3">+</button>
-                  <button onclick="{{ panelProfile.onGzReset }}" title="Reset view" style="width:22px;height:22px;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3">⟲</button>
-                </div>
               </div>
             </div>
           </sc-if>
@@ -1716,7 +1717,7 @@
           <sc-if value="{{ pageOverview.hasWeb }}" hint-placeholder-val="{{ false }}">
             <div style="display:flex;align-items:baseline;gap:7px;margin:16px 0 4px;flex-wrap:wrap;">
               <span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--acc);">The spine</span>
-              <span onclick="{{ pageOverview.onOpenTop }}" style="font-size:10.5px;color:var(--ink3);cursor:pointer;">centred on {{ pageOverview.topLab }} →</span>
+              <span onclick="{{ pageOverview.onOpenTop }}" style="font-size:10.5px;color:var(--ink3);cursor:pointer;">reading-order DAG from {{ pageOverview.topLab }} →</span>
             </div>
             <div style="background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px;">{{ pageOverview.webViz }}</div>
           </sc-if>
@@ -2047,7 +2048,7 @@ class Component extends DCLogic {
       hoverSrc:null, pinSrc:null, openSrc:null, mode:'breadth', direction:'', hoverEnt:null, hoverHref:null, hoverAhead:null, hoverXY:{x:0,y:0}, rev:0, sortMode:'updated',
       llm:true, llmAvail:false, svoBusy:false, svoStatus:'', pasteOpen:false, pasteText:'',
       srcWide:false, srcTab:'page', srcDoc:null, srcLoading:false, srcErr:null, linkMode:savedLink==='0'?false:true, linkChoice:null,
-      viewUrl:null, detect:true, pageDoc:null, bookView:false, pageLoading:false, pageErr:null, rightOpen:true, panelSel:null, panelLens:null, panelMode:'overview', previewWiki:null, memOpen:false, memTab:'sources', memExpand:null,
+      viewUrl:null, detect:true, pageDoc:null, bookView:false, pageLoading:false, pageBytes:0, pageTotal:0, pageErr:null, rightOpen:true, panelSel:null, panelLens:null, panelMode:'overview', previewWiki:null, memOpen:false, memTab:'sources', memExpand:null,
       // The "+" new-tab surface: a blank tab with nothing chosen yet, offering the three
       // kinds a tab can be — a chat, a live website, or a page in reader view. Set by newTab()
       // and cleared the moment a destination is picked (a URL, a chat, an entity, a book).
@@ -2576,7 +2577,7 @@ class Component extends DCLogic {
     n=n||3;
     const page=1+Math.floor(Math.random()*40);
     let data;
-    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent('https://gutendex.com/books/?languages=en&page='+page));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
+    try{const r=await this.proxyFetch('https://gutendex.com/books/?languages=en&page='+page);if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
     catch(e){return [];}
     const books=this._gutenBooks(data);
     for(let i=books.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));const t=books[i];books[i]=books[j];books[j]=t;}
@@ -2698,7 +2699,50 @@ class Component extends DCLogic {
     return {title,text:this.paras(t).replace(/<[^>]*>/g,' ').replace(/\[(?:\d+|citation needed|edit)\]/gi,'').slice(0,60000),image:null};
   }
   paras(t){ return String(t||'').split(/\n\s*\n/).map(p=>this.norm(p.replace(/\n/g,' '))).filter(p=>p.length>2).join('\n'); }
-  async fetchPage(url){const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(url));if(!r.ok)throw new Error('HTTP '+r.status);const html=await r.text();if(html.trim().length<60)throw new Error('empty page');if(/<title>\s*(?:just a moment|attention required|access denied|verify you are human|are you a robot|enable javascript|please wait\b|checking your browser)/i.test(html))throw new Error('blocked by anti-bot check');return this.extract(html,r.headers.get('content-type')||'',url);}
+  // Every live-web read funnels through the feed proxy. It used to do so with a bare fetch() —
+  // no timeout, no retry, no fallback — so a slow or hung proxy connection stranded the UI on
+  // "Fetching…" indefinitely (the network tab shows a request that never settles), and a single
+  // transient hiccup surfaced as a hard failure. proxyFetch hardens every proxied read:
+  //  · a hard TIMEOUT (AbortController) cuts a stalled connection loose instead of hanging forever;
+  //  · a few RETRIES with backoff ride out a transient network drop or a 5xx/429 from the proxy;
+  //  · on the last attempt it ROTATES to a public CORS fallback so a fully-down primary proxy still
+  //    has a chance. Returns a real Response, so callers keep using .ok / .status / .headers /
+  //    .text() / .body exactly as before. A caller-supplied `signal` (user cancel) is honoured and,
+  //    unlike a timeout, is never retried.
+  _proxyUrls(target){
+    const u=encodeURIComponent(target);
+    return [
+      this.PROXY+'/feed?url='+u,                 // primary — the reader's own feed proxy
+      'https://corsproxy.io/?url='+u,            // fallbacks, only reached after the primary fails
+      'https://api.allorigins.win/raw?url='+u,
+    ];
+  }
+  async proxyFetch(target,{timeout=25000,retries=2,signal=null,init=null}={}){
+    const urls=this._proxyUrls(target);
+    let lastErr=null;
+    for(let attempt=0;attempt<=retries;attempt++){
+      const url=urls[Math.min(attempt,urls.length-1)];
+      const ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+      const relay=()=>{try{ctrl&&ctrl.abort();}catch(e){}};
+      if(signal&&ctrl){ if(signal.aborted)relay(); else signal.addEventListener('abort',relay); }
+      const timer=(ctrl&&timeout)?setTimeout(relay,timeout):null;
+      try{
+        const r=await fetch(url,{...(init||{}),...(ctrl?{signal:ctrl.signal}:{})});
+        if(timer)clearTimeout(timer); if(signal)signal.removeEventListener('abort',relay);
+        // A 5xx or 429 from a proxy is transient — retry it; hand back 4xx and success as-is.
+        if((r.status>=500||r.status===429)&&attempt<retries){lastErr=new Error('HTTP '+r.status);await this.sleep(400*(attempt+1));continue;}
+        return r;
+      }catch(e){
+        if(timer)clearTimeout(timer); if(signal)signal.removeEventListener('abort',relay);
+        // A caller-initiated cancel is final; a timeout/network fault falls through to a retry.
+        if(signal&&signal.aborted)throw e;
+        lastErr=e;
+        if(attempt<retries){await this.sleep(400*(attempt+1));continue;}
+      }
+    }
+    throw lastErr||new Error('proxy fetch failed');
+  }
+  async fetchPage(url){const r=await this.proxyFetch(url);if(!r.ok)throw new Error('HTTP '+r.status);const html=await r.text();if(html.trim().length<60)throw new Error('empty page');if(/<title>\s*(?:just a moment|attention required|access denied|verify you are human|are you a robot|enable javascript|please wait\b|checking your browser)/i.test(html))throw new Error('blocked by anti-bot check');return this.extract(html,r.headers.get('content-type')||'',url);}
   // Candidate URLs for a query — the entry point both research paths (the ✦ button and the
   // chat research mode) walk from. PRIMARY: DuckDuckGo's HTML endpoint via the proxy. FALLBACK:
   // Wikipedia's search API, which is CORS-direct (no proxy) through _wikiJSON. A research walk
@@ -2714,7 +2758,7 @@ class Component extends DCLogic {
     return out;
   }
   async _searchDDG(query,n){
-    const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent('https://html.duckduckgo.com/html/?q='+encodeURIComponent(query)));
+    const r=await this.proxyFetch('https://html.duckduckgo.com/html/?q='+encodeURIComponent(query));
     if(!r.ok)throw new Error('HTTP '+r.status);
     const doc=new DOMParser().parseFromString(await r.text(),'text/html');const out=[];
     const grab=a=>{let h=a.getAttribute&&a.getAttribute('href');if(!h)return;const m=h.match(/[?&]uddg=([^&]+)/);if(m)h=decodeURIComponent(m[1]);if(/^https?:\/\//i.test(h)&&!/duckduckgo\.com/i.test(h))out.push(h);};
@@ -4521,6 +4565,17 @@ class Component extends DCLogic {
     this.setState(s=>({...patch,histRev:(s.histRev||0)+1}),()=>this._syncDocDock());
     this._scrollMainTop();
   }
+  // Fork a document at a chosen revision (from the History view): the surface
+  // hands us the state at that point as a seed; we register it as a brand-new
+  // document and open it in its own tab. The original is untouched — forking only
+  // ever adds a document, never edits the one you forked from.
+  _forkDoc(seedDoc,meta){
+    if(!seedDoc)return;
+    const docs=this._docsMap();
+    const id='doc:fork:'+(this._forkN=(this._forkN||0)+1)+':'+(Date.now?Date.now():0);
+    docs.set(id,{id,title:seedDoc.title||'Untitled document (fork)',log:null,seed:seedDoc});
+    this.openDoc(id);
+  }
   // Keep the doc dock showing the active document; hide it when another tab is up.
   // Cheap on every update — only (re)mounts when the active doc id actually changes.
   _syncDocDock(){
@@ -4552,6 +4607,7 @@ class Component extends DCLogic {
       author:'you',
       onChange:(log)=>{ const rec=this._docsMap().get(id); if(rec)rec.log=log; this._onDocChanged(id); },
       onTitle:(t)=>{ const rec=this._docsMap().get(id); if(rec)rec.title=t; this.setState(s=>({histRev:(s.histRev||0)+1})); },
+      onFork:(seedDoc,meta)=>this._forkDoc(seedDoc,meta),
       onClose:()=>this.closeDocTab(id),
     });
     this._docMountedId=id;
@@ -7625,7 +7681,7 @@ class Component extends DCLogic {
   async searchGutenberg(query){
     const api='https://gutendex.com/books/?search='+encodeURIComponent(query);
     let data;
-    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(api));if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
+    try{const r=await this.proxyFetch(api);if(!r.ok)throw new Error('HTTP '+r.status);data=JSON.parse(await r.text());}
     catch(e){this.feedLine('warn','Gutenberg search failed — '+(e&&e.message||e));return [];}
     return this._gutenBooks(data).slice(0,16);
   }
@@ -7701,7 +7757,7 @@ class Component extends DCLogic {
     this.setState({gutenReading:book.id});
     this.feedSep('Project Gutenberg');this.feedLine('read','Fetching “'+book.title+'”…');
     let text;
-    try{const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(book.txtUrl));if(!r.ok)throw new Error('HTTP '+r.status);text=await r.text();}
+    try{const r=await this.proxyFetch(book.txtUrl,{timeout:60000});if(!r.ok)throw new Error('HTTP '+r.status);text=await r.text();}
     catch(e){this.feedLine('warn','Could not fetch the book — '+(e&&e.message||e));this.setState({gutenReading:null});return;}
     const meta=this.bookMeta(book,text);                   // read title/author/date from the raw header
     text=this.stripGutenberg(text);
@@ -7897,26 +7953,40 @@ class Component extends DCLogic {
   // entity. Real names ("Thornbank", "Vela") appear mid-sentence or never lowercase.
   capIndex(){
     if(this._capIdx&&this._capIdxRev===this.state.rev)return this._capIdx;
-    const lower=new Set(),capMid=new Set();
+    const lower=new Set(),capMid=new Set(),lc=new Map(),cm=new Map();
+    const bump=(m,k)=>m.set(k,(m.get(k)||0)+1);
     const sents=(this.master&&this.master.sentences)||[];
     for(const s of sents){
       const toks=String(s).split(/\s+/); let pos=0;
       for(const raw of toks){
         const w=raw.replace(/^[^A-Za-z]+|[^A-Za-z]+$/g,''); if(!w){pos++;continue;}
-        if(/^[a-z][a-z]+$/.test(w))lower.add(w);
-        else if(/^[A-Z][a-z]+$/.test(w)&&pos>0)capMid.add(w);
+        // Count each token's CASE, not just presence: a real name is almost always
+        // capitalized, a common word almost always lowercase, and in a long book the
+        // rare mid-sentence capital ("he said, 'Good.'") should not outweigh hundreds of
+        // lowercase uses. strayCapital reads these counts as a signal/noise ratio.
+        if(/^[a-z][a-z]+$/.test(w)){lower.add(w);bump(lc,w);}
+        else if(/^[A-Z][a-z]+$/.test(w)&&pos>0){capMid.add(w);bump(cm,w.toLowerCase());}
         pos++;
       }
     }
-    this._capIdx={lower,capMid};this._capIdxRev=this.state.rev;return this._capIdx;
+    this._capIdx={lower,capMid,lc,cm};this._capIdxRev=this.state.rev;return this._capIdx;
   }
   strayCapital(id){
     const lab=this.labelOf(id); if(!lab||/\s/.test(lab))return false;            // multiword names stand
     const w=lab.replace(/[^A-Za-z]/g,''); if(!w||!/^[A-Z][a-z]+$/.test(w))return false;
-    const {lower,capMid}=this.capIndex();
-    if(capMid.has(w))return false;                                              // seen capitalized mid-sentence → a real name
     const lw=w.toLowerCase();
-    return lower.has(lw)||this.COMMON_OPENER.has(lw);                            // positional capital of a common word → drop
+    if(this.COMMON_OPENER.has(lw))return true;                                  // a known positional adjective → drop
+    const {lc,cm}=this.capIndex();
+    const lowerN=lc.get(lw)||0, capN=cm.get(lw)||0;
+    if(lowerN===0)return false;                                                 // never lowercase in the corpus → a real name
+    // Signal from noise by CASE DOMINANCE. A real name is nearly always capitalized
+    // ("Pierre" is never "pierre"); a common word capitalized only because it opened a
+    // sentence — or landed after a quote — is mostly lowercase ("having", "good", "men").
+    // The old test let ANY single mid-sentence capital rescue such a word, so a 3 MB novel
+    // admitted "Good"/"Men"/"Come" as entities. Now the word is dropped when its lowercase
+    // use dominates (≥2×) its mid-sentence capital use — the threshold that, on War and
+    // Peace, drops the openers while keeping every real character (all of whom are 0× lowercase).
+    return lowerN>=capN*2;
   }
   weightOf(e){return e?(Math.log(1+(e.sightings||1))+(this.incident.get(e.id)||0)):0;}
   edgesOf(id){return this.graph.edges.filter(e=>(e.from===id||e.to===id)&&e.from!==e.to);}
@@ -7939,14 +8009,21 @@ class Component extends DCLogic {
     const nSent=(scoped?hi-lo+1:this.master.sentences.length)||1;
     const inScope=i=>!scoped||(i>=lo&&i<=hi&&ss[i]===url);
     const mentions=new Map();
-    for(const id of g.entities.keys()){const m=this.mentionsOf(id).filter(inScope).map(i=>scoped?i-lo:i);if(m.length)mentions.set(id,m);}
+    // Weave only REAL entities — the storylines panel used to walk every projected id, so a
+    // stray capital ("Good", "Men", "Having") rode in as a thread. Route it through the same
+    // signal/noise gate (showable → strayCapital) the rest of the reader uses.
+    for(const id of g.entities.keys()){if(!this.showable(id))continue;const m=this.mentionsOf(id).filter(inScope).map(i=>scoped?i-lo:i);if(m.length)mentions.set(id,m);}
     const nest=(this.E&&this.E.referentNesting)?this.E.referentNesting({mentions,units:nSent},g):null;
     if(!nest)return null;
     const STOP=new Set(['french','russian','german','english','austrian','come','go','though','well','yes','no','oh','god']);
-    const isArt=id=>/^(chapter|book|part|volume)\b/i.test(id)||/^[ivxlc]+$/i.test(id)||STOP.has(id);
+    // Test the LABEL, not the entity id (a hash) — the old isArt(r.id) compared a hash to
+    // words/roman numerals and so never matched, which is a second reason the STOP list
+    // (demonyms, interjections) never bit. A demonym like "French" is always capitalized so
+    // showable keeps it; the STOP list is what drops it from the storyline weave.
+    const isArt=r=>{const l=String(r.label||'').toLowerCase();return /^(chapter|book|part|volume)\b/i.test(l)||/^[ivxlc]+$/i.test(l)||STOP.has(l);};
     // A single source is shorter than the whole spine, so its recurrence floor is lower.
     const MIN=scoped?4:8;
-    const pop=nest.referents.filter(r=>r.count>=MIN&&!isArt(r.id)).sort((a,b)=>b.count-a.count).slice(0,60);
+    const pop=nest.referents.filter(r=>r.count>=MIN&&!isArt(r)).sort((a,b)=>b.count-a.count).slice(0,60);
     if(pop.length<3)return null;
     const bins=120,DARK=['#3987e5','#199e70','#c98500','#008300','#9085e9','#e66767','#d55181','#d95926'],OTHER='#57647e';
     const threads=pop.map(r=>{
@@ -8242,90 +8319,105 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       acc.push(h('text',{key:'lt'+i,x:23,y:yy,style:{fontSize:'10px',fontWeight:'600',fill:'#7a8089'}},t));return acc;},legTail)));
     return h('svg',{viewBox:'0 0 '+W+' '+H,preserveAspectRatio:'xMidYMid meet',style:{display:'block',width:'100%',height:'auto',maxHeight:'60vh'}},layers);
   }
-  // Compact neighbourhood DAG for the side panel — same grammar as egoGraph
-  // (grain-coloured directed edges, arrowheads read subject → object, click to
-  // pivot) but tuned for ~300px.
-  egoGraphMini(sel,nbrs){
+  // The relations DAG — a referent and its neighbourhood as a LAYERED directed acyclic
+  // graph, not a radial ring. The focus referent is the source; edges run OUT to its
+  // relations, and between two relations by reading order (whoever is introduced first
+  // leads to whom). Every edge respects a strict order (root first, then first-mention),
+  // so the graph is acyclic by construction — a genuine DAG, laid out left→right in
+  // longest-path layers. This is the referent weave read as a partial order
+  // (docs/referent-journey.md: "containment is a partial order (a DAG), not a tree").
+  relDag(sel,nbrs,opts){
+    opts=opts||{};
     const h=React.createElement;
-    const lab=this.labelOf(sel),hov=this.state.hoverEnt;
+    const compact=!!opts.compact;
+    const lab=this.labelOf(sel), hov=this.state.hoverEnt;
     const GRAINC={Ground:'#2f6f9e',Figure:'#b06f2a',Pattern:'#2f7d54'};
+    const firstOf=(id)=>{let f=(this.master&&this.master.entFirstSent&&this.master.entFirstSent[id]);
+      if(f==null){const m=this.mentionsOf(id);f=m.length?Math.min.apply(null,m):1e9;}return f;};
+    const MAXN=compact?8:12;
     const all=(nbrs||[]).filter(n=>n&&n.id!=null&&!this.isURLish(this.labelOf(n.id)));
-    const MAXN=10,extra=Math.max(0,all.length-MAXN);
-    const dirs=this.dirSplit(sel);
-    const real=all.slice(0,MAXN).map(n=>{const d=dirs.get(n.id)||{inW:0,outW:1,inOps:new Map(),outOps:new Map()};
-      const incoming=d.inW>d.outW;
-      let op=null,opN=0;((incoming?d.inOps:d.outOps)||new Map()).forEach((v,k)=>{if(v>opN){opN=v;op=k;}});
-      return{label:this.labelOf(n.id),id:n.id,w:Math.max(0.001,n.w||1),grain:n.grain||'Figure',
-        incoming,mutual:d.inW>1e-3&&d.outW>1e-3,op,glyph:this.opGlyph(op)};});
+    const extra=Math.max(0,all.length-MAXN);
+    const real=all.slice(0,MAXN).map(n=>({id:n.id,label:this.labelOf(n.id),w:Math.max(0.001,n.w||1),grain:n.grain||'Figure',first:firstOf(n.id)}));
     if(!real.length)return null;
-    const left=real.filter(n=>n.incoming),right=real.filter(n=>!n.incoming);
-    const tierSort=(a,b)=>(this.opTier(a.op)-this.opTier(b.op))||(b.w-a.w);
-    left.sort(tierSort);right.sort(tierSort);
-    const rows=Math.max(left.length,right.length,1);
-    const W=300,cx=W/2,GAP=46,CR=24;
-    const H=Math.max(150,rows*GAP+56),cy=H/2+4;
     const wmax=Math.max.apply(null,real.map(n=>n.w).concat([1]));
-    const place=(col,x)=>col.forEach((nd,i)=>{nd._x=x;nd._y=cy+(i-(col.length-1)/2)*GAP;
-      nd._r=Math.max(11,Math.min(17,10+Math.sqrt(nd.w/wmax)*7));});
-    place(left,66);place(right,W-66);const ccx=left.length?(right.length?cx:W-66-64):(right.length?66+64:cx);
-    const anyHover=real.some(n=>n.id===hov),cc=this.hashColor(lab),layers=[];
-    // Track content bounds as we draw, then fit the viewBox around them so
-    // labels never clip the card edge.
-    let minX=0,maxX=W,minY=0,maxY=H;
+    // nodes: 0 = focus (root), 1.. = neighbours
+    const nodes=[{id:sel,label:lab,root:true,grain:'Figure',w:wmax,first:firstOf(sel)}]
+      .concat(real.map(n=>({id:n.id,label:n.label,root:false,grain:n.grain,w:n.w,first:n.first})));
+    const nidx=new Map(nodes.map((n,i)=>[n.id,i]));
+    const nodeIds=new Set(real.map(n=>n.id));
+    // bonds among the neighbours themselves, read off the live graph
+    const bond=new Set();
+    try{for(const e of this.graph.edges){const a=e.from,b=e.to;if(a==null||b==null||a===b)continue;
+      if(nodeIds.has(a)&&nodeIds.has(b))bond.add(a<b?a+'|'+b:b+'|'+a);}}catch(_e){}
+    // edges: root→neighbour, plus neighbour→neighbour oriented by first-mention
+    const edges=[];
+    real.forEach(n=>edges.push({a:0,b:nidx.get(n.id),rel:false,grain:n.grain,w:n.w}));
+    for(let i=0;i<real.length;i++)for(let j=i+1;j<real.length;j++){const A=real[i],B=real[j];
+      const key=A.id<B.id?A.id+'|'+B.id:B.id+'|'+A.id;if(!bond.has(key))continue;
+      const u=(A.first<=B.first)?A:B, v=(A.first<=B.first)?B:A;
+      edges.push({a:nidx.get(u.id),b:nidx.get(v.id),rel:true,grain:v.grain,w:1});}
+    // Layer by READING ORDER: the root is column 0; the neighbours fan out left→right in
+    // the order the text introduces them, split into a few columns so the graph reads as a
+    // flow rather than one tall fan. A bond edge (earlier→later) is then always rightward,
+    // and the whole thing stays acyclic.
+    const nbIdx=real.map((_n,i)=>i+1);
+    const byFirst=nbIdx.slice().sort((x,y)=>nodes[x].first-nodes[y].first||x-y);
+    const COLS=Math.min(4,Math.max(1,Math.ceil(byFirst.length/3)));
+    const perCol=Math.max(1,Math.ceil(byFirst.length/COLS));
+    const layer=nodes.map(()=>0);
+    byFirst.forEach((ni,rank)=>{layer[ni]=1+Math.floor(rank/perCol);});
+    for(let pass=0;pass<real.length;pass++){let ch=false;
+      edges.forEach(ed=>{if(ed.rel&&layer[ed.b]<=layer[ed.a]){layer[ed.b]=layer[ed.a]+1;ch=true;}});if(!ch)break;}
+    const nLayers=Math.max.apply(null,layer)+1;
+    const byLayer=[];for(let l=0;l<nLayers;l++)byLayer.push([]);
+    nodes.forEach((n,i)=>byLayer[layer[i]].push(i));
+    byLayer.forEach(arr=>arr.sort((x,y)=>nodes[x].first-nodes[y].first||x-y));
+    // positions: column per layer, rows centred within a layer
+    const xGap=compact?96:158, rowH=compact?44:60, marginX=compact?34:64;
+    const pos=nodes.map(()=>({x:0,y:0,r:0}));
+    byLayer.forEach((arr,l)=>{const cnt=arr.length;arr.forEach((i,slot)=>{const n=nodes[i];
+      pos[i].x=marginX+l*xGap;pos[i].y=(slot-(cnt-1)/2)*rowH;
+      pos[i].r=n.root?(compact?22:32):Math.max(compact?12:15,Math.min(compact?18:26,(compact?11:14)+Math.sqrt((n.w||1)/wmax)*(compact?7:12)));});});
+    const hovInSet=nodes.some(n=>n.id===hov);
+    const layers=[];
+    let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9;
     const fit=(x0,y0,x1,y1)=>{if(x0<minX)minX=x0;if(x1>maxX)maxX=x1;if(y0<minY)minY=y0;if(y1>maxY)maxY=y1;};
-    const spread=(i,n)=>n<2?0:((i/(n-1))-0.5)*2*Math.min(15,(n-1)*6);
-    const midGlyph=(key,px,py,nd,faded)=>{if(!nd.glyph)return [];
-      const tri=this.opTriad(nd.op),line=tri?tri[0]:(GRAINC[nd.grain]||GRAINC.Figure),fill=tri?tri[1]:'#fff';
-      return[h('circle',{key:key+'gc',cx:px,cy:py,r:8,fill,stroke:line,strokeWidth:1,opacity:faded?0:0.97}),
-        h('text',{key:key+'g',x:px,y:py+3,textAnchor:'middle',
-          style:{fontSize:'8.5px',fontWeight:'700',fill:line,fontFamily:'ui-monospace,Menlo,Consolas,monospace',pointerEvents:'none'},opacity:faded?0:1},nd.glyph)];};
-    left.forEach((nd,i)=>{const on=nd.id===hov,faded=anyHover&&!on,gc=GRAINC[nd.grain]||GRAINC.Figure;
-      const oy=spread(i,left.length),ex=ccx-Math.sqrt(Math.max(1,(CR+1)*(CR+1)-oy*oy)),ey=cy+oy;
-      const sx=nd._x+nd._r,[px,py]=this._dagPointAt(sx,nd._y,ex,ey,0.34);
-      layers.push(h('g',{key:'eL'+i,style:{pointerEvents:'none'}},
-        this._dagEdge('eL'+i,sx,nd._y,ex,ey,{color:on?'#8a531e':gc,w:on?2.6:1+(nd.w/wmax)*1.8,op:faded?0.12:0.55,back:nd.mutual,alen:7,awid:3.2})
-        .concat(midGlyph('eL'+i,px,py,nd,faded))));});
-    right.forEach((nd,i)=>{const on=nd.id===hov,faded=anyHover&&!on,gc=GRAINC[nd.grain]||GRAINC.Figure;
-      const oy=spread(i,right.length),sx=ccx+Math.sqrt(Math.max(1,(CR+1)*(CR+1)-oy*oy)),sy=cy+oy;
-      const ex=nd._x-nd._r,[px,py]=this._dagPointAt(sx,sy,ex,nd._y,0.66);
-      layers.push(h('g',{key:'eR'+i,style:{pointerEvents:'none'}},
-        this._dagEdge('eR'+i,sx,sy,ex,nd._y,{color:on?'#8a531e':gc,w:on?2.6:1+(nd.w/wmax)*1.8,op:faded?0.12:0.55,back:nd.mutual,alen:7,awid:3.2})
-        .concat(midGlyph('eR'+i,px,py,nd,faded))));});
-    const node=(nd,i,side)=>{const on=nd.id===hov,faded=anyHover&&!on,c=this.hashColor(nd.label);
-      const anchor=side<0?'end':'start',lx=side<0?nd._x-nd._r-5:nd._x+nd._r+5,ly=nd._y+3;
-      const name=this.truncLabel(nd.label,16),tw=name.length*5.3+8;
-      const hx=anchor==='start'?lx-4:lx-tw+4;
-      fit(nd._x-nd._r,nd._y-nd._r,nd._x+nd._r,nd._y+nd._r);
-      fit(hx,ly-9,hx+tw,ly+4);
+    // edges (under the nodes), each with a drawn arrowhead at the target
+    edges.forEach((ed,i)=>{const A=pos[ed.a],B=pos[ed.b];
+      const dx=B.x-A.x,dy=B.y-A.y,len=Math.hypot(dx,dy)||1,ux=dx/len,uy=dy/len,gap=(compact?5:7);
+      const sx=A.x+ux*A.r,sy=A.y+uy*A.r,ex=B.x-ux*(B.r+gap),ey=B.y-uy*(B.r+gap);
+      const mx=(sx+ex)/2,my=(sy+ey)/2,curv=((ed.b%2)?1:-1)*(compact?7:12);
+      const cxp=mx-uy*curv,cyp=my+ux*curv;
+      const col=ed.rel?'#b9c0ca':(GRAINC[nodes[ed.b].grain]||GRAINC.Figure);
+      const on=(nodes[ed.a].id===hov)||(nodes[ed.b].id===hov),faded=hovInSet&&!on;
+      const w=on?(compact?2.4:3):(ed.rel?(compact?1:1.2):(compact?1.3:1.5)+(ed.w/wmax)*(compact?1.3:2.2));
+      layers.push(h('path',{key:'e'+i,d:'M '+sx+' '+sy+' Q '+cxp+' '+cyp+' '+ex+' '+ey,fill:'none',
+        stroke:on?'#8a531e':col,strokeLinecap:'round',strokeWidth:w,opacity:faded?0.12:0.6}));
+      const tdx=ex-cxp,tdy=ey-cyp,tl=Math.hypot(tdx,tdy)||1,tux=tdx/tl,tuy=tdy/tl;
+      const ah=compact?5:7,aw=compact?3:4,bxp=ex-tux*ah,byp=ey-tuy*ah,px=-tuy,py=tux;
+      layers.push(h('polygon',{key:'a'+i,points:ex+','+ey+' '+(bxp+px*aw)+','+(byp+py*aw)+' '+(bxp-px*aw)+','+(byp-py*aw),
+        fill:on?'#8a531e':col,opacity:faded?0.12:0.72}));});
+    // nodes (root emphasised); labels sit below so columns never collide
+    nodes.forEach((n,i)=>{const p=pos[i],on=n.id===hov,faded=hovInSet&&!on,c=this.hashColor(n.label);
+      fit(p.x-p.r,p.y-p.r,p.x+p.r,p.y+p.r);
+      const name=this.truncLabel(n.label,compact?14:20),ly=p.y+p.r+(compact?11:14),tw=name.length*(compact?5.2:6)+8;
+      fit(p.x-tw/2,ly-(compact?9:11),p.x+tw/2,ly+4);
       const els=[];
-      if(on)els.push(h('circle',{key:'h',cx:nd._x,cy:nd._y,r:nd._r+4,fill:'none',stroke:c,strokeWidth:1.4,opacity:0.4}));
-      els.push(h('circle',{key:'cf',cx:nd._x,cy:nd._y,r:nd._r,fill:c,opacity:0.12}));
-      els.push(h('circle',{key:'c',cx:nd._x,cy:nd._y,r:nd._r,fill:'none',stroke:c,strokeWidth:on?2.4:1.6}));
-      els.push(h('text',{key:'in',x:nd._x,y:nd._y+3.5,textAnchor:'middle',style:{fontSize:'10px',fontWeight:'700',fill:c,pointerEvents:'none'}},this.initials(nd.label)));
-      els.push(h('rect',{key:'lh',x:hx,y:ly-9,width:tw,height:13,rx:4,fill:'#fff',opacity:faded?0:0.82}));
-      els.push(h('text',{key:'ln',x:lx,y:ly,textAnchor:anchor,style:{fontSize:'9.5px',fontWeight:on?'700':'600',fill:'#33373d',pointerEvents:'none'}},name));
-      layers.push(h('g',{key:(side<0?'nL':'nR')+i,style:{cursor:'pointer',opacity:faded?0.32:1,transition:'opacity .15s ease'},
-        onClick:()=>this.clickEntity(nd.id),onMouseEnter:(ev)=>this.panelNodeHover(nd.id,ev),onMouseLeave:()=>this.panelNodeLeave()},els));};
-    left.forEach((nd,i)=>node(nd,i,-1));
-    right.forEach((nd,i)=>node(nd,i,1));
-    layers.push(h('g',{key:'center'},[
-      h('circle',{key:'cf',cx:ccx,cy,r:CR,fill:cc,opacity:0.1}),
-      h('circle',{key:'cr',cx:ccx,cy,r:CR,fill:'none',stroke:cc,strokeWidth:2.2}),
-      h('text',{key:'ci',x:ccx,y:cy+5,textAnchor:'middle',style:{fontSize:'12px',fontWeight:'800',fill:cc,pointerEvents:'none'}},this.initials(lab))
-    ]));
-    // The columns are capped at MAXN; the remainder lives in the full explorer below.
-    if(extra>0){layers.push(h('text',{key:'more',x:cx,y:maxY+13,textAnchor:'middle',
-      style:{fontSize:'9px',fontWeight:'700',fill:'#9aa1ab',letterSpacing:'.03em',pointerEvents:'none'}},'+'+extra+' more'));maxY+=16;}
-    // Grow the viewBox to wrap all content with a small margin, so labels never
-    // clip no matter how long they are. Handlers read this._gvb to stay consistent.
-    const pad=8,vbx=minX-pad,vby=minY-pad,vbw=(maxX-minX)+pad*2,vbh=(maxY-minY)+pad*2;
-    this._gvb={x:vbx,y:vby,w:vbw,h:vbh};
-    const gz=this.state.gz||{k:1,x:0,y:0};
-    const stage=h('g',{key:'stage',transform:'translate('+gz.x+' '+gz.y+') scale('+gz.k+')'},layers);
+      if(on)els.push(h('circle',{key:'h',cx:p.x,cy:p.y,r:p.r+(compact?4:5),fill:'none',stroke:c,strokeWidth:1.4,opacity:0.4}));
+      els.push(h('circle',{key:'cf',cx:p.x,cy:p.y,r:p.r,fill:c,opacity:n.root?0.14:0.1}));
+      els.push(h('circle',{key:'c',cx:p.x,cy:p.y,r:p.r,fill:'none',stroke:c,strokeWidth:n.root?(compact?2.4:2.8):(on?2.2:1.6)}));
+      els.push(h('text',{key:'in',x:p.x,y:p.y+(compact?3.5:4),textAnchor:'middle',style:{fontSize:(n.root?(compact?12:15):(compact?9.5:12))+'px',fontWeight:'800',fill:c,pointerEvents:'none'}},this.initials(n.label)));
+      els.push(h('rect',{key:'lh',x:p.x-tw/2,y:ly-(compact?9:11),width:tw,height:compact?13:15,rx:4,fill:'#fff',opacity:faded?0:0.82}));
+      els.push(h('text',{key:'ln',x:p.x,y:ly,textAnchor:'middle',style:{fontSize:(compact?9:11)+'px',fontWeight:(n.root||on)?'700':'600',fill:n.root?c:'#33373d',pointerEvents:'none'}},name));
+      const onEnter=compact?((ev)=>this.panelNodeHover(n.id,ev)):((ev)=>this.entHover(n.id,ev));
+      const onLeave=compact?(()=>this.panelNodeLeave()):(()=>this.entLeave());
+      layers.push(h('g',{key:'n'+i,style:{cursor:'pointer',opacity:faded?0.32:1,transition:'opacity .15s ease'},
+        onClick:()=>this.clickEntity(n.id),onMouseEnter:onEnter,onMouseLeave:onLeave},els));});
+    if(extra>0){const ey2=maxY+(compact?12:15);layers.push(h('text',{key:'more',x:(minX+maxX)/2,y:ey2,textAnchor:'middle',
+      style:{fontSize:(compact?9:10)+'px',fontWeight:'700',fill:'#9aa1ab',letterSpacing:'.03em',pointerEvents:'none'}},'+'+extra+' more in the record'));maxY=ey2+4;}
+    const pad=compact?9:12,vbx=minX-pad,vby=minY-pad,vbw=(maxX-minX)+pad*2,vbh=(maxY-minY)+pad*2;
     return h('svg',{viewBox:vbx+' '+vby+' '+vbw+' '+vbh,preserveAspectRatio:'xMidYMid meet',
-      onPointerDown:e=>this.gzDown(e),
-      ref:el=>{if(el&&!el.__wb){el.__wb=true;el.addEventListener('wheel',this._gzWheel,{passive:false});}},
-      style:{display:'block',width:'100%',height:'auto',cursor:this._gzDrag?'grabbing':'grab',touchAction:'none'}},[stage]);
+      style:{display:'block',width:'100%',height:'auto',maxHeight:compact?'none':'56vh'}},layers);
   }
   setLens(l){this.setState({panelLens:l});}
   panelNodeHover(id,ev){clearTimeout(this._pivotT);this._hovEnt=id;const st={hoverEnt:id,hoverHref:null,hoverAhead:null};const x=(ev&&ev.clientX!=null)?ev.clientX:null,y=(ev&&ev.clientY!=null)?ev.clientY:null;if(x!=null)st.hoverXY={x,y};this.setState(st);if(x!=null)this._startCardWatch(x,y);}
@@ -8617,7 +8709,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
         barStyle:'height:3px;border-radius:2px;margin-top:4px;background:'+this.hashColor(nl)+';width:'+Math.max(8,Math.round(n/maxN*100))+'%;',
         onSelect:()=>this.clickEntity(eid),onEnter:ev=>this.entHover(eid,ev),onLeave:()=>this.entLeave()};});
     const topId=ranked.length?ranked[0].eid:null;
-    const webViz=topId?this.egoGraphMini(topId,this.neighbors(topId),{}):null;
+    const webViz=topId?this.relDag(topId,this.neighbors(topId),{compact:true}):null;
     const c=this.hashColor(this.short(url)),fmtDate=ts=>{try{return new Date(ts).toLocaleDateString([],{month:'short',day:'numeric'});}catch(e){return '';}};
     return {title:p.title,host:this.short(url),url,when:fmtDate(p.ts),
       av:this.short(url).slice(0,2).toUpperCase(),
@@ -8917,7 +9009,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     // api.php (origin=*) are CORS-open, but THIS preview frame blocks cross-origin fetch,
     // so on failure we fall back to the very same proxy the reader uses for page fetches.
     try{ const r=await fetch(url,{headers:{accept:'application/json'}}); if(r.ok) return await r.json(); }catch(e){}
-    const r2=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(url));
+    const r2=await this.proxyFetch(url);
     if(!r2.ok) throw new Error('HTTP '+r2.status);
     const txt=await r2.text();
     try{ return JSON.parse(txt); }catch(e){ throw new Error('non-JSON from proxy'); }
@@ -9828,7 +9920,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     const linksMore=Math.max(0,nbrs.filter(n=>!this.isURLish(this.labelOf(n.id))).length-nbrShown.length);
     const lr=this.state.liveResearch||{},researching=!!(lr.on&&lr.focal===id),justDone=(!lr.on&&lr.focal===id&&lr.phase==='done');
     const researchMsg=researching?(lr.phase==='read'?('Reading '+(lr.host||'a new source')+'…'):('Searching the web for more on '+lab+'…')):(justDone?((lr.addedFocal>0)?('Added '+lr.addedFocal+' new line'+(lr.addedFocal!==1?'s':'')+' about '+lab+(lr.srcFocal>0?(' · +'+lr.srcFocal+' source'+(lr.srcFocal!==1?'s':'')):'')+'.'):('Read '+(lr.added||0)+' lines into memory — but nothing new about '+lab+' yet. The new sources were about something else.')):'');
-    const webViz=this.egoGraphMini(id,nbrs);
+    const webViz=this.relDag(id,nbrs,{compact:true});
     const lens=this.lensBlock(id,vu,leadDef,leadCites);
     return {name:lab,av:this.initials(lab),avStyle:this.avatar(lab,40),avStyleSm:this.avatar(lab,30),
       webViz:webViz, hasWeb:!!webViz, webMeta:nbrs.filter(n=>!this.isURLish(this.labelOf(n.id))).length+' connected', lens:lens,
@@ -10226,8 +10318,16 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     // so it always loads native until the read finishes (processPage re-renders it).
     const read=this.pageOf(url);if(this._bookReady(read)&&this.state.viewMode!=='native'){this._renderBook(url,read);return;}
     if(this._pageUrl===url&&this.state.pageDoc&&!this.state.bookView)return;
-    this._pageUrl=url;this.setState({bookView:false,pageLoading:true,pageDoc:null,pageErr:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false});
-    fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);const ctype=r.headers.get('content-type')||'';return r.text().then(text=>({text,ctype}));}).then(({text,ctype})=>{
+    this._pageUrl=url;this.setState({bookView:false,pageLoading:true,pageBytes:0,pageTotal:0,pageDoc:null,pageErr:null,bookToc:[],bookmarks:[],bmRail:[],tocOpen:false});
+    let _shown=0;
+    this._fetchProxied(url,(got,total)=>{
+      // Live byte progress so a big book (War and Peace is ~3 MB) shows it is moving, not
+      // hung. Throttled — a re-render per chunk would thrash — and only while this view is
+      // still the one loading, so a fast navigation away never repaints a stale spinner.
+      if(this.state.viewUrl!==url||!this.state.pageLoading||this.state.bookView)return;
+      if(got-_shown<131072&&!(total&&got>=total))return;
+      _shown=got;this.setState({pageBytes:got,pageTotal:total});
+    }).then(({text,ctype})=>{
       if(this.state.viewUrl!==url||this.state.bookView)return;
       // A plain-text body has no markup — render its paragraphs explicitly, else the
       // iframe collapses every newline and the page reads as one run-on blob.
@@ -10246,6 +10346,22 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       this.setState({pageDoc:doc,pageLoading:false});
     }).catch(e=>{ if(this.state.viewUrl===url)this.setState({pageLoading:false,pageErr:String(e&&e.message||e)}); });
   }
+  // Fetch a URL through the feed proxy while reporting bytes-downloaded, so a large document
+  // shows live progress instead of a silent spinner. Streams the response body when the
+  // platform gives a reader; falls back to a one-shot read otherwise. Returns {text,ctype}.
+  async _fetchProxied(url,onBytes){
+    const r=await this.proxyFetch(url,{timeout:60000});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const ctype=r.headers.get('content-type')||'';
+    const total=Number(r.headers.get('content-length'))||0;
+    if(!r.body||typeof r.body.getReader!=='function'){const text=await r.text();if(onBytes)try{onBytes(text.length,total);}catch(e){}return {text,ctype};}
+    const reader=r.body.getReader();const dec=new TextDecoder('utf-8');let text='',got=0;
+    for(;;){const {done,value}=await reader.read();if(done)break;got+=value.length;text+=dec.decode(value,{stream:true});if(onBytes)try{onBytes(got,total);}catch(e){}}
+    text+=dec.decode();
+    return {text,ctype};
+  }
+  // Human byte count for the loading readout: "812 KB", "3.1 MB".
+  _fmtBytes(n){n=Number(n)||0;if(n<1024)return n+' B';if(n<1048576)return Math.round(n/1024)+' KB';return (n/1048576).toFixed(1)+' MB';}
   navBtnStyle(on){return 'width:27px;height:27px;flex:0 0 auto;border:1px solid var(--line2);background:var(--app);border-radius:7px;font-size:17px;line-height:1;display:flex;align-items:center;justify-content:center;'+(on?'color:var(--ink2);cursor:pointer;':'color:#cbced4;cursor:default;');}
   entRow(e,sel){
     const fc=this.frontier(e.id).length,isSel=e.id===sel,lab=this.labelOf(e.id);
@@ -10294,7 +10410,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     try{return await this._searchWikiRich(query,n);}catch(e){return [];}
   }
   async _searchDDGRich(query,n){
-    const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent('https://html.duckduckgo.com/html/?q='+encodeURIComponent(query)));
+    const r=await this.proxyFetch('https://html.duckduckgo.com/html/?q='+encodeURIComponent(query));
     if(!r.ok)throw new Error('HTTP '+r.status);
     const doc=new DOMParser().parseFromString(await r.text(),'text/html');const out=[];const seen=new Set();
     doc.querySelectorAll('.result, .web-result').forEach(res=>{
@@ -10355,7 +10471,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     if(!url||/^text:/i.test(url)){this.setState({srcDoc:null,srcLoading:false,srcErr:null});return;}
     if(this._embedUrl===url&&this.state.srcDoc)return;
     this._embedUrl=url; this.setState({srcLoading:true,srcDoc:null,srcErr:null});
-    fetch(this.PROXY+'/feed?url='+encodeURIComponent(url)).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);const ctype=r.headers.get('content-type')||'';return r.text().then(text=>({text,ctype}));}).then(({text,ctype})=>{
+    this.proxyFetch(url).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);const ctype=r.headers.get('content-type')||'';return r.text().then(text=>({text,ctype}));}).then(({text,ctype})=>{
       if(this.state.openSrc!==url)return;
       // A plain-text source renders as paragraphs, not raw-as-HTML (which collapses it).
       if(this._isPlainText(ctype,text)){this.setState({srcDoc:this._plainTextDoc(text,url),srcLoading:false,srcErr:null});return;}
@@ -10384,15 +10500,31 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
   // was folded from it, returns the EMPTY set: that source is unabsorbed noumena, so
   // it offers nothing rather than borrowing the rest of the corpus's phenomena.
   // Cached by rev.
+  // The entities a source is ABOUT — its signal, separated from its noise. Every entity is
+  // globally linkable (buildLinkIndex caps nothing), so what keeps a page's links meaningful
+  // is scoped HERE, per source: we count how often each entity is mentioned IN THIS SOURCE
+  // and keep the ones that RECUR. A figure the text returns to is signal; a stray capitalized
+  // token the parser admitted once is noise. A globally strong entity (one the whole corpus
+  // returns to) still links on a page that mentions it only in passing.
   sourceEntities(url){
     if(!url||!this.graph||!this.master||!this.master.events)return null;
     if(this._srcEntsRev!==this.state.rev){
       this._srcEnts=new Map();this._srcEntsRev=this.state.rev;
       const rep=x=>{try{return this.graph.representative(x);}catch(e){return x;}};
+      const counts=new Map();   // url -> Map(entityId -> in-source mention count)
       for(const e of this.master.events){
         if(e.sentIdx==null)continue;const u=this.master.sentenceSource[e.sentIdx];if(!u)continue;
-        let set=this._srcEnts.get(u);if(!set){set=new Set();this._srcEnts.set(u,set);}
-        for(const x of [e.id,e.src,e.tgt,e.from,e.to])if(x)set.add(rep(x));
+        let cm=counts.get(u);if(!cm){cm=new Map();counts.set(u,cm);}
+        for(const x of [e.id,e.src,e.tgt,e.from,e.to]){if(!x)continue;const r=rep(x);cm.set(r,(cm.get(r)||0)+1);}
+      }
+      for(const [u,cm] of counts){
+        const set=new Set();
+        for(const [id,n] of cm){
+          const ge=this.graph.entities.get(id);
+          const strong=ge&&(ge.sightings||0)>=3;   // the whole corpus keeps returning to it
+          if(n>=2||strong)set.add(id);             // recurs here, or is signal elsewhere → link it
+        }
+        this._srcEnts.set(u,set);
       }
     }
     return this._srcEnts.get(url)||(this._noEnts||(this._noEnts=new Set()));
@@ -10428,10 +10560,20 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       }
       for(const [tok,v] of cand){if(v&&!map.has(tok)){map.set(tok,v.id);labels.push(v.disp);}}
     }
+    // NO CAP — every entity the graph holds is globally linkable. Longest-first so the
+    // alternation prefers "Prince Andrew" over "Andrew". The old `.slice(0,600)` kept only
+    // the 600 LONGEST labels, which silently dropped a novel's short, frequent main
+    // characters ("Pierre", "Anna Pávlovna") while a rare long name ("Mademoiselle George")
+    // survived — so a whole book lit up only a handful of names. Signal-from-noise is NOT
+    // decided here by throwing names away; it is scoped PER SOURCE in sourceEntities (only a
+    // page's meaningful, recurring entities actually light up). V8 compiles even a
+    // several-thousand-alternative literal regex in a few ms; a pathological graph that would
+    // overflow the engine degrades to no links rather than crashing the reader.
     labels.sort((a,b)=>b.length-a.length);
     const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-    const pat=labels.slice(0,600).map(esc).join('|');
-    this._linkRe=pat?new RegExp('\\b('+pat+')\\b','gi'):null;
+    const pat=labels.map(esc).join('|');
+    try{this._linkRe=pat?new RegExp('\\b('+pat+')\\b','gi'):null;}
+    catch(e){this._linkRe=null;}
     this._linkMap=map;this._linkRev=this.state.rev;return map;
   }
   linkifyNode(text,srcUrl){
@@ -10512,7 +10654,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       // unbind/strip if linkMode off
       if(!this.state.linkMode){d.querySelectorAll('[data-eo-ent]').forEach(s=>{const t=d.createTextNode(s.textContent);s.parentNode.replaceChild(t,s);});d.querySelectorAll('a[data-eo-wiki]').forEach(a=>{a.classList.remove('eo-ent-link');a.removeAttribute('data-eo-wiki');});return;}
       const map=this.buildLinkIndex(),re=this._linkRe;if(!re)return;
-      const local=this.sourceEntities(this.state.viewUrl);   // offer only entities salient to the open source
+      const local=this.sourceEntities(this.state.viewUrl);   // this source's meaningful entities — signal, not noise
       this._frameIds=this._frameIds||[];
       const walker=d.createTreeWalker(d.body,NodeFilter.SHOW_TEXT,{acceptNode:n=>{
         if(!n.nodeValue||!n.nodeValue.trim()||n.nodeValue.length<3)return NodeFilter.FILTER_REJECT;
@@ -10524,10 +10666,17 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
         // "National Academy" + "Sciences" dots. The whole-anchor pass below handles it.
         if(p.closest('a'))return NodeFilter.FILTER_REJECT;
         return NodeFilter.FILTER_ACCEPT;}});
-      const targets=[];let nn,cap=0;while((nn=walker.nextNode())&&cap<4000){targets.push(nn);cap++;}
+      // How deep into the open document we lay links. A whole novel renders as one iframe, so
+      // these bound the DOM work per decorate pass. They were 4000 nodes / 1500 wraps — enough
+      // for a first chapter, so links died partway through a book. Raised so a long read stays
+      // linked far deeper, while still capping span creation so a 3 MB book can't freeze the
+      // tab (each wrap splits a text node and inserts a span — several thousand is smooth, a
+      // hundred thousand is not).
+      const NODE_CAP=20000,WRAP_CAP=8000;
+      const targets=[];let nn,cap=0;while((nn=walker.nextNode())&&cap<NODE_CAP){targets.push(nn);cap++;}
       let wraps=0;
       for(const node of targets){
-        if(wraps>1500)break;const text=node.nodeValue;re.lastIndex=0;let m,last=0,frags=null;
+        if(wraps>WRAP_CAP)break;const text=node.nodeValue;re.lastIndex=0;let m,last=0,frags=null;
         const aEl=node.parentElement&&node.parentElement.closest?node.parentElement.closest('a'):null;
         const href=(aEl&&aEl.getAttribute&&aEl.getAttribute('href'))?aEl.href:null;
         while((m=re.exec(text))){
@@ -10542,7 +10691,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
           // span stays plain (no link chrome) and a click still opens the profile, not the link.
           else{const aw=this._entWikiUrl(id);if(aw)span.setAttribute('data-eo-ahead',aw);}
           span.textContent=m[0];frags.push(span);last=m.index+m[0].length;wraps++;
-          if(wraps>1500)break;
+          if(wraps>WRAP_CAP)break;
         }
         if(frags){if(last<text.length)frags.push(d.createTextNode(text.slice(last)));const par=node.parentNode;frags.forEach(f=>par.insertBefore(f,node));par.removeChild(node);}
       }
@@ -10661,7 +10810,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
         thumb:(d.thumbnail&&d.thumbnail.source)||null,
         url:(d.content_urls&&d.content_urls.desktop&&d.content_urls.desktop.page)||href};
     }else{
-      const r=await fetch(this.PROXY+'/feed?url='+encodeURIComponent(href));
+      const r=await this.proxyFetch(href);
       if(!r.ok)throw new Error('HTTP '+r.status);
       const ex=this.extract(await r.text(),r.headers.get('content-type')||'',href);
       // The lede is the first few real blocks of the extracted body, abbreviation-safe.
@@ -11075,7 +11224,9 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     }
     if(vu){
       base.showWeb=true;
+      const _lb=this.state.pageBytes||0,_lt=this.state.pageTotal||0;
       base.web={url:vu,host:/^search:/i.test(vu)?('Search · '+this.norm(vu.slice(7))):(/^text:/i.test(vu)?((this.pageOf(vu)||{}).title||'Imported text'):this.short(vu)),loading:!!this.state.pageLoading&&!this.state.pageDoc,
+        loadingProgress:_lb>0?(this._fmtBytes(_lb)+(_lt>_lb?(' / '+this._fmtBytes(_lt)):'')):'',
         err:(this.state.pageErr&&!this.state.pageDoc)?this.state.pageErr:null,hasDoc:!!this.state.pageDoc,doc:this.state.pageDoc||'',
         onReloadPage:()=>this.loadCenter(vu),detecting:this.state.detect&&this.state.busy};
     }
