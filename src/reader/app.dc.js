@@ -4080,6 +4080,20 @@ class Component extends DCLogic {
         finish({text:'Grounded mode: nothing you’ve read covers this, so I won’t answer from the model alone. Read something on it (or turn the web on and ask again), or switch the register to Auto or Creative.',
           groundKind:'model',register:'grounded'});
         return;}
+      // THE WALK TRIGGER (docs/paragraph-at-a-time.md, the multi-paragraph-walk spec).
+      // A DEVELOPED, multi-paragraph ask over grounded reading is not one padded call —
+      // it is the WALK: one paragraph per model call, each a continuation over a fold
+      // that SHIFTS per paragraph (the self-read refold), bound and vetoed at claim
+      // grain, held honestly when the fold is spent rather than padded to length. The
+      // trigger is the discourse read itself (_wantsLongform keys on the metacognition's
+      // develop/brief length demand, with an explicit essay/word-count as the floor) —
+      // the right cue, not a keyword cliff. Soft: a pointed lookup falls straight through
+      // to the single grounded call below, unchanged.
+      // An explicit paragraph count ("5 paragraphs") is a strong longform seed the essay/
+      // word-count floor misses — it names the shape outright, so it cues the walk directly.
+      if(grounded&&amode!=='creative'&&(this._paragraphDemand(q)||this._wantsLongform(q,read||meta))){
+        return await this._walkReply(id,q,sources,{model,guard,finish,ground,meta,read,prev});
+      }
       let messages;
       // The reader answers as a research LIBRARIAN — sources foregrounded, attributed, quoted —
       // not an expert holding forth (the librarian cue, every grounded turn). A broad / explanatory
@@ -4151,6 +4165,17 @@ class Component extends DCLogic {
       // summary that leaned on the source's opening shows those lines, disclosed as such;
       // an answer with no read footing says plainly it's the model's own (_groundReport).
       const gr=this._gateGround(this._groundReport(ground,grounded),text);
+      // DISCOVER THE WALK (the multi-paragraph-walk spec: the discovered continuation).
+      // The single call was NOT cued as longform, yet it came back as a multi-paragraph
+      // return — that IS the signal the turn wanted a developed piece. Rather than stop
+      // at whatever the one call produced, REFOLD and continue the walk from here, handing
+      // the LAST paragraph as the left-context (generation drives retrieval). The already-
+      // written paragraphs seed the run; the walk extends them, grounded, until the fold is
+      // spent. Guarded: grounded, contentful, not a Stop, and not already a cued walk.
+      if(grounded&&amode!=='creative'&&!this._stopGen&&!isolated&&!this._paragraphDemand(q)&&!this._wantsLongform(q,read||meta)&&this._isParagraphReturn(text)){
+        const seedParas=this._seedParasFrom(text);
+        if(seedParas.length){ return await this._walkReply(id,q,sources,{model,guard:this._stallGuard(),finish,ground,meta,read,prev,seed:seedParas,shown:true}); }
+      }
       // The turn wears the register it ACTUALLY used, and a grounded answer is read back
       // through the EOT reflection — every proposition judged against the graph (_reflect).
       finish({text:isolated?text:this._withOfficeNote(text,sources),entities:ground.entities,sources:gr.sources,passages:gr.passages,
@@ -4391,6 +4416,111 @@ class Component extends DCLogic {
       if(read.lengthDemand==='brief')return false;                  // the read asks for brevity — override the soft-keyword floor
     }
     return this._longformIntent(q);                                 // length-neutral / cold / absent → the keyword floor, unchanged
+  }
+  // ── THE WALK: one paragraph per call, over a fold that shifts ─────────────────────────────
+  // (docs/paragraph-at-a-time.md, the multi-paragraph-walk spec.) A developed ask is written
+  // paragraph-at-a-time: each paragraph is ONE model call continuing the running document, over
+  // a slice of the fold the prior paragraphs have NOT drunk. The reader owns retrieval — every
+  // beat REFOLDS (groundNotes re-queried, focused by the paragraph before it: the self-read weld,
+  // generation driving retrieval) — and the walk (src/longgen) owns the grounded-paragraph floor:
+  // bind + veto at claim grain, splice the ungrounded tail, hold a NUL rather than confabulate,
+  // stop and report the shortfall when the fold is spent rather than pad to length. An empty
+  // refold IS saturation. Streams each paragraph into the bubble as it lands.
+  //   o = { model, guard, finish, ground, meta, read, prev, seed?, shown? }
+  //   seed  — already-written paragraph records (the DISCOVERED continuation); the walk resumes
+  //           from them, refolding for more, handing their LAST as the left-context.
+  async _walkReply(id,q,sources,o){
+    if(!this._ME)this._ME=await import((typeof window!=='undefined'&&window.__resources&&window.__resources.eoModel)||'./model-entry.js');
+    const seed=(o.seed||[]).filter(p=>p&&p.text);
+    const demand=this._paragraphDemand(q)||((o.read||o.meta)&&(o.read||o.meta).lengthDemand==='develop'?6:5);
+    this._setThink(id,this._composeOpen(true,o.ground));
+    // Stream: the accepted paragraphs plus the paragraph currently decoding, painted token by
+    // token into the pending bubble (the same rAF-batched paint the single-call path uses).
+    let accParas=seed.map(p=>p.text), partial='', raf=0;
+    const paint=()=>{raf=0;const body=accParas.concat(partial?[partial]:[]).join('\n\n');this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:body,think:this._composeTick(body)};return {...c,messages:m};})}),()=>this._scrollChat());};
+    const schedule=()=>{if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+    // Wrap the chat model so each beat's model.phrase streams its tokens (walk calls .phrase
+    // directly; streamPhrase drives onToken). partial resets per call, so a regenerated beat
+    // repaints from empty rather than doubling.
+    const streamModel={name:(o.model&&o.model.name)||this.state.backend||'model',
+      phrase:(messages,opts)=>{partial='';return this._ME.streamPhrase(o.model,messages,{...opts,onToken:(p)=>{const s=String(p||'');if(!s)return;o.guard.feed();partial+=s;schedule();},signal:o.guard.signal});}};
+    // REFOLD — the self-read weld. Re-query the reading for the next beat, focused by the prior
+    // paragraph (its tail) plus the ask, and hand back only spans not already drunk. Each span's
+    // idx is its GLOBAL sentence index, so a cite (s{idx}) maps straight back to master.sentences.
+    const refold=async ({prior,index,seen})=>{
+      const focus=(index>0&&prior)?(this.norm(prior).split(/\s+/).slice(-40).join(' ')+' '+q):this._groundingQuery(q,o.prev,null);
+      let g; try{ g=this.groundNotes(focus,sources); }catch(e){ g=null; }
+      const out=[];
+      for(const s of ((g&&g.spans)||[])){ const i=s.i; if(!Number.isInteger(i)||seen.has(String(i)))continue; out.push({...s,idx:i}); if(out.length>=6)break; }
+      return out;
+    };
+    // Seed the resume state from the discovered paragraphs: their coverage is the fold the single
+    // call already drank, so the walk refolds for genuinely NEW spans (never re-serves them).
+    const state=seed.length?{
+      design:this._ME.buildSkeleton({ground:[],demand}),
+      accepted:seed,
+      covered:[...new Set(((o.ground&&o.ground.spans)||[]).map(s=>s.i).filter(Number.isInteger).concat(seed.flatMap(p=>p.sources||[])))],
+      done:seed.map((_,i)=>'b'+i),
+    }:null;
+    this._auditRec(id,'answer-prompt',{prompt:'[walk] '+(seed.length?'discovered continuation':'developed piece')+' — up to '+demand+' paragraphs, one model call each, refolding per paragraph.'});
+    let res;
+    try{
+      res=await this._ME.walk({fold:[],design:{demand},question:q,model:streamModel,refold,onParagraph:(rec)=>{accParas.push(rec.text);partial='';schedule();},state,signal:o.guard.signal});
+    }catch(e){ o.guard.clear(); if((e&&e.stopped)||this._stopGen)return; res=null; }
+    o.guard.clear();
+    // The walk failed (model stalled, import error, …) — the bubble must still settle,
+    // never spin forever. Keep whatever paragraphs already streamed; if none, answer
+    // structurally from the reading so the turn ends honestly rather than hanging.
+    if(!res){
+      this.setState({modelStatus:''});
+      const streamed=accParas.slice(seed.length).join('\n\n')||seed.map(p=>p.text).join('\n\n');
+      if(streamed){ o.finish({text:this._withOfficeNote(streamed,sources),groundKind:'matched',related:this.relatedDocs(q,sources),register:'grounded',reflection:this._reflect(streamed)}); }
+      else{ const fb=this.answerQuestion(q,sources); o.finish({text:fb.text||'I couldn’t build this out from what you’ve read.',groundKind:fb.refs&&fb.refs.length?'matched':'model',register:'grounded'}); }
+      return;
+    }
+    this._auditRec(id,'answer-raw',{output:res.answer,note:'walk · '+res.paragraphs.length+'/'+demand+' paragraphs · '+res.trace.map(t=>t.kind).join(',')});
+    const paras=res.paragraphs;
+    if(!paras.length){
+      // Nothing grounded a developed piece — hold honestly rather than pad from priors.
+      o.finish({text:'I looked for enough in what you’ve read to build this out paragraph by paragraph, but the passages don’t ground a longer piece — so I’ll stop here rather than pad it with things you didn’t read.',groundKind:'model',register:'grounded'});
+      return;
+    }
+    // Citations: the walk's sources ARE global sentence indices (a cite is s{idx}); map each back
+    // to its sentence and source, exactly as the single-call fallback path builds passages.
+    const idxs=(res.sources||[]).filter(n=>Number.isInteger(n)&&this.master&&this.master.sentences[n]!=null);
+    const passages=idxs.map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})).filter(p=>p.text);
+    const used=[...new Set(passages.map(p=>p.u).filter(Boolean))];
+    const saturated=res.trace.some(t=>t.kind==='saturated');
+    const shortNote=(paras.length<demand&&(saturated||demand-paras.length>=1))
+      ? '\n\nThat is '+paras.length+' grounded paragraph'+(paras.length!==1?'s':'')+(this._paragraphDemand(q)?(' of the '+demand+' you asked for'):'')+' — the reading ran out of new ground, so I stopped rather than pad the rest.'
+      : '';
+    const text=res.answer;
+    o.finish({text:this._withOfficeNote(text,sources)+shortNote,sources:used,passages,groundKind:'matched',
+      related:this.relatedDocs(q,sources),register:'grounded',reflection:this._reflect(text)});
+    if(!o.shown)this._pivotChatPanel(q+' '+text);
+  }
+  // _paragraphDemand — an explicit paragraph count in the ask ("5 paragraphs", "three paragraphs"),
+  // the walk's demand ceiling; null when none is named (the caller falls back to the length read).
+  _paragraphDemand(q){
+    const m=String(q||'').match(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\s+paragraphs?\b/i);
+    if(!m)return null;
+    const w={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10};
+    const n=w[m[1].toLowerCase()]||parseInt(m[1],10);
+    return (n>=1&&n<=12)?n:null;
+  }
+  // _isParagraphReturn — did a single grounded call come back as a MULTI-paragraph piece? Three or
+  // more real paragraphs is the "this wanted to be developed" signal the discover path acts on (two
+  // is an ordinary answer). The trigger to refold and continue as a walk.
+  _isParagraphReturn(text){
+    const paras=String(text||'').split(/\n\s*\n/).map(s=>this.norm(s)).filter(s=>s&&s.split(/\s+/).length>=12);
+    return paras.length>=3;
+  }
+  // _seedParasFrom — split a discovered multi-paragraph return into seed records the walk resumes
+  // from: the last is the left-context the next beat opens on. Sources are unknown here (the single
+  // call did not cite per paragraph), so coverage is seeded from the fold at the call site instead.
+  _seedParasFrom(text){
+    const paras=String(text||'').split(/\n\s*\n/).map(s=>this.norm(s)).filter(Boolean);
+    return paras.map((t,i)=>({beat:'b'+i,role:i?'continue':'open',heading:null,topic:'',kind:'connective',seed:'',text:t,sources:[],boundFraction:1,action:'discovered',closes:false}));
   }
   // ── COMPOSE: make the artifact, get out of the model's way ────────────────────────────────
   // A small model writes in a named style — Dickinson's dashes, a haiku's 5-7-5, a limerick's bounce
