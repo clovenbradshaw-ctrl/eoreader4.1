@@ -3663,7 +3663,21 @@ class Component extends DCLogic {
     if(!this._subjStop)this._namedSubjects('');
     const anaphoric=/\b(they|them|their|theirs|it|its|this|that|these|those|one|ones|he|him|his|she|her|hers|same)\b/i.test(s);
     const own=s.toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>3&&!this.STOP.has(w)&&!this._subjStop.has(w));
-    if(!anaphoric&&own.length)return q;                    // names its own subject and no anaphor — retrieve on its own terms
+    // RELATIONAL follow-ups name a RELATION to a subject, not a subject: "what versions are
+    // similar?", "a parody", "a captain-kangaroo TYPE character", "any knock offs". Their own
+    // content words describe the SHAPE of the wanted thing (version/parody/type/example/…) while
+    // the actual topic still lives in the THREAD. The old gate treated any own content word as a
+    // named subject and retrieved on the bare relational words — which pull generic noise (the
+    // Captain-Kangaroo run's "fictional versions similar" that retrieved Wonder Woman + a rabbit
+    // god). So a query whose only content words are relational is NOT self-contained: carry the
+    // thread subject in, exactly as for a thin/anaphoric follow-up.
+    const REL=new Set(('similar similarly similarity version versions type types kind kinds sort sorts '+
+      'example examples parody parodies parodied spoof spoofs knockoff knockoffs knock alike comparable '+
+      'equivalent equivalents counterpart counterparts analog analogue analogous variant variants '+
+      'fictional fiction exist exists existing character characters movie movies film films show shows '+
+      'thing things stuff others another else like resemble resembles resembling').split(' '));
+    const ownSubj=own.filter(w=>!REL.has(w));               // own words that actually NAME a subject
+    if(!anaphoric&&ownSubj.length)return q;                 // names its own subject and no anaphor — retrieve on its own terms
     const carried=this._carriedSubject(prev,fold,q).filter(w=>!own.includes(w));
     return carried.length?(q+' '+carried.join(' ')):q;
   }
@@ -6170,7 +6184,17 @@ class Component extends DCLogic {
       // The steer rides in its OWN slot now (buildGroundedMessages `steer`), not folded into the
       // shape bundle — so the discourse read's brief lands as the last instruction before the answer
       // clause and aims the whole reply, instead of being buried at the tail of the librarian cue.
-      const steer=grounded?this._steerLine(meta):'';
+      // HONEST OPENER — "grounded" here can be graph-only: the meaning graph exists, so the reader
+      // answers in the librarian register and is handed the fold ("here's the sense of it, from your
+      // reading"), but NO passage actually matched this question (ground.relevant is false). Left
+      // alone the model opens "Based on what I found in my reading" and invents a citation it never
+      // had (the Captain-Kangaroo run's t1/t3: groundKind 'model', 0 passages, yet "as mentioned in
+      // the text"). Ride an explicit honesty instruction in the strong steer slot so the opener
+      // tracks the real stance. Fail-soft: only added when grounded AND nothing matched.
+      const honest=(grounded&&!(ground&&ground.relevant))
+        ? 'Before anything else: your reading turned up no passage that actually bears on this question. Do NOT say "based on what I read", "as mentioned in the text", or otherwise imply you found this in the sources. Open by saying plainly, in the first person, that you didn’t find it in what you read; then, if you can, answer from general knowledge and mark it as your own knowledge, not the reading.'
+        : '';
+      const steer=grounded?[this._steerLine(meta),honest].filter(Boolean).join(' '):'';
       const sectioned=(this._ME.shapeForScope&&this._ME.shapeForScope(q))||'';
       const longform=this._explicitLongform(q);
       // A LONGFORM ask takes the CAPABILITY cue INSTEAD of the sectioned shape, not alongside it: the
@@ -6686,7 +6710,17 @@ class Component extends DCLogic {
       const longform=this._explicitLongform(q);
       // The steer rides in its own slot (buildGroundedMessages `steer`) so the read's brief leads the
       // answer clause instead of trailing the librarian cue — the research/web path steers the same way.
-      const steer=grounded?this._steerLine(meta):'';
+      // HONEST OPENER — "grounded" here can be graph-only: the meaning graph exists, so the reader
+      // answers in the librarian register and is handed the fold ("here's the sense of it, from your
+      // reading"), but NO passage actually matched this question (ground.relevant is false). Left
+      // alone the model opens "Based on what I found in my reading" and invents a citation it never
+      // had (the Captain-Kangaroo run's t1/t3: groundKind 'model', 0 passages, yet "as mentioned in
+      // the text"). Ride an explicit honesty instruction in the strong steer slot so the opener
+      // tracks the real stance. Fail-soft: only added when grounded AND nothing matched.
+      const honest=(grounded&&!(ground&&ground.relevant))
+        ? 'Before anything else: your reading turned up no passage that actually bears on this question. Do NOT say "based on what I read", "as mentioned in the text", or otherwise imply you found this in the sources. Open by saying plainly, in the first person, that you didn’t find it in what you read; then, if you can, answer from general knowledge and mark it as your own knowledge, not the reading.'
+        : '';
+      const steer=grounded?[this._steerLine(meta),honest].filter(Boolean).join(' '):'';
       // A LONGFORM ask takes the CAPABILITY cue INSTEAD of the sectioned shape, not alongside it: the
       // two contradict (one says "lay it out in sections", the other "don't spin up a long piece — give
       // a short grounded rundown"), and stacking both just hands a small model a mixed signal it pads to

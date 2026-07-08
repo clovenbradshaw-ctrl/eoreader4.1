@@ -25,7 +25,13 @@ const WEBLLM_URL = 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2/+esm';
 // a coder passes { id, model } and reuses every line of this path.
 export const makeWebllmBackend = (defaults = {}) => (opts = {}) => {
   const id    = defaults.id || 'webllm';
-  const model = opts.model || defaults.model || 'Llama-3.2-3B-Instruct-q4f32_1-MLC';
+  // DEFAULT TO THE q4f16_1 BUILD, not q4f32_1. Both are 4-bit weights; the suffix is the
+  // ACCUMULATION dtype. q4f32_1 accumulates in fp32 — a larger download and a materially slower
+  // WebGPU decode (fp16 is the native fast path on the GPU), which is the "typing is very slow"
+  // the reader feels on every token. q4f16_1 is the fp16-accumulation build the coder models
+  // (model/coders.js) already default to; it decodes faster and downloads smaller on the same
+  // hardware. A caller can still pin either explicitly via opts.model / defaults.model.
+  const model = opts.model || defaults.model || 'Llama-3.2-3B-Instruct-q4f16_1-MLC';
   let engine  = null;
   let loading = null;
 
