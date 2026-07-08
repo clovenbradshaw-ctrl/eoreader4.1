@@ -4451,7 +4451,16 @@ class Component extends DCLogic {
       res=await this._ME.walk({fold:[],design:{demand},question:q,model:streamModel,refold,onParagraph:(rec)=>{accParas.push(rec.text);partial='';schedule();},state,signal:o.guard.signal});
     }catch(e){ o.guard.clear(); if((e&&e.stopped)||this._stopGen)return; res=null; }
     o.guard.clear();
-    if(!res){ this.setState({modelStatus:''}); return; }
+    // The walk failed (model stalled, import error, …) — the bubble must still settle,
+    // never spin forever. Keep whatever paragraphs already streamed; if none, answer
+    // structurally from the reading so the turn ends honestly rather than hanging.
+    if(!res){
+      this.setState({modelStatus:''});
+      const streamed=accParas.slice(seed.length).join('\n\n')||seed.map(p=>p.text).join('\n\n');
+      if(streamed){ o.finish({text:this._withOfficeNote(streamed,sources),groundKind:'matched',related:this.relatedDocs(q,sources),register:'grounded',reflection:this._reflect(streamed)}); }
+      else{ const fb=this.answerQuestion(q,sources); o.finish({text:fb.text||'I couldn’t build this out from what you’ve read.',groundKind:fb.refs&&fb.refs.length?'matched':'model',register:'grounded'}); }
+      return;
+    }
     this._auditRec(id,'answer-raw',{output:res.answer,note:'walk · '+res.paragraphs.length+'/'+demand+' paragraphs · '+res.trace.map(t=>t.kind).join(',')});
     const paras=res.paragraphs;
     if(!paras.length){
