@@ -57,6 +57,64 @@ export const createCpuLlm = async ({ onProgress } = {}) => {
   };
 };
 
+// ── The CPU completion talker — SmolLM2-360M BASE, no chat template. ───────────────
+// The walk's continuation frame (src/longgen/render.js) is a document that trails
+// off on a seed for the model to COMPLETE — no task, no assistant turn. An
+// instruct-tuned talker run through its chat template answers that frame in the
+// assistant register ("Here's a revised version …", editor commentary), which the
+// grounding floor then rightly holds as NUL. The base model is the matching organ:
+// the prompt is the concatenated document itself, and the output is its
+// continuation. Honors opts.stop by truncation (the walk treats stop as optional).
+let _completer = null;
+export const createCpuCompleter = async ({ onProgress } = {}) => {
+  if (!_completer) {
+    onProgress?.('loading SmolLM2-360M base (q8, cpu)…');
+    // The community ONNX export — the HuggingFaceTB base repo ships no onnx/ tree.
+    _completer = await pipeline('text-generation', 'onnx-community/SmolLM2-360M-ONNX',
+      { dtype: DTYPE, device: DEVICE });
+    onProgress?.('completion talker ready');
+  }
+  return {
+    id: 'smollm2-360m-base', kind: 'local', isLoaded: () => true,
+    async load() {},
+    async phrase(messages, opts = {}) {
+      // The document is the prompt: the user block already carries the genre line,
+      // the record, the boundary, the prior paragraph, and the trailing seed.
+      const prompt = messages
+        .filter((m) => m.role === 'user')
+        .map((m) => String(m.content || ''))
+        .join('\n\n');
+      const gen = {
+        max_new_tokens: opts.maxTokens ?? 192,
+        // The walk's FLOOR_TOKENS rides as min_new_tokens: a greedy base model
+        // otherwise closes a connective seed in one clause and stops.
+        ...(opts.minTokens ? { min_new_tokens: opts.minTokens } : {}),
+        repetition_penalty: 1.1,
+        return_full_text: false,
+      };
+      // A base completion needs sampling to write prose rather than the single
+      // most-likely clause; the floor (bindAndVeto) judges whatever comes out.
+      // 0.4 measured best on the walk e2e (0.7 wanders off the record and the
+      // floor trims every paragraph to its seed; greedy closes in one clause).
+      // COMPLETER_TEMP tunes the demonstration without touching the walk.
+      const temperature = opts.temperature ?? (Number(process.env.COMPLETER_TEMP) || 0.4);
+      if (temperature > 0) { gen.do_sample = true; gen.temperature = temperature; }
+      const out = await _completer(prompt, gen);
+      let text = String(Array.isArray(out) ? out[0]?.generated_text : out?.generated_text) || '';
+      for (const s of (opts.stop || [])) {
+        const at = text.indexOf(s);
+        if (at >= 0) text = text.slice(0, at);
+      }
+      // One paragraph's worth: cut at the first REAL paragraph break — a blank line
+      // after enough prose to be a paragraph, not the one-clause line a completion
+      // sometimes opens with before flowing on.
+      const brk = text.indexOf('\n\n', 200);
+      if (brk > 0) text = text.slice(0, brk);
+      return text.trim();
+    },
+  };
+};
+
 // ── The MiniLM meaning organ — the SAME model the centroids were built in. ─────────
 // measuresMeaning:true is the firewall the classifier reads (embed.js): a cosine in
 // this space is a real meaning-distance, so the geometric reader commits.

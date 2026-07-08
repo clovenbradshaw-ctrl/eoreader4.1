@@ -208,6 +208,15 @@ shape that says `covered: 1, planned: 5`, and the honest response is to
 
 ## The weld reads self back and predicts the retrieval (message 4)
 
+> **Status.** The weld has two sides, and they share the name only. The **gate**
+> side — re-read the accepted paragraph through the grounder and strike drift
+> before it becomes the next prior — is BUILT and measured:
+> `src/longgen/weld.js` (`selfRead`, on by default in the walk), gated by the
+> Step 0 measurement in `docs/self-read-weld-measurement.md`. The **retrieval**
+> side described in this section (enrich the SURF with self, predict the next
+> fold-part) remains the walk's `refold` seam, unbuilt beyond the reader's
+> lexical re-focus.
+
 `docs/long-generation.md` names this as built-later and unbuilt: *"Reading self
 back through the perceiver — run the accepted prose back through the document
 reader so the recurrence and structural priors read the generated text's own
@@ -431,6 +440,7 @@ its hand:
 | the floor, per-sentence at claim grain (EVA) | `src/ground/index.js` (`bindAndVeto`) | reuse |
 | the render call | `src/arc/generate.js` (`generateSection`) | reuse |
 | the organic-prompt cleanup (strip `LIBRARIAN_CUE` / `CAPABILITY_CUE` policing) | `src/model/prompt.js` | later slice |
+| the self-read weld, GATE side — strike drift before it becomes the prior | `src/longgen/weld.js` (`selfRead`, measured in `docs/self-read-weld-measurement.md`) | built |
 | the self-read weld → predicted retrieval | `src/predict` (`buildMoveLog`, `predictNextMove`), `src/surfer` (`surfFold`, `salienceField`) | later slice |
 | the resumable state carrying skeleton + progress | `src/longgen/compose.js` (`state`) | new |
 

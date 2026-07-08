@@ -31,6 +31,7 @@
 import { buildSkeleton } from './skeleton.js';
 import { renderContinuation, seedFor } from './render.js';
 import { progressAgainst } from './progress.js';
+import { selfRead } from './weld.js';
 import { bindAndVeto } from '../ground/index.js';
 import { REBIND_THRESHOLD, FLOOR_TOKENS, ceilingFor, EPSILON } from '../arc/index.js';
 import { groundSaturation } from '../arc/index.js';
@@ -146,8 +147,8 @@ const carveDesign = ({ design, fold, question }) => {
 // at claim grain, splice the ungrounded tail, regenerate once below threshold,
 // strike a frame leak at EVA. The coarse-generate / fine-verify body shared by the
 // static walk and the live (self-read) walk, so both hold the SAME grounding floor.
-// Returns { paragraph|null, gated, action, leak, seed }.
-const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal }) => {
+// Returns { paragraph|null, gated, action, leak, seed, weld }.
+const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal, weld = null }) => {
   const seed = seedFor({ beat, slice });
   const ceiling = ceilingFor({ mass: slice.reduce((m, s) => m + (s.score || 0), 0) / slice.length, spans: slice });
   let paragraph = null, gated = null, action = 'regen', leak = null;
@@ -186,7 +187,24 @@ const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal
       if (regated.sources.length) { paragraph = prefix; gated = regated; action = 'salvage'; leak = null; }
     }
   }
-  return { paragraph, gated, action, leak, seed };
+  // The SELF-READ WELD — re-read the accepted paragraph through the grounder
+  // BEFORE it becomes the prior the next paragraph opens on. The birth gate above
+  // is lexical and slice-scoped; the weld's three signals (number / refold /
+  // witness, docs/self-read-weld-measurement.md) catch the drift that rides
+  // through it. A struck sentence is dropped and the paragraph RE-GATED so its
+  // sources stay accurate; a fully-struck paragraph holds as NUL — drift is never
+  // folded into the running document, and never becomes the next retrieval cue.
+  let welded = null;
+  if (paragraph && weld) {
+    welded = selfRead(paragraph, { slice, pool: weld.pool, doc: weld.doc });
+    if (welded.action === 'reject') { paragraph = null; }
+    else if (welded.action === 'splice') {
+      const regated = bindAndVeto(welded.text, slice, { question: beat.topic, task: 'answer' });
+      if (regated.sources.length) { paragraph = welded.text; gated = regated; action = 'weld'; }
+      else { paragraph = null; }
+    }
+  }
+  return { paragraph, gated, action, leak, seed, weld: welded };
 };
 
 // recordFor — the accepted-paragraph record (the shape the progress fold and the
@@ -208,10 +226,17 @@ export const walk = async ({
   maxBeats = Infinity,    // beats to write this call. v1: the whole design.
   question = '',          // carried into the carve when design is a { demand, outline } spec
   state = null,           // resumable state — the SEAM; v1 produces no caller that feeds it back
-  refold = null,          // the SELF-READ WELD (deferred capacity #3): async ({ prior, accepted,
+  refold = null,          // self-read RETRIEVAL (deferred capacity #3): async ({ prior, accepted,
                           // covered, index, question, seen }) -> fresh spans for the next beat.
                           // When set, the walk runs LIVE — generation drives retrieval, each beat's
                           // fold re-focused by the paragraph before it, rather than one static pool.
+  selfRead: weldOn = true, // the SELF-READ WELD GATE: re-read each accepted paragraph through the
+                          // grounder (number / refold / witness signals) and strike drifted
+                          // sentences before the paragraph becomes the next prior. Measured in
+                          // docs/self-read-weld-measurement.md; off restores the birth gate alone.
+  doc = null,             // optional — the reading's own doc; sharpens the weld's witness signal
+                          // (propositional judgment, coref intact). Absent, the weld degrades to
+                          // the citation-holds gate against the slice.
   onParagraph = null,     // (record, i) -> void — called as each paragraph is accepted (UI streaming)
   signal = null,
 } = {}) => {
@@ -241,6 +266,9 @@ export const walk = async ({
     // so a discovered continuation (state.covered = the fold the single call already
     // drank) refolds for genuinely NEW spans instead of re-serving them.
     const seen = new Set([...covered, ...accepted.flatMap(p => (p.sources || []))].map(String));
+    // The weld's "anywhere" pool accumulates every span the live walk has been
+    // served — the fold as drunk so far — since no static pool exists here.
+    const served = [];
     let idx = accepted.length;
     while (idx < demandCap && wrote < maxBeats) {
       if (signal?.aborted) { trace.push({ beat: `b${idx}`, kind: 'aborted' }); break; }
@@ -255,7 +283,9 @@ export const walk = async ({
         role: idx === 0 ? 'open' : 'continue', heading: null,
       };
       const coldStart = accepted.length === 0;
-      const { paragraph, gated, action, leak, seed } = await composeBeat(model, { beat, slice, prior, coldStart, genre, signal });
+      served.push(...slice);
+      const weld = weldOn ? { pool: served, doc } : null;
+      const { paragraph, gated, action, leak, seed, weld: welded } = await composeBeat(model, { beat, slice, prior, coldStart, genre, signal, weld });
       // Spend only what the beat CONSUMED: its anchor (a walked beat is never
       // retried against the same anchor — monotone), plus every span the accepted
       // paragraph actually CITED (re-anchoring a cited span later would restate
@@ -267,12 +297,14 @@ export const walk = async ({
       for (const src of ((gated && gated.sources) || [])) { covered.add(src); seen.add(String(src)); }
       done.add(beat.id); wrote += 1; idx += 1;
       if (!paragraph || !gated.sources.length) {
-        trace.push({ beat: beat.id, kind: 'nul', boundFraction: round3(gated?.boundFraction ?? 0), leak });
+        trace.push({ beat: beat.id, kind: 'nul', boundFraction: round3(gated?.boundFraction ?? 0), leak,
+                     ...(welded?.fired ? { weld: welded.action } : {}) });
         continue;
       }
       const record = recordFor(beat, seed, paragraph, gated, action);
       accepted.push(record);
-      trace.push({ beat: beat.id, kind: action, cited: gated.sources.length, boundFraction: round3(gated.boundFraction) });
+      trace.push({ beat: beat.id, kind: action, cited: gated.sources.length, boundFraction: round3(gated.boundFraction),
+                   ...(welded?.fired ? { weldStruck: welded.spans.filter(s => s.fired).length } : {}) });
       if (onParagraph) { try { onParagraph(record, accepted.length - 1); } catch (e) { /* UI hook, never fatal */ } }
     }
     const answerLive = accepted.map(p => p.text).filter(Boolean).join('\n\n');
@@ -304,7 +336,8 @@ export const walk = async ({
 
     const prior = accepted.length ? accepted[accepted.length - 1].text : '';
     const coldStart = accepted.length === 0;
-    const { paragraph, gated, action, leak, seed } = await composeBeat(model, { beat, slice, prior, coldStart, genre, signal });
+    const weld = weldOn ? { pool, doc } : null;
+    const { paragraph, gated, action, leak, seed, weld: welded } = await composeBeat(model, { beat, slice, prior, coldStart, genre, signal, weld });
 
     // Cover the slice whether the beat held or not — a walked beat is not retried
     // against the same slice (monotone coverage), and the beat is marked done.
@@ -315,13 +348,15 @@ export const walk = async ({
     if (!paragraph || !gated.sources.length) {
       // NUL — the slice is present but did not cohere into a grounded (and
       // un-leaked) paragraph; hold it (record the honest miss), never confabulate.
-      trace.push({ beat: beat.id, kind: 'nul', boundFraction: round3(gated?.boundFraction ?? 0), leak });
+      trace.push({ beat: beat.id, kind: 'nul', boundFraction: round3(gated?.boundFraction ?? 0), leak,
+                   ...(welded?.fired ? { weld: welded.action } : {}) });
       continue;
     }
 
     const record = recordFor(beat, seed, paragraph, gated, action);
     accepted.push(record);
-    trace.push({ beat: beat.id, kind: action, cited: gated.sources.length, boundFraction: round3(gated.boundFraction) });
+    trace.push({ beat: beat.id, kind: action, cited: gated.sources.length, boundFraction: round3(gated.boundFraction),
+                 ...(welded?.fired ? { weldStruck: welded.spans.filter(s => s.fired).length } : {}) });
     if (onParagraph) { try { onParagraph(record, accepted.length - 1); } catch (e) { /* UI hook, never fatal */ } }
   }
 
