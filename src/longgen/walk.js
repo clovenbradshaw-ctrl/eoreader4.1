@@ -74,11 +74,45 @@ const LEAKS = [
   /i (?:didn'?t|could ?n'?t) find/i, /\bthe user\b/i, /in this paragraph/i,
   /^\s*sure[,!]/i, /^\s*here'?s\b/i, /^\s*certainly[,!]/i, /\bi found\b/i,
   /the text (?:about|describes|mentions)/i, /the record (?:shows|says)/i,
+  // EDITOR REGISTER — the model narrating the WRITING rather than continuing it. A
+  // base/instruct model handed a document-to-continue sometimes announces the seam
+  // ("Here is the continuation of the text:", "here is a revised version") mid-answer;
+  // it binds lexically to nothing and is pure scaffolding, so strike the beat. Anywhere
+  // in the paragraph, not just the opening — the dolphins run leaked it mid-paragraph.
+  /here (?:is|'?s) (?:the |a |your )?(?:continuation|revised|rewritten|updated|rest of|remainder of|following)/i,
+  /continuation of the (?:text|passage|essay|document|above)/i,
 ];
 export const frameLeak = (text = '') => {
   const t = String(text || '');
   for (const re of LEAKS) { const m = t.match(re); if (m) return (m[0] || '').trim(); }
   return null;
+};
+
+// DEGENERATION TRIM — cut a paragraph at the onset of model degeneration, keeping the
+// coherent lead. This is COHERENCE HYGIENE, not grounding: it drops the repetition
+// loops, verbatim-restated sentences, and low-diversity token runs a small model falls
+// into once it runs past what it can say ("I'm not sure about that. I'm not sure about
+// that." / "00/00/00/00…"). Used only on the write-first (groundLater) path, where the
+// whole draft is kept — so the kept draft is the model's real prose up to the point it
+// stops being prose. Conservative: a paragraph with no degeneration is returned whole.
+const norml = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+export const trimDegeneration = (text = '') => {
+  const sents = String(text || '').split(/(?<=[.!?])\s+/);
+  const kept = []; const seen = new Set();
+  for (const s of sents) {
+    const n = norml(s);
+    if (!n) { kept.push(s); continue; }
+    if (seen.has(n)) break;                                  // a sentence restated verbatim — degeneration onset
+    const toks = n.split(' ');
+    let run = 1, maxRun = 1;
+    for (let i = 1; i < toks.length; i++) { if (toks[i] === toks[i - 1]) { run++; if (run > maxRun) maxRun = run; } else run = 1; }
+    if (maxRun >= 5) break;                                  // a token repeated 5+ times in a row — a loop
+    const uniq = new Set(toks).size;
+    if (toks.length >= 12 && uniq / toks.length < 0.35) break;   // long sentence, almost no distinct words — garbage
+    seen.add(n); kept.push(s);
+  }
+  const out = kept.join(' ').trim();
+  return out || String(text || '').trim();                  // never trim to nothing — keep the original if the whole thing tripped
 };
 
 // EVA — the provenance gate: verify per sentence (bindAndVeto binds at claim
@@ -148,7 +182,17 @@ const carveDesign = ({ design, fold, question }) => {
 // strike a frame leak at EVA. The coarse-generate / fine-verify body shared by the
 // static walk and the live (self-read) walk, so both hold the SAME grounding floor.
 // Returns { paragraph|null, gated, action, leak, seed, weld }.
-const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal, weld = null }) => {
+//
+// groundLater — WRITE FIRST, GROUND LATER. The default path grounds at BIRTH: it
+// splices the ungrounded tail and salvages a beat down to its cited prefix, so a
+// small model that drafts a full paragraph around a couple of sourced sentences
+// ships only those sentences ("wrote a lot, kept little"). Under groundLater the
+// beat KEEPS the whole draft — grounding becomes a downstream LABEL (per-span
+// provenance: cite what a source witnesses, mark the rest as the model's own),
+// never a gate that deletes. The only birth-time strike is the editor-register
+// leak, which is hygiene (the model narrating the writing), not grounding. `gated`
+// is still computed so the citation labels and sources ride along.
+const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal, weld = null, groundLater = false }) => {
   const seed = seedFor({ beat, slice });
   const ceiling = ceilingFor({ mass: slice.reduce((m, s) => m + (s.score || 0), 0) / slice.length, spans: slice });
   let paragraph = null, gated = null, action = 'regen', leak = null;
@@ -163,6 +207,20 @@ const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal
     const continuation = String(raw || '').trim();
     const full = seed ? `${seed} ${continuation}`.trim() : continuation;
     gated = bindAndVeto(full, slice, { question: beat.topic, task: 'answer' });
+    if (groundLater) {
+      // Keep the whole draft; strike only the editor-register leak (one regen to
+      // shed it) and trim any degeneration tail (coherence hygiene, not grounding).
+      // Grounding is deferred to the render's per-span provenance pass.
+      leak = frameLeak(full);
+      if (leak && attempt < MAX_REGEN) { action = 'regen'; continue; }
+      const deleaked = leak ? full.replace(frameLeak(full), '').trim() : full;
+      const cleaned = trimDegeneration(deleaked);
+      if (cleaned) {
+        if (cleaned !== full) gated = bindAndVeto(cleaned, slice, { question: beat.topic, task: 'answer' });
+        paragraph = cleaned; action = gated.boundFraction >= 1 ? 'accept' : 'ground-later'; leak = null;
+      }
+      break;
+    }
     let eva = evaSplice(gated);
     // A frame leak that bound lexically is struck here — the grounding floor cannot
     // see it (it rides on a grounded claim), so EVA must.
@@ -180,7 +238,7 @@ const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal
   // sources), a leaked prefix is struck, and a beat where NOTHING bound — a
   // connective seed with a drifting continuation — still holds as NUL. Never
   // confabulation; at worst the beat is the anchor's own topic sentence.
-  if (!paragraph && gated) {
+  if (!groundLater && !paragraph && gated) {
     const prefix = boundPrefix(gated.bound);
     if (prefix && !frameLeak(prefix)) {
       const regated = bindAndVeto(prefix, slice, { question: beat.topic, task: 'answer' });
@@ -194,8 +252,11 @@ const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal
   // through it. A struck sentence is dropped and the paragraph RE-GATED so its
   // sources stay accurate; a fully-struck paragraph holds as NUL — drift is never
   // folded into the running document, and never becomes the next retrieval cue.
+  // The weld strikes drift before it becomes the next prior. Under groundLater we keep
+  // the draft whole and label it downstream, so the weld's discarding is off — the
+  // provenance pass will mark any drift as the model's own rather than delete it.
   let welded = null;
-  if (paragraph && weld) {
+  if (paragraph && weld && !groundLater) {
     welded = selfRead(paragraph, { slice, pool: weld.pool, doc: weld.doc });
     if (welded.action === 'reject') { paragraph = null; }
     else if (welded.action === 'splice') {
@@ -237,6 +298,10 @@ export const walk = async ({
   doc = null,             // optional — the reading's own doc; sharpens the weld's witness signal
                           // (propositional judgment, coref intact). Absent, the weld degrades to
                           // the citation-holds gate against the slice.
+  groundLater = false,    // WRITE FIRST, GROUND LATER: keep each drafted paragraph WHOLE (strike
+                          // only editor-register leaks) and let grounding be a downstream per-span
+                          // label rather than a birth-time gate that salvages the draft down to its
+                          // cited prefix. Off by default — the birth gate stays the shipped floor.
   onParagraph = null,     // (record, i) -> void — called as each paragraph is accepted (UI streaming)
   signal = null,
 } = {}) => {
@@ -285,7 +350,7 @@ export const walk = async ({
       const coldStart = accepted.length === 0;
       served.push(...slice);
       const weld = weldOn ? { pool: served, doc } : null;
-      const { paragraph, gated, action, leak, seed, weld: welded } = await composeBeat(model, { beat, slice, prior, coldStart, genre, signal, weld });
+      const { paragraph, gated, action, leak, seed, weld: welded } = await composeBeat(model, { beat, slice, prior, coldStart, genre, signal, weld, groundLater });
       // Spend only what the beat CONSUMED: its anchor (a walked beat is never
       // retried against the same anchor — monotone), plus every span the accepted
       // paragraph actually CITED (re-anchoring a cited span later would restate
@@ -296,7 +361,10 @@ export const walk = async ({
       covered.add(anchor.idx); seen.add(String(anchor.idx));
       for (const src of ((gated && gated.sources) || [])) { covered.add(src); seen.add(String(src)); }
       done.add(beat.id); wrote += 1; idx += 1;
-      if (!paragraph || !gated.sources.length) {
+      // NUL — no paragraph survived (empty / all-leak), or, in the birth-gate path, it
+      // grounded nothing. Under groundLater a paragraph with no cited span is still
+      // KEPT (grounding is a later label), so only an empty draft holds.
+      if (!paragraph || (!groundLater && !gated.sources.length)) {
         trace.push({ beat: beat.id, kind: 'nul', boundFraction: round3(gated?.boundFraction ?? 0), leak,
                      ...(welded?.fired ? { weld: welded.action } : {}) });
         continue;
@@ -337,7 +405,7 @@ export const walk = async ({
     const prior = accepted.length ? accepted[accepted.length - 1].text : '';
     const coldStart = accepted.length === 0;
     const weld = weldOn ? { pool, doc } : null;
-    const { paragraph, gated, action, leak, seed, weld: welded } = await composeBeat(model, { beat, slice, prior, coldStart, genre, signal, weld });
+    const { paragraph, gated, action, leak, seed, weld: welded } = await composeBeat(model, { beat, slice, prior, coldStart, genre, signal, weld, groundLater });
 
     // Cover the slice whether the beat held or not — a walked beat is not retried
     // against the same slice (monotone coverage), and the beat is marked done.
@@ -345,9 +413,9 @@ export const walk = async ({
     done.add(beat.id);
     wrote += 1;
 
-    if (!paragraph || !gated.sources.length) {
-      // NUL — the slice is present but did not cohere into a grounded (and
-      // un-leaked) paragraph; hold it (record the honest miss), never confabulate.
+    // NUL — no paragraph survived, or (birth-gate path) it grounded nothing. Under
+    // groundLater a paragraph with no cited span is KEPT and labeled downstream.
+    if (!paragraph || (!groundLater && !gated.sources.length)) {
       trace.push({ beat: beat.id, kind: 'nul', boundFraction: round3(gated?.boundFraction ?? 0), leak,
                    ...(welded?.fired ? { weld: welded.action } : {}) });
       continue;

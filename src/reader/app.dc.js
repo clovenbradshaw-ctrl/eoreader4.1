@@ -4558,8 +4558,15 @@ class Component extends DCLogic {
     // Wrap the chat model so each beat's model.phrase streams its tokens (walk calls .phrase
     // directly; streamPhrase drives onToken). partial resets per call, so a regenerated beat
     // repaints from empty rather than doubling.
+    // Record EVERY model call's full raw output to the audit — including the attempts a
+    // beat later salvages or regenerates away. The final answer-raw shows only what the
+    // grounding floor KEPT; without this, a walk that "wrote a lot but kept little"
+    // (every beat salvaged to its cited prefix) leaves no trace of what the model
+    // actually produced. `call` counts calls across the whole walk (a regenerated beat
+    // is two calls), so the audit shows written-vs-kept honestly.
+    let call=0;
     const streamModel={name:(o.model&&o.model.name)||this.state.backend||'model',
-      phrase:(messages,opts)=>{partial='';return this._ME.streamPhrase(o.model,messages,{...opts,onToken:(p)=>{const s=String(p||'');if(!s)return;o.guard.feed();partial+=s;schedule();},signal:o.guard.signal});}};
+      phrase:(messages,opts)=>{partial='';const n=++call;return this._ME.streamPhrase(o.model,messages,{...opts,onToken:(p)=>{const s=String(p||'');if(!s)return;o.guard.feed();partial+=s;schedule();},signal:o.guard.signal}).then(raw=>{const t=String(raw||'');this._auditRec(id,'walk-beat-raw',{output:t,note:'model call '+n+' · '+t.length+' chars written'});return raw;});}};
     // REFOLD — the self-read weld. Re-query the reading for the next beat, focused by the prior
     // paragraph (its tail) plus the ask, and hand back only spans not already drunk. Each span's
     // idx is its GLOBAL sentence index, so a cite (s{idx}) maps straight back to master.sentences.
@@ -4595,7 +4602,10 @@ class Component extends DCLogic {
     this._auditRec(id,'answer-prompt',{prompt:'[walk] '+(seed.length?'discovered continuation':'developed piece')+' — up to '+demand+' paragraphs, one model call each, refolding per paragraph.'});
     let res;
     try{
-      res=await this._ME.walk({fold:[],design:{demand},question:q,model:streamModel,refold,onParagraph:(rec)=>{accParas.push(untag(rec.text));partial='';schedule();},state,signal:o.guard.signal});
+      // WRITE FIRST, GROUND LATER — keep each drafted paragraph whole; the finish()
+      // below grounds it as a per-span provenance label (cite what a source witnesses,
+      // mark the rest as the model's own) rather than salvaging the draft at birth.
+      res=await this._ME.walk({fold:[],design:{demand},question:q,model:streamModel,refold,groundLater:true,onParagraph:(rec)=>{accParas.push(untag(rec.text));partial='';schedule();},state,signal:o.guard.signal});
     }catch(e){ o.guard.clear(); if((e&&e.stopped)||this._stopGen)return; res=null; }
     o.guard.clear();
     // The walk failed (model stalled, import error, …) — the bubble must still settle,
@@ -4608,7 +4618,11 @@ class Component extends DCLogic {
       else{ const fb=this.answerQuestion(q,sources); o.finish({text:fb.text||'I couldn’t build this out from what you’ve read.',groundKind:fb.refs&&fb.refs.length?'matched':'model',register:'grounded'}); }
       return;
     }
-    this._auditRec(id,'answer-raw',{output:res.answer,note:'walk · '+res.paragraphs.length+'/'+demand+' paragraphs · '+res.trace.map(t=>t.kind).join(',')});
+    // Per-beat kept-vs-written ledger: the kind + how much bound (boundFraction) for each
+    // beat, so a walk that salvaged everything (kept only the cited prefix of each
+    // paragraph) reads plainly against the walk-beat-raw records above it.
+    const beatLedger=res.trace.map(t=>t.beat+':'+t.kind+(t.boundFraction!=null?(' bound='+t.boundFraction):'')+(t.weldStruck?(' weld-struck='+t.weldStruck):'')).join(' · ');
+    this._auditRec(id,'answer-raw',{output:res.answer,note:'walk · '+res.paragraphs.length+'/'+demand+' paragraphs · '+beatLedger});
     const paras=res.paragraphs;
     if(!paras.length){
       // Nothing grounded a developed piece — hold honestly rather than pad from priors.

@@ -86,6 +86,7 @@ const run = async () => {
     model,
     question: QUESTION,
     doc,                       // sharpens the weld's witness signal (coref intact)
+    groundLater: !process.argv.includes('--birth-gate'),  // write first, ground later (default); --birth-gate for the old floor
     onParagraph: (rec, i) => process.stderr.write(`  ¶${i + 1} [${rec.action}] cited ${rec.sources.length}\n`),
   });
 
