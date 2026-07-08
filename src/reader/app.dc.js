@@ -1218,7 +1218,18 @@ class Component extends DCLogic {
   // Per-answer grounding strip: collapsed by default (not overwhelming), one tap reveals
   // the passages/entities the answer is grounded in. Keyed by chat id + message index.
   toggleGround(key){this.setState(s=>{const g={...(s.groundOpen||{})};g[key]=!g[key];return {groundOpen:g};});}
-  _scrollChat(){requestAnimationFrame(()=>{const a=document.getElementById('eo-chat-scroll');if(a)a.scrollTop=a.scrollHeight;});}
+  // The chat scroll pane — overlay OR docked (only one is mounted at a time).
+  _chatPane(){return document.getElementById('eo-chat-scroll')||document.getElementById('eo-chat-scroll-docked');}
+  // STICK-TO-BOTTOM, only if the reader is ALREADY at the bottom. Called BEFORE a
+  // streaming paint mutates state (while the DOM still holds the pre-growth height),
+  // it records whether the pane was pinned to the foot. If the reader has scrolled UP
+  // to re-read an earlier paragraph, `_chatStick` goes false and the next paint leaves
+  // their scroll where it is — so a long-form walk's new paragraphs append below
+  // instead of yanking the view down and scrolling the paragraph they're reading out
+  // of sight (the "it hides the last one when the 2nd appears" report). A fresh turn
+  // resets it to true (sendChat), so the first answer always scrolls into view.
+  _captureStick(){const a=this._chatPane();this._chatStick=!a||((a.scrollHeight-a.scrollTop-a.clientHeight)<80);}
+  _scrollChat(force){const stick=(force===true)||this._chatStick!==false;requestAnimationFrame(()=>{if(!stick)return;const a=this._chatPane();if(a)a.scrollTop=a.scrollHeight;});}
   setBackend(name){try{localStorage.setItem('eo_backend',name);}catch(e){}if(this._chatModel&&this._chatModel.id!==name)this._chatModel=null;this.setState({backend:name,modelStatus:''});}
   // Questions a clock answers — handled without any model so they always work.
   mechanicalAnswer(q){const low=q.toLowerCase();
@@ -3927,6 +3938,7 @@ class Component extends DCLogic {
     // ask names no length — the manual override for when the emergent length read comes back
     // short. Gated the same as the automatic cue: grounded, non-creative reading only.
     this._turnForceWalk=!!this._forceWalk; this._forceWalk=false;
+    this._chatStick=true;   // a fresh turn is sticky — the answer scrolls into view; scrolling up mid-stream unsticks it
     // THE TURN'S CONFIG IS DERIVED, not stored (design/chat-redesign/REVISIONS.md):
     // one emergent read of the ask replaces the old composer mode state. It rides
     // on the instance for the depth/strategy consumers downstream of this turn
@@ -4244,7 +4256,7 @@ class Component extends DCLogic {
       // returns the full reply, which `finish` then re-renders as bound markdown.
       this._setThink(id,this._composeOpen(grounded,ground));
       let acc='',raf=0;
-      const paint=()=>{raf=0;const head=this._composeTick(acc);this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,think:head};return {...c,messages:m};})}),()=>this._scrollChat());};
+      const paint=()=>{raf=0;this._captureStick();const head=this._composeTick(acc);this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,think:head};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
       // Only a genuinely SECTIONED broad grounded answer gets the 900-token room to breathe; a plain
       // lookup — and a longform ask we're deliberately keeping short and grounded — stays on the
@@ -4541,7 +4553,7 @@ class Component extends DCLogic {
     // Stream: the accepted paragraphs plus the paragraph currently decoding, painted token by
     // token into the pending bubble (the same rAF-batched paint the single-call path uses).
     let accParas=seed.map(p=>p.text), partial='', raf=0;
-    const paint=()=>{raf=0;const body=accParas.concat(partial?[partial]:[]).join('\n\n');this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:body,think:this._composeTick(body)};return {...c,messages:m};})}),()=>this._scrollChat());};
+    const paint=()=>{raf=0;this._captureStick();const body=accParas.concat(partial?[partial]:[]).join('\n\n');this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:body,think:this._composeTick(body)};return {...c,messages:m};})}),()=>this._scrollChat());};
     const schedule=()=>{if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
     // Wrap the chat model so each beat's model.phrase streams its tokens (walk calls .phrase
     // directly; streamPhrase drives onToken). partial resets per call, so a regenerated beat
@@ -4954,7 +4966,7 @@ class Component extends DCLogic {
       this._auditRec(id,'answer-prompt',{prompt:messages.map(mm=>'['+mm.role+']\n'+mm.content).join('\n\n---\n\n')});
       this._setThink(id,this._composeOpen(grounded,ground));
       let acc='',raf=0;
-      const paint=()=>{raf=0;const head=this._composeTick(acc);this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,think:head};return {...c,messages:m};})}),()=>this._scrollChat());};
+      const paint=()=>{raf=0;this._captureStick();const head=this._composeTick(acc);this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,think:head};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
       // Only a genuinely SECTIONED broad grounded answer gets the 900-token room to breathe; a plain
       // lookup — and a longform ask we're deliberately keeping short and grounded — stays on the
