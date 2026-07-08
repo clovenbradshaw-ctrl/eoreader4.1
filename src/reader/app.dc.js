@@ -4074,7 +4074,9 @@ class Component extends DCLogic {
       // develop/brief length demand, with an explicit essay/word-count as the floor) —
       // the right cue, not a keyword cliff. Soft: a pointed lookup falls straight through
       // to the single grounded call below, unchanged.
-      if(grounded&&amode!=='creative'&&this._wantsLongform(q,read||meta)){
+      // An explicit paragraph count ("5 paragraphs") is a strong longform seed the essay/
+      // word-count floor misses — it names the shape outright, so it cues the walk directly.
+      if(grounded&&amode!=='creative'&&(this._paragraphDemand(q)||this._wantsLongform(q,read||meta))){
         return await this._walkReply(id,q,sources,{model,guard,finish,ground,meta,read,prev});
       }
       let messages;
@@ -4155,7 +4157,7 @@ class Component extends DCLogic {
       // the LAST paragraph as the left-context (generation drives retrieval). The already-
       // written paragraphs seed the run; the walk extends them, grounded, until the fold is
       // spent. Guarded: grounded, contentful, not a Stop, and not already a cued walk.
-      if(grounded&&amode!=='creative'&&!this._stopGen&&!isolated&&!this._wantsLongform(q,read||meta)&&this._isParagraphReturn(text)){
+      if(grounded&&amode!=='creative'&&!this._stopGen&&!isolated&&!this._paragraphDemand(q)&&!this._wantsLongform(q,read||meta)&&this._isParagraphReturn(text)){
         const seedParas=this._seedParasFrom(text);
         if(seedParas.length){ return await this._walkReply(id,q,sources,{model,guard:this._stallGuard(),finish,ground,meta,read,prev,seed:seedParas,shown:true}); }
       }
