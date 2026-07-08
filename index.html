@@ -5034,13 +5034,49 @@ class Component extends DCLogic {
   // Render markdown-lite to HTML. `cites` (optional) is an idx→{u,label} registry: any
   // ⟦cN⟧ sentinel _citeAnnotate left in the text becomes an inline, clickable citation pill
   // (¶ source) bound to passage N. Clicks are caught by the bubble's onCite delegate (data-u).
-  _md(src,cites,sreg){
+  // Build the inline entity linker for one chat answer: the set of entities the answer is
+  // grounded in (its named entities) plus the salient, recurring entities of the sources it
+  // drew on — signal, not noise, scoped exactly the way the reading view scopes a page. Returns
+  // { re, map, want } for _md to wrap matching names, or null when there is nothing to link
+  // (link mode off, no graph, or no salient entity). The id→forms reverse index is cached by rev.
+  _answerEntLinker(ids,sources){
+    if(!this.state.linkMode||typeof document==='undefined'||!this.graph)return null;
+    const map=this.buildLinkIndex();if(!map||!map.size)return null;
+    const want=new Set();
+    for(const id of (ids||[])){if(id!=null)want.add(id);}
+    for(const u of (sources||[])){const se=this.sourceEntities(u);if(se)for(const id of se)want.add(id);}
+    if(!want.size)return null;
+    if(this._entFormsRev!==this._linkRev){
+      const rev=new Map();
+      for(const [form,id] of map){let a=rev.get(id);if(!a){a=[];rev.set(id,a);}a.push(form);}
+      this._entForms=rev;this._entFormsRev=this._linkRev;
+    }
+    const cur=this.state.panelSel,forms=[];
+    for(const id of want){if(id===cur)continue;const fs=this._entForms.get(id);if(fs)for(const f of fs)forms.push(f);}
+    if(!forms.length)return null;
+    forms.sort((a,b)=>b.length-a.length);
+    const esc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    let re;try{re=new RegExp('\\b('+forms.map(esc).join('|')+')\\b','gi');}catch(e){return null;}
+    return {re,map,want};
+  }
+  _md(src,cites,sreg,entLink){
     const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const att=s=>esc(String(s==null?'':s)).replace(/"/g,'&quot;');
     // A clean citation glyph — a bare superscript footnote number (no box). Numbered per passage;
     // hover shows the source name; click opens it (bubble onCite delegate, data-u).
     const pillStyle='color:var(--acc);font-weight:700;font-size:0.72em;vertical-align:super;line-height:0;cursor:pointer;padding:0 1px;';
-    const inline=s=>esc(s)
+    // Inline entity links — the answer's own grounded entities made clickable in the prose, the
+    // same "click a name to open its profile" affordance the reading view gives, brought to the
+    // chat bubble. Names are wrapped BEFORE the markdown transforms (via sentinels, like the
+    // citations) so a name never fragments a link or a bold run, and never sub-wraps inside code.
+    // The surface form rides along on data-eo-entform; the bubble's click/hover delegates
+    // (_onCite / _initCiteHover) resolve it back to the entity id.
+    const entStyle='color:var(--acc);cursor:pointer;border-bottom:1px dotted var(--accline);';
+    const entForms=[];
+    const inline=s=>{
+      let t=esc(s);
+      if(entLink){t=t.replace(entLink.re,(mm)=>{const id=entLink.map.get(mm.toLowerCase());if(id==null||!entLink.want.has(id))return mm;const k=entForms.push(mm.toLowerCase())-1;return '⟬e'+k+'⟭'+mm+'⟬/e⟭';});}
+      return t
       .replace(/`([^`]+)`/g,(m,c)=>'<code style="background:rgba(0,0,0,.07);border-radius:4px;padding:1px 4px;font-size:.92em;">'+c+'</code>')
       .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer" style="color:var(--acc);">$1</a>')
       // Auto-link bare site URLs so every site mentioned in chat is clickable. Runs after
@@ -5063,7 +5099,12 @@ class Component extends DCLogic {
         if(s.kind==='source')return '<span class="eo-cite eo-prov eo-prov-source" data-kind="source" data-u="'+att(s.u)+'" data-quote="'+att(s.quote)+'" data-label="'+att(s.label)+'" data-host="'+att(s.host)+'" title="From a source — hover for the passage, click to go to it">';
         const assert=s.role!=='connective';
         return '<span class="eo-prov eo-prov-llm'+(assert?' eo-prov-assert':'')+'" data-kind="llm" data-role="'+att(s.role||'assertion')+'" title="'+(assert?'The model asserts this — from its own knowledge (its training), not a source you loaded':'The model’s own phrasing — joining the grounded points, asserting nothing a source needs to carry')+'">';})
-      .replace(/⟦\/g⟧/g,'</span>');
+      .replace(/⟦\/g⟧/g,'</span>')
+      // Entity sentinels → clickable name spans (added AFTER escaping + markdown, so the span is
+      // raw HTML and the name inside carries no stray markup).
+      .replace(/⟬e(\d+)⟭/g,(m,i)=>'<span class="eo-ent-chat" data-eo-entform="'+att(entForms[i]||'')+'" style="'+entStyle+'">')
+      .replace(/⟬\/e⟭/g,'</span>');
+    };
     const lines=String(src||'').replace(/\r/g,'').split('\n');
     const out=[];let list=null;
     const flush=()=>{if(list){out.push('<'+list.tag+' style="margin:6px 0;padding-left:20px;">'+list.items.join('')+'</'+list.tag+'>');list=null;}};
@@ -6864,7 +6905,10 @@ class Component extends DCLogic {
   // scrolls to the cited section (data-quote). A real markdown link (its own href) is honoured
   // first — a grounded span may wrap a link, and the link must win over the go-to-passage jump.
   // A void (model's-own) span carries no data-u, so a click on it falls through untouched.
-  _onCite(e){let el=e&&(e.target||e.srcElement);for(let d=0;el&&d<6;d++){if(el.tagName==='A'&&el.getAttribute&&el.getAttribute('href'))return;if(el.getAttribute){const u=el.getAttribute('data-u');if(u){if(e.preventDefault)e.preventDefault();if(e.stopPropagation)e.stopPropagation();this._hideCiteCard(true);this._goToPassage(u,el.getAttribute('data-quote')||'');return;}}el=el.parentNode;}}
+  _onCite(e){let el=e&&(e.target||e.srcElement);for(let d=0;el&&d<6;d++){if(el.tagName==='A'&&el.getAttribute&&el.getAttribute('href'))return;if(el.getAttribute){
+    // A clicked entity name in the answer opens its profile — the reading view's entity-click, here.
+    const ef=el.getAttribute('data-eo-entform');if(ef){const id=this.buildLinkIndex().get(ef);if(id!=null){if(e.preventDefault)e.preventDefault();if(e.stopPropagation)e.stopPropagation();this._hideCiteCard(true);this.entLeave();this.clickEntity(id);return;}}
+    const u=el.getAttribute('data-u');if(u){if(e.preventDefault)e.preventDefault();if(e.stopPropagation)e.stopPropagation();this._hideCiteCard(true);this._goToPassage(u,el.getAttribute('data-quote')||'');return;}}el=el.parentNode;}}
   // Open a cited source and scroll it to the exact passage the citation marks — "go to the
   // section of the page it's from". If the source is already open we just scroll; otherwise we
   // load it, then poll for the iframe to render before scrolling to the verbatim passage.
@@ -6887,7 +6931,11 @@ class Component extends DCLogic {
   _initCiteHover(){
     if(this._citeHoverInit||typeof document==='undefined')return;
     this._citeHoverInit=true;
-    this._onCiteOver=(e)=>{const p=this._closestCite(e.target);if(!p)return;
+    this._onCiteOver=(e)=>{
+      // An entity name in the answer floats the same entity preview card the reading view uses.
+      const en=this._closestEnt(e.target);
+      if(en){const id=this.buildLinkIndex().get(en.getAttribute('data-eo-entform'));if(id!=null){try{this.entHover(id,e);}catch(_){}}return;}
+      const p=this._closestCite(e.target);if(!p)return;
       // In 'off' mode the per-span provenance layer is inert — no hover card for eo-prov spans.
       // Native citation pills (eo-cite without eo-prov — the [N] superscripts) still work in every mode.
       if(this.state.provMode==='off'&&p.classList&&p.classList.contains('eo-prov'))return;
@@ -6906,7 +6954,10 @@ class Component extends DCLogic {
         return;
       }
       clearTimeout(this._citeSwitchT);this._citePill=p;this._showCiteCard(p);};
-    this._onCiteOut=(e)=>{const p=this._closestCite(e.target);if(!p)return;const to=e.relatedTarget;
+    this._onCiteOut=(e)=>{
+      const en=this._closestEnt(e.target);
+      if(en){const to=e.relatedTarget;if(to&&this._closestEnt(to))return;try{this.entLeave();}catch(_){}return;}
+      const p=this._closestCite(e.target);if(!p)return;const to=e.relatedTarget;
       if(to&&this._citeCard&&this._citeCard.contains(to))return;   // moved onto the card — keep it
       clearTimeout(this._citeSwitchT);this._hideCiteCard();};
     document.addEventListener('mouseover',this._onCiteOver);
@@ -6916,6 +6967,8 @@ class Component extends DCLogic {
   // per-span provenance wrapper (eo-prov, which a void/model's-own span carries without eo-cite).
   // Either floats the provenance card, so EVERY span is hoverable, not only the cited ones.
   _closestCite(el){for(let d=0;el&&el.getAttribute&&d<4;d++){if(el.classList&&(el.classList.contains('eo-cite')||el.classList.contains('eo-prov')))return el;el=el.parentNode;}return null;}
+  // The nearest clickable entity name under the cursor (an inline answer link).
+  _closestEnt(el){for(let d=0;el&&el.getAttribute&&d<4;d++){if(el.classList&&el.classList.contains('eo-ent-chat'))return el;el=el.parentNode;}return null;}
   _citeCardEl(){
     if(this._citeCard)return this._citeCard;
     const el=document.createElement('div');
@@ -7323,7 +7376,11 @@ class Component extends DCLogic {
       // markup on `m.svg`; show it as the bubble body verbatim (our own template's
       // output, every text node escaped at the source — render.js).
       const hasSvg=!isUser&&!!m.svg;
-      const bodyHtml=hasSvg?m.svg:(isMd?this._md((rcites?rcites.text:(ann?ann.text:m.text)),liveReg||(rcites?rcites.reg:(ann&&ann.reg)),ann&&ann.sreg):'');
+      // Once the answer has settled, make the entities it named (and the salient entities of the
+      // sources it drew on) clickable inline — the reading view's entity-click, in the chat bubble.
+      // Only on settled answers, so streaming stays cheap and the spans don't churn token by token.
+      const entLink=(isMd&&!m.pending)?this._answerEntLinker(m.entities,m.sources):null;
+      const bodyHtml=hasSvg?m.svg:(isMd?this._md((rcites?rcites.text:(ann?ann.text:m.text)),liveReg||(rcites?rcites.reg:(ann&&ann.reg)),ann&&ann.sreg,entLink):'');
       // The numbered REFERENCES the inline footnotes point at — each previewing the verbatim source
       // line (the librarian apparatus, shown by default). When the binder found no inline match we
       // still list the passages the answer drew on, so the source text is always in view.
