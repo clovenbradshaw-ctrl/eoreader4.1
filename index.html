@@ -6241,9 +6241,9 @@ class Component extends DCLogic {
       const exchange=prevMsgs.slice(-2).map(m=>((m.role==='user')?'user: ':'assistant: ')+this.truncLabel(this.norm(m.text),240)).join('\n');
       const prompt='You are helping in one ongoing conversation.\n'+
         (exchange?('The last exchange:\n'+exchange+'\n'):'')+
-        'The user just said: "'+String(q||'')+'"\n'+
+        'They just said: "'+String(q||'')+'"\n'+
         'Your read of it: '+String((read&&read.speech)||'')+'\n'+
-        'This request is underspecified — you cannot answer it well until the user says what they mean. '+
+        'This request is underspecified — you cannot answer it well until they say what they mean. '+
         'Ask them ONE short, friendly clarifying question that would let you proceed. '+
         'Ask only the question — no preamble, no answer, no apology, one sentence.';
       let acc='',raf=0;
@@ -6324,7 +6324,7 @@ class Component extends DCLogic {
     // emergent ("only when the material genuinely falls into several parts"), and marked "don't
     // quote it" like the rest of the steer. The talker is never handed a bare layout directive; the
     // read that understood the turn is what decides how the answer is shaped.
-    if(meta.speech&&!meta.abstained)bits.push('What this turn is really for — read it as your brief for what the user wants, and let it decide what you foreground and how you shape the reply (a note to you, not the user; don’t quote it or say you were told it): '+meta.speech+' Aim the answer squarely at that, and let the answer’s shape follow what you actually have to say: open with a direct answer in a sentence or two, then — only when the material genuinely falls into several distinct parts — give each part its own short "## heading" with the few load-bearing terms in **bold**; when it is one idea, keep it a tight paragraph with no headings. Lead with the part of what you read that actually speaks to what they’re after'+(meta.route==='research'?'.':'; where what you read only glances their question, say so plainly rather than serving the nearest passage as though it were the answer.'));
+    if(meta.speech&&!meta.abstained)bits.push('What this turn is really for — read it as your brief for what they want, and let it decide what you foreground and how you shape the reply (a note to you, not to them; don’t quote it or say you were told it): '+meta.speech+' Aim the answer squarely at that, and let the answer’s shape follow what you actually have to say: open with a direct answer in a sentence or two, then — only when the material genuinely falls into several distinct parts — give each part its own short "## heading" with the few load-bearing terms in **bold**; when it is one idea, keep it a tight paragraph with no headings. Lead with the part of what you read that actually speaks to what they’re after'+(meta.route==='research'?'.':'; where what you read only glances their question, say so plainly rather than serving the nearest passage as though it were the answer.'));
     if(meta.anchorGap)bits.push('What you’ve read does not mention '+meta.anchorGap.missing.join(', ')+' — where the answer needs that, say so plainly and in the first person ("I didn’t find that in what I read", never "the reading doesn’t mention…") instead of filling it in from memory.');
     return bits.join(' ');
   }

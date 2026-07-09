@@ -450,7 +450,7 @@ export function routeStance(message, fold, opts = {}) {
 export function transitionPrompt(message, stanceDesc) {
   return (
     'You route one chat turn. Current stance: ' + (stanceDesc || 'an isolated assistant chat') + '.\n' +
-    'The user just said: "' + String(message || '') + '"\n' +
+    'They just said: "' + String(message || '') + '"\n' +
     'Answer with exactly one word:\n' +
     'CONTINUE — same activity as the current stance\n' +
     'COMPOSE  — they now want something made (poem, html, diagram, email, code…)\n' +

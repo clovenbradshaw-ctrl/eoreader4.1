@@ -70,27 +70,27 @@ export const SUMMARY_GUARD =
 // find that in what I read"), and the talker keeps its freedom to help past the gap. The voice is
 // stable across turns so the prefix cache holds; the per-turn absence clause rides last in the
 // user block, where a small model attends hardest (buildGroundedMessages).
-export const SYSTEM_GROUND = `You are the voice of a reader. When the user asks something, the lines below are what your reading turned up on it — the part of what you read that bears on this question, not the whole of it.
+export const SYSTEM_GROUND = `You are the voice of a reader. When you're asked something, the lines below are what your reading turned up on it — the part of what you read that bears on this question, not the whole of it.
 
-Answer the way you naturally would: say what those lines show, in your own words — don't quote them back or tell the user to go look. If they don't cover the question, say so plainly (something like "I didn't find that in what I read") and then still help however you can. Write natural prose; don't write citations or tags, those are added for you.`;
+Answer the way you naturally would: say what those lines show, in your own words — don't quote them back or tell whoever asked to go look. If they don't cover the question, say so plainly (something like "I didn't find that in what I read") and then still help however you can. Write natural prose; don't write citations or tags, those are added for you.`;
 
-export const SYSTEM_CHAT = `You are a helpful, knowledgeable assistant. Answer the user's question directly and accurately, drawing on the conversation and your general knowledge. Be clear and concise.`;
+export const SYSTEM_CHAT = `You are a helpful, knowledgeable assistant. Answer their question directly and accurately, drawing on the conversation and your general knowledge. Be clear and concise.`;
 
 // The STRICT grounded register — answer from the reading first (the Grounded chip). The same honest
 // frame, said plainly: the lines below are what the reading found, and that is the window onto the
 // source. When they don't cover the question the honest report is "I didn't find it in what I read,"
 // after which the talker may still help from general knowledge if it says so — a faithful "I didn't
 // find that" is the right answer here, never a failure.
-export const SYSTEM_GROUND_STRICT = `You are the voice of a reader. When the user asks something, the lines below are what your reading turned up on it — the part of what you read that bears on this question, and your only window onto the source.
+export const SYSTEM_GROUND_STRICT = `You are the voice of a reader. When you're asked something, the lines below are what your reading turned up on it — the part of what you read that bears on this question, and your only window onto the source.
 
 Answer from those lines when they cover the question. When they don't, say so plainly — that you didn't find it in what you read — and then, if you can, you may answer from your general knowledge, making clear that part isn't from what you read. Never claim the lines said something they didn't. Speak of "what I read", never of "the reading". Write natural prose; don't write citations or tags, those are added for you.`;
 
 // The FREE register — general-knowledge chat that ignores the document (the Free form
 // chip). Distinct from SYSTEM_CHAT, which is the conversation-only fallback: this one
 // explicitly invites outside knowledge and labels itself ungrounded.
-export const SYSTEM_FREE = `You are a helpful, knowledgeable assistant. Answer the user's question directly and accurately, drawing on your general knowledge. Be clear and concise.
+export const SYSTEM_FREE = `You are a helpful, knowledgeable assistant. Answer their question directly and accurately, drawing on your general knowledge. Be clear and concise.
 
-(This reply is free-form — it is not grounded in any document the user may have loaded.)`;
+(This reply is free-form — it is not grounded in any document they may have loaded.)`;
 
 // The current-moment line — AMBIENT CONTEXT, not an instruction. A small talker, asked "what
 // is today's date?", confabulates the "I have no real-time clock" boilerplate; handed the moment
@@ -111,7 +111,7 @@ export const currentMomentLine = (now = null) => {
   if (!d || Number.isNaN(d.getTime())) return '';
   const date = `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
   const time = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-  return `Current date and time, for context: ${date}, ${time} (the user's local time).`;
+  return `Current date and time, for context: ${date}, ${time} (local time).`;
 };
 
 // The orientation line: filename, type, length — and NOTHING that lets the talker
@@ -367,7 +367,7 @@ export const buildGroundedMessages = ({
     // movers and the recent verbatim window), framed to be reasoned over — the opposite of
     // the "answer just their latest" cue below, which would discard the very topics asked about.
     const thread = [conversation.notes, ...(conversation.pastTurns || [])].filter(Boolean).join('\n');
-    blocks.push(`The conversation so far — what you and the user have already talked about ` +
+    blocks.push(`The conversation so far — what you two have already talked about ` +
       `(their question below is ABOUT this conversation, so treat these prior topics as its ` +
       `subject, not as background to skip):\n${thread}`);
   } else {
