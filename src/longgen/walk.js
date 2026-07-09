@@ -60,7 +60,14 @@ const beatReflection = (deepRead, visited) => {
   } catch { return ''; }
   if (!r || !r.body) return '';
   if (visited instanceof Set && Number.isInteger(r.peak)) visited.add(r.peak);   // habituate
-  return r.body;
+  // Feed the reflection as PROSE — the model writes prose, so its input must not be far off
+  // from its output (a continuation model handed EOT notation like `X -> rel : Y` either
+  // chokes on it or mimics it). `r.body` is the significance VOICING: natural prose when a
+  // model `reflect` is injected (the register-matched form), a terse note in the model-free
+  // fallback. The structured fold (`r.fold.text`, existence+structure+significance in EOT
+  // form) is the reading's own substrate — kept OFF the generation prompt precisely because
+  // its register is wrong for a writer. Information, in the writer's own voice.
+  return String(r.body).trim();
 };
 
 // FLOW — the amodal build-arc witness/shaper (docs/flow-prior.md). The walk owns the
