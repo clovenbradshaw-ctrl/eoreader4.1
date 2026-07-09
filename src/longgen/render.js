@@ -29,12 +29,34 @@ export const DEFAULT_GENRE = 'The following is a grounded explanatory piece.';
 // and matches the document's register below it.
 const BOUNDARY = '———';
 
+// Wikipedia-style extractors sometimes GLUE a section heading onto the first sentence
+// beneath it — "Evolution Dolphins display…", "Behavior A pod…", "Locomotion Dolphins…".
+// The heading is a lone Title-Case word that predicates nothing; left in the seed it opens
+// the paragraph on a header fragment. Strip a leading run of such KNOWN section words (a
+// curated set, so a real Title-Case opener like "United States…" is never touched).
+const SECTION_HEADINGS = new Set(['evolution', 'behavior', 'behaviour', 'anatomy', 'ecology',
+  'taxonomy', 'distribution', 'habitat', 'diet', 'reproduction', 'conservation', 'etymology',
+  'history', 'description', 'locomotion', 'communication', 'socialization', 'socialisation',
+  'intelligence', 'range', 'classification', 'physiology', 'morphology', 'biology', 'overview',
+  'characteristics', 'feeding', 'predation', 'migration', 'lifespan', 'genetics', 'phylogeny',
+  'appearance', 'culture', 'threats', 'status', 'relationship', 'relationships']);
+export const stripHeadingPrefix = (text = '') => {
+  let t = String(text).trim();
+  for (let k = 0; k < 2; k++) {                             // at most two stacked headings
+    const m = t.match(/^([A-Z][a-z]+)\s+(?=[A-Z0-9])/);      // a Title-Case word before another capital
+    if (m && SECTION_HEADINGS.has(m[1].toLowerCase())) t = t.slice(m[0].length).trim();
+    else break;
+  }
+  return t;
+};
+
 // Trim a span's text to its lead sentence — the raw material for a tight seed. A
 // load-bearing seed is the text projection of the beat's strongest slice span
 // (already grounded, so EVA has nothing to strike in it); its first sentence is
-// the topic sentence the paragraph commits to.
+// the topic sentence the paragraph commits to. A glued section heading is stripped
+// first so the seed opens on the real topic sentence, not the header.
 export const leadSentence = (text = '') => {
-  const t = String(text).replace(/\s+/g, ' ').trim();
+  const t = stripHeadingPrefix(String(text).replace(/\s+/g, ' ').trim());
   const m = t.match(/^.*?[.!?](?=\s|$)/);
   return (m ? m[0] : t).trim();
 };

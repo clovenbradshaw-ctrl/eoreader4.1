@@ -449,7 +449,7 @@
                   <div style="{{ m.registerStyle }}" title="{{ m.registerTitle }}"><span style="{{ m.registerIconStyle }}">{{ m.registerIcon }}</span><span>{{ m.registerLabel }}</span></div>
                   </sc-if>
                   <sc-if value="{{ m.showBubble }}" hint-placeholder-val="{{ true }}">
-                  <div style="{{ m.bubbleStyle }}" onclick="{{ m.onCite }}"><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
+                  <div style="{{ m.bubbleStyle }}" onclick="{{ m.onCite }}"><sc-if value="{{ m.isDoc }}" hint-placeholder-val="{{ false }}"><div style="{{ m.docHeadStyle }}"><span style="{{ m.docIconStyle }}">{{ m.docIcon }}</span><span style="{{ m.docTitleStyle }}">{{ m.docTitle }}</span><sc-if value="{{ m.docStatusHas }}" hint-placeholder-val="{{ false }}"><span style="{{ m.docStatusStyle }}">{{ m.docStatus }}</span></sc-if></div></sc-if><sc-if value="{{ m.isMd }}" hint-placeholder-val="{{ false }}"><sc-html value="{{ m.html }}"></sc-html></sc-if><sc-if value="{{ m.plain }}" hint-placeholder-val="{{ true }}">{{ m.text }}</sc-if></div>
                   </sc-if>
                   <sc-if value="{{ m.hasGround }}" hint-placeholder-val="{{ false }}">
                     <div style="{{ m.groundStyle }}">
