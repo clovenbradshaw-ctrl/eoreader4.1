@@ -62,6 +62,10 @@ const SURFACE_CSS = `
 
 .mns-cols{flex:1 1 auto;min-height:0;display:flex;gap:0}
 @media(max-width:820px){.mns-cols{flex-direction:column}}
+/* Driven/docked: the panel is narrow (the app's right column), so stack regardless of viewport —
+   the stream fills and scrolls, the graph rail sits beneath it. */
+.mns-driven .mns-cols{flex-direction:column}
+.mns-driven .mns-graph{flex:0 0 auto;border-left:none;border-top:1px solid #262c39;max-height:none}
 .mns-stream{flex:1 1 auto;min-height:0;min-width:0;overflow:auto;padding:14px 16px}
 .mns-graph{flex:0 0 300px;min-height:0;overflow:auto;border-left:1px solid #262c39;background:#0c0e13;padding:14px 14px}
 @media(max-width:820px){.mns-graph{flex:0 0 auto;border-left:none;border-top:1px solid #262c39;max-height:42%}}
@@ -137,15 +141,28 @@ const stripLead = (body, focus) => {
   return b;
 };
 
-// mountMonologueSurface(el, opts) → { destroy, read, rest, wake, stop }
+// mountMonologueSurface(el, opts) → standalone: { destroy, read, rest, wake, stop }
+//                                    driven:     { destroy, refresh, setPosture }
 //   opts.doc     an already-ingested doc to reflect over (skips the first ingest)
 //   opts.text    initial document text to seed the input box with (default: a small sample)
 //   opts.title   header label
 //   opts.onClose show a close button that calls this
 //   opts.autorest start resting immediately once a doc is held (default false)
+//
+//   DRIVEN MODE — opts.driven === true. The surface owns NO reader and NO ingest box: the host
+//   (the app) holds the document, runs the deep reader in the background when it is not otherwise
+//   busy, and this surface is the WINDOW onto that. It reads reflections + the trail from getters
+//   the host supplies, renders them, and re-syncs on refresh(); the host sets the posture (the
+//   rest / reading / settled orb) from its real idle state. This is the "pure presentation over
+//   the engine's state" the docs promise, with the state living in the host rather than here.
+//   opts.getReflections  () => the reflection records the host has accumulated (peak, focus,
+//                        verdict, surprise, band, body, sources) — the source of truth for cards.
+//   opts.getTrail        () => the reader's trail (every place weighed, worth or below-band).
+//   opts.onManualTick    () => nudge the host to run one idle pass now ("Reflect now").
 export const mountMonologueSurface = (el, opts = {}) => {
+  const driven = !!opts.driven;
   const root = document.createElement('div');
-  root.className = 'mns';
+  root.className = 'mns' + (driven ? ' mns-driven' : '');
   const style = document.createElement('style');
   style.textContent = SURFACE_CSS;
   root.appendChild(style);
@@ -157,6 +174,7 @@ export const mountMonologueSurface = (el, opts = {}) => {
       <button class="mns-btn mns-copy" disabled>Copy log</button>
       ${opts.onClose ? '<button class="mns-btn mns-close" title="Close">✕</button>' : ''}
     </div>
+    ${driven ? '' : `
     <div class="mns-in">
       <textarea class="mns-text" placeholder="Paste a document — or drop a .txt/.md file — and let the reading rest on it."></textarea>
       <div class="mns-col">
@@ -164,17 +182,20 @@ export const mountMonologueSurface = (el, opts = {}) => {
         <button class="mns-btn mns-file">Open file…</button>
         <input type="file" class="mns-fileinput" accept=".txt,.md,.markdown,text/*" hidden />
       </div>
-    </div>
+    </div>`}
     <div class="mns-err" style="display:none"></div>
-    <div class="mns-rest" style="display:none">
+    <div class="mns-rest" style="display:${driven ? '' : 'none'}">
       <span class="mns-posture"><span class="mns-orb"></span><span class="mns-state">idle</span></span>
-      <button class="mns-btn mns-tick-btn">Idle tick ▸</button>
-      <button class="mns-btn mns-auto">Let it rest</button>
+      ${driven
+        ? '<button class="mns-btn mns-tick-btn">Reflect now</button>'
+        : '<button class="mns-btn mns-tick-btn">Idle tick ▸</button><button class="mns-btn mns-auto">Let it rest</button>'}
       <span class="mns-sp"></span>
       <span class="mns-tally"></span>
     </div>
-    <div class="mns-cols" style="display:none">
-      <div class="mns-stream"><div class="mns-empty">The reading is held, at rest.<br><small>Press <b>Idle tick</b> once, or <b>Let it rest</b> — when nothing else is happening the reading surfs to the place of most interest and reflects there.</small></div></div>
+    <div class="mns-cols" style="display:${driven ? '' : 'none'}">
+      <div class="mns-stream"><div class="mns-empty">${driven
+        ? 'At rest.<br><small>When you are not chatting, the reading turns back on what it holds — it surfs to the place of most interest and reflects there. The thoughts appear here.</small>'
+        : 'The reading is held, at rest.<br><small>Press <b>Idle tick</b> once, or <b>Let it rest</b> — when nothing else is happening the reading surfs to the place of most interest and reflects there.</small>'}</div></div>
       <div class="mns-graph">
         <p class="mns-g-h">Deposited into the graph</p>
         <div class="mns-g-stat"><span>reflections · significance</span><b class="mns-c-refl">0</b></div>
@@ -203,6 +224,10 @@ export const mountMonologueSurface = (el, opts = {}) => {
   const tickBtn = $('.mns-tick-btn');
 
   const showErr = (m) => { errEl.style.display = m ? '' : 'none'; errEl.textContent = m || ''; };
+
+  // A host may identify figures by opaque id (the app's merged corpus does); labelClean resolves
+  // those to readable labels for display. Identity by default — the standalone reader needs none.
+  const clean = (s) => (opts.labelClean ? opts.labelClean(String(s ?? '')) : String(s ?? ''));
 
   let doc = null;
   let reader = null;
@@ -242,7 +267,7 @@ export const mountMonologueSurface = (el, opts = {}) => {
     }
     const nodesEl = $('.mns-nodes');
     nodesEl.innerHTML = nodes.length
-      ? nodes.map((n) => `<div class="mns-node"><span class="nid">${esc(n.id)}</span> · <span class="nat">§${n.atSentence ?? '—'}</span>${n.about ? ' · ' + esc(n.about) : ''}<br><span class="nread">${esc(n.reading)}</span></div>`).join('')
+      ? nodes.map((n) => `<div class="mns-node"><span class="nid">${esc(n.id)}</span> · <span class="nat">§${n.atSentence ?? '—'}</span>${n.about ? ' · ' + esc(clean(n.about)) : ''}<br><span class="nread">${esc(clean(n.reading))}</span></div>`).join('')
       : '<div class="mns-node" style="border:none;color:#565f73">none yet</div>';
   };
 
@@ -267,13 +292,13 @@ export const mountMonologueSurface = (el, opts = {}) => {
     const scale = Math.max(surprise, band) * 1.35 || 1;
     const fillPct = clamp01(surprise / scale) * 100;
     const bandPct = clamp01(band / scale) * 100;
-    const note = esc(stripLead(r.body, r.focus)) || '…';
+    const note = esc(clean(stripLead(r.body, r.focus))) || '…';
     const card = document.createElement('div');
     card.className = 'mns-refl ' + (v || '');
     card.innerHTML = `
       <div class="mns-r-top">
         <span class="mns-place">§${r.peak}</span>
-        ${r.focus ? `<span class="mns-focus">${esc(r.focus)}</span>` : ''}
+        ${r.focus ? `<span class="mns-focus">${esc(clean(r.focus))}</span>` : ''}
         ${v ? `<span class="mns-verdict ${v}">${esc(v)}</span>` : ''}
       </div>
       <div class="mns-note">${note}</div>
@@ -338,12 +363,14 @@ export const mountMonologueSurface = (el, opts = {}) => {
     return { fresh: fresh.length, quiesced: reachedEnd && fresh.length === 0 };
   };
 
+  const DRIVEN_EMPTY = '<div class="mns-empty">At rest.<br><small>When you\'re not chatting, the reading turns back on what it holds — it surfs to the place of most interest and reflects there. The thoughts appear here.</small></div>';
+
   const stopAuto = () => {
     if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
-    autoBtn.classList.remove('on'); autoBtn.textContent = 'Let it rest';
+    if (autoBtn) { autoBtn.classList.remove('on'); autoBtn.textContent = 'Let it rest'; }
   };
   const startAuto = () => {
-    if (autoTimer || restedFully) return;
+    if (autoTimer || restedFully || !autoBtn) return;
     autoBtn.classList.add('on'); autoBtn.textContent = 'Pause';
     tick();
     autoTimer = setInterval(() => {
@@ -369,6 +396,57 @@ export const mountMonologueSurface = (el, opts = {}) => {
     if (opts.autorest) startAuto();
   };
 
+  // ── DRIVEN MODE — the app holds the doc and runs the reader; this is the window onto it.
+  // syncDriven appends only reflection records not yet shown (keyed by place+body), so the app
+  // can call refresh() after every idle pass and the stream grows a card at a time; the trail and
+  // graph rail re-derive from the host's getters and the doc's own log.
+  const seenKey = new Set();
+  const keyOf = (r) => `${r.peak}|${r.body}`;
+  const syncDriven = () => {
+    if (doc) subEl.textContent = `${doc.docId || 'reading'} · ${(doc.units || doc.sentences || []).length} sentences`;
+    const list = (opts.getReflections ? opts.getReflections() : []) || [];
+    for (const r of list) {
+      const k = keyOf(r);
+      if (seenKey.has(k)) continue;
+      seenKey.add(k);
+      const empty = streamEl.querySelector('.mns-empty'); if (empty) empty.remove();
+      reflections.push(r);
+      renderReflection(r);
+    }
+    trail.length = 0;
+    trail.push(...((opts.getTrail ? opts.getTrail() : []) || []));
+    if (reflections.length && $('.mns-copy')) $('.mns-copy').disabled = false;
+    renderGraph();
+    refreshTally();
+  };
+
+  const copyLog = async () => {
+    if (!doc) return;
+    const jsonl = readReflections(doc).map((e) => JSON.stringify(e)).join('\n');
+    try { await navigator.clipboard.writeText(jsonl); const b = $('.mns-copy'); b.textContent = 'Copied'; setTimeout(() => (b.textContent = 'Copy log'), 1200); }
+    catch { showErr('Clipboard blocked — select and copy manually.'); }
+  };
+
+  if (driven) {
+    doc = opts.doc || null;
+    if (tickBtn) tickBtn.addEventListener('click', () => { if (opts.onManualTick) opts.onManualTick(); });
+    $('.mns-copy').addEventListener('click', copyLog);
+    if (opts.onClose) $('.mns-close').addEventListener('click', () => opts.onClose());
+    setPosture('resting');
+    syncDriven();
+    return {
+      destroy: () => { root.remove(); },
+      // refresh(doc?) — re-sync from the host's getters; a new doc identity resets the stream.
+      refresh: (d) => {
+        if (d && d !== doc) { doc = d; seenKey.clear(); reflections.length = 0; trail.length = 0; streamEl.innerHTML = DRIVEN_EMPTY; }
+        else if (d) doc = d;
+        syncDriven();
+      },
+      setPosture,   // the host drives the orb from its real idle state: 'reading' | 'resting' | 'settled'
+    };
+  }
+
+  // ── STANDALONE MODE — the surface owns the ingest box, the reader, and the idle loop.
   const holdText = async (text, name) => {
     const t = String(text || '').trim();
     if (!t) return showErr('Paste some text first.');
@@ -399,13 +477,7 @@ export const mountMonologueSurface = (el, opts = {}) => {
 
   tickBtn.addEventListener('click', () => { stopAuto(); if (!restedFully) tick(); });
   autoBtn.addEventListener('click', () => { if (autoTimer) stopAuto(); else startAuto(); });
-
-  $('.mns-copy').addEventListener('click', async () => {
-    if (!doc) return;
-    const jsonl = readReflections(doc).map((e) => JSON.stringify(e)).join('\n');
-    try { await navigator.clipboard.writeText(jsonl); const b = $('.mns-copy'); b.textContent = 'Copied'; setTimeout(() => (b.textContent = 'Copy log'), 1200); }
-    catch { showErr('Clipboard blocked — select and copy manually.'); }
-  });
+  $('.mns-copy').addEventListener('click', copyLog);
   if (opts.onClose) $('.mns-close').addEventListener('click', () => { stopAuto(); opts.onClose(); });
 
   // Seed: an already-ingested doc is held immediately; seed text (or the sample) fills the box.

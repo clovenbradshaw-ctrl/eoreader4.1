@@ -97,6 +97,19 @@ it is testable and any product surface (the app's idle tick) is pure presentatio
 state. "Not otherwise busy" is the **caller's** signal (only it knows a turn is not in flight);
 the engine exposes `arrive()` as the wake-on-idle entry, never a self-poll.
 
+## In the app — deep reading when not engaged in chat
+
+The reader app (`src/reader/app.dc.js`) runs this at rest. An idle governor (`_deepIdleStart`) fires
+a governed pass (`_deepTick` → `reader.arrive`) only when the app is **not engaged in chat** — no
+turn decoding (`_busy`) and the user quiet for a beat (a keystroke or tap resets the clock). The
+reflections ride an **append overlay** over the read doc (`_deepEnsure`), never master's own event
+log, so the record the reader can witness is untouched; the loop **habituates and quiesces**
+(`_deepSettled`) so background reading never spins, and wakes again when the corpus grows. The
+`☾ Inner monologue` button in the left rail opens the docked panel (`onOpenMonologue`) — the driven
+`mountMonologueSurface` in view mode, a window onto the same at-rest state (reflections keep
+depositing whether or not it is open). A count badge on the button shows how many thoughts the
+reading has had while you weren't looking.
+
 ## The surface — the inner monologue, at rest
 
 `inner-monologue.html` (mounting `src/reader/monologue-surface.js`, the `mountMonologueSurface`
@@ -134,6 +147,7 @@ witness is provably untouched.
 |---|---|
 | the engine + the governed loop | `src/fold/deep-reading.js` |
 | the surface (the inner monologue) | `src/reader/monologue-surface.js`, `inner-monologue.html` |
+| the in-app idle wiring + panel | `src/reader/app.dc.js` (`_deepIdleStart`, `_deepTick`, `onOpenMonologue`) |
 | the reflection as a graph node | `src/fold/substrate.js` (`eo:Reflection`, `readReflections`) |
 | the fold it reads | `src/fold/integral.js` (`foldNote`) |
 | the place of most interest | `src/surfer/surf.js` (`surfFold`), `src/surfer/salience.js` |
