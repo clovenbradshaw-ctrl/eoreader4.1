@@ -135,6 +135,31 @@ test('serialize / deserialize is a faithful round-trip', () => {
   assert.deepEqual(back, L);
 });
 
+test('the seed lens is named a place, not the wide-scope word', () => {
+  // The seed is the NARROW grounding pole; naming it "Everything" (the WIDE pole's
+  // word) made the control read as the paradox "Narrow to 'Everything'".
+  assert.equal(activeWorkspace(emptyLens()).name, 'Home');
+});
+
+test('deserialize migrates the legacy "Everything" seed name, once, seed-only', () => {
+  // A pre-migration store: the app-seeded lens 'w0' still carries the old default,
+  // and the user later made a lens they themselves named "Everything".
+  const raw = JSON.stringify({
+    active: 'w0',
+    order: ['w0', 'w1'],
+    workspaces: {
+      w0: { name: 'Everything', pinned: [] },
+      w1: { name: 'Everything', pinned: [] },
+    },
+  });
+  const L = deserialize(raw);
+  assert.equal(L.workspaces.w0.name, 'Home', 'seed migrated off the paradoxical name');
+  assert.equal(L.workspaces.w1.name, 'Everything', 'a user-named lens is left untouched');
+  // Idempotent: running deserialize again does not re-migrate anything.
+  const again = deserialize(serialize(L));
+  assert.equal(again.workspaces.w0.name, 'Home');
+});
+
 test('deserialize tolerates garbage and reconciles order + active', () => {
   assert.deepEqual(deserialize('not json'), emptyLens());
   assert.deepEqual(deserialize(null), emptyLens());
