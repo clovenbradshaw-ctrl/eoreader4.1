@@ -37,6 +37,7 @@ import { REBIND_THRESHOLD, FLOOR_TOKENS, ceilingFor, EPSILON } from '../arc/inde
 import { groundSaturation } from '../arc/index.js';
 
 const MAX_REGEN = 1;   // one regenerate on an ungrounded paragraph, then hold (NUL)
+const BOUND_FLOOR = 0.2;   // write-first: a beat grounding below this regenerates ONCE before it ships
 
 // SIG — the beat's slice: its anchor span plus supporting context, a cluster of
 // commitments (the chosen grain). Neighbours are NEVER another beat's anchor, so
@@ -113,6 +114,19 @@ export const trimDegeneration = (text = '') => {
   }
   const out = kept.join(' ').trim();
   return out || String(text || '').trim();                  // never trim to nothing — keep the original if the whole thing tripped
+};
+
+// DANGLING-TAIL TRIM — when a beat runs to the token ceiling it stops MID-SENTENCE; the
+// write-first path keeps the draft whole, so that un-terminated fragment would ship (the
+// dolphins essay ended "…dolphins have also been observed exhibiting"). Drop the trailing
+// fragment back to the last completed sentence — but never to nothing: a paragraph that is a
+// single unfinished sentence is kept whole (a whole thought beats no thought).
+export const trimDangling = (text = '') => {
+  const t = String(text || '').trim();
+  if (!t || /[.!?…][)\]"'”’]*$/.test(t)) return t;          // already ends on a sentence boundary
+  const m = t.match(/^[\s\S]*[.!?…][)\]"'”’]*(?=\s)/);       // keep through the last complete sentence
+  const kept = m ? m[0].trim() : '';
+  return kept || t;                                          // no earlier boundary → keep the fragment whole
 };
 
 // EVA — the provenance gate: verify per sentence (bindAndVeto binds at claim
@@ -213,8 +227,14 @@ const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal
       // Grounding is deferred to the render's per-span provenance pass.
       leak = frameLeak(full);
       if (leak && attempt < MAX_REGEN) { action = 'regen'; continue; }
+      // BOUND FLOOR — a beat that grounds almost nothing (a small model drifting off a thin
+      // slice: the dolphins run shipped 0.071-bound paragraphs) gets ONE regenerate before it
+      // ships. Write-first never DELETES, but it should try once for a better-grounded draft
+      // rather than ship near-ungrounded prose unchallenged; after the retry it holds and labels.
+      if (!leak && gated.boundFraction < BOUND_FLOOR && attempt < MAX_REGEN) { action = 'regen'; continue; }
       const deleaked = leak ? full.replace(frameLeak(full), '').trim() : full;
-      const cleaned = trimDegeneration(deleaked);
+      // Trim the degeneration loops, then the dangling mid-sentence tail a ceiling-length beat leaves.
+      const cleaned = trimDangling(trimDegeneration(deleaked));
       if (cleaned) {
         if (cleaned !== full) gated = bindAndVeto(cleaned, slice, { question: beat.topic, task: 'answer' });
         paragraph = cleaned; action = gated.boundFraction >= 1 ? 'accept' : 'ground-later'; leak = null;

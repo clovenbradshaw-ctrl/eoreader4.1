@@ -1345,6 +1345,9 @@ class Component extends DCLogic {
       // (read "Finish - Wikipedia", "Surface finishing") instead of continuing the subject; here they name
       // no fresh topic, so the subject comes from the chat (the dolphins thread) as every other meta ask does.
       'finish finished finishing complete completed completing wrap wrapping proceed onward onwards ahead ' +
+      // REQUEST framing — "the essay I requested", "as requested", "per my request" name no fresh
+      // topic; without this the query builder appended "requested" to the subject ("dolphins requested").
+      'request requests requested requesting ' +
       'answer answers answering answered respond response reply want wants wanting wanted wanna need needs needing needed ' +
       'me my mine us our ours your yours yourself them their it its ' +
       // DEICTIC doc-class nouns — "this book", "the author", "more about this page". Used as a bare
@@ -4592,6 +4595,9 @@ class Component extends DCLogic {
     if(!this._ME)this._ME=await import((typeof window!=='undefined'&&window.__resources&&window.__resources.eoModel)||'./model-entry.js');
     const seed=(o.seed||[]).filter(p=>p&&p.text);
     const ask=o.ask||q;
+    // The document card's title — the subject of the ask with its imperative frame stripped
+    // ("write me an essay about dolphins" → "Dolphins"). Rides on the pending + settled message.
+    const dTitle=this._docTitle(ask);
     const demand=this._paragraphDemand(ask)||((o.read||o.meta)&&(o.read||o.meta).lengthDemand==='develop'?6:5);
     // renderBound tags an accepted claim with its cite ([s123], or the walk's synthesized
     // [sL2.1]); provenance already rides in `sources`/passages, so the tags never reach the
@@ -4602,7 +4608,11 @@ class Component extends DCLogic {
     // Stream: the accepted paragraphs plus the paragraph currently decoding, painted token by
     // token into the pending bubble (the same rAF-batched paint the single-call path uses).
     let accParas=seed.map(p=>p.text), partial='', raf=0;
-    const paint=()=>{raf=0;this._captureStick();const body=accParas.concat(partial?[partial]:[]).join('\n\n');this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:body,think:this._composeTick(body)};return {...c,messages:m};})}),()=>this._scrollChat());};
+    // Show the in-progress paragraph only up to its LAST COMPLETED SENTENCE, so half-words and
+    // unclosed markdown (**/#/`) never flicker in the card as tokens land; accepted paragraphs are
+    // already sentence-complete and read clean. The dangling tail stays hidden until it closes.
+    const _sentenceSafe=(t)=>{const s=String(t||'');if(!s)return '';const b=s.match(/^[\s\S]*[.!?…][)\]"'”’]*(?=\s|$)/);return b?b[0].trim():'';};
+    const paint=()=>{raf=0;this._captureStick();const live=_sentenceSafe(partial);const body=accParas.concat(live?[live]:[]).join('\n\n');this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],doc:true,docTitle:dTitle,text:body,think:this._composeTick(body)};return {...c,messages:m};})}),()=>this._scrollChat());};
     const schedule=()=>{if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
     // Wrap the chat model so each beat's model.phrase streams its tokens (walk calls .phrase
     // directly; streamPhrase drives onToken). partial resets per call, so a regenerated beat
@@ -4638,7 +4648,7 @@ class Component extends DCLogic {
         // the pool is exactly the top-6 similar spans, byte-identical to before.
         const wide=this._foldSurprise?18:6;
         const cands=[];
-        for(const s of ((g&&g.spans)||[])){ const i=s.i; if(!Number.isInteger(i)||seen.has(String(i)))continue; if(cands.some(x=>x.idx===i))continue; cands.push({...s,idx:i}); if(cands.length>=wide)break; }
+        for(const s of ((g&&g.spans)||[])){ const i=s.i; if(!Number.isInteger(i)||seen.has(String(i)))continue; if(cands.some(x=>x.idx===i))continue; if(this._spanChrome(String(s.text||'')))continue; /* never seed a beat on reference/heading chrome */ cands.push({...s,idx:i}); if(cands.length>=wide)break; }
         // GROUNDABLE SURPRISE (docs/fold-advance-measurement.md, Step 1). The candidates
         // are already groundable — groundNotes only returns on-topic, citable spans — so
         // this is the surprise term on a pre-leashed pool: re-rank by Born-scored
@@ -4680,7 +4690,7 @@ class Component extends DCLogic {
     if(!res){
       this.setState({modelStatus:''});
       const streamed=accParas.slice(seed.length).join('\n\n')||seed.map(p=>p.text).join('\n\n');
-      if(streamed){ o.finish({text:this._withOfficeNote(streamed,sources),groundKind:'matched',related:this.relatedDocs(q,sources),register:'grounded',reflection:this._reflect(streamed)}); }
+      if(streamed){ o.finish({text:this._withOfficeNote(streamed,sources),doc:true,docTitle:dTitle,groundKind:'matched',related:this.relatedDocs(q,sources),register:'grounded',reflection:this._reflect(streamed)}); }
       else{ const fb=this.answerQuestion(q,sources); o.finish({text:fb.text||'I couldn’t build this out from what you’ve read.',groundKind:fb.refs&&fb.refs.length?'matched':'model',register:'grounded'}); }
       return;
     }
@@ -4705,9 +4715,26 @@ class Component extends DCLogic {
       ? '\n\nThat is '+paras.length+' grounded paragraph'+(paras.length!==1?'s':'')+(this._paragraphDemand(ask)?(' of the '+demand+' you asked for'):'')+' — the reading ran out of new ground, so I stopped rather than pad the rest.'
       : '';
     const text=untag(res.answer);
-    o.finish({text:this._withOfficeNote(text,sources)+shortNote,sources:used,passages,groundKind:'matched',
+    o.finish({text:this._withOfficeNote(text,sources)+shortNote,doc:true,docTitle:dTitle,sources:used,passages,groundKind:'matched',
       related:this.relatedDocs(q,sources),register:'grounded',reflection:this._reflect(text)});
     if(!o.shown)this._pivotChatPanel(q+' '+text);
+  }
+  // _docTitle — a clean human title for the document card, the SUBJECT of the ask with its
+  // imperative artifact frame stripped: "write me an essay about dolphins" → "Dolphins",
+  // "compose a report on the history of Rome" → "The history of Rome". Falls back to the whole
+  // ask when there is no frame to strip, so a bare subject ("dolphins") titles itself.
+  _docTitle(q){
+    const raw=String(q||'').trim();
+    if(!raw)return 'Document';
+    // Drop a leading "write/compose/… [me] [a/an] [essay/report/…] about/on/of ___" frame.
+    let s=raw.replace(/^\s*(?:please\s+|can\s+you\s+|could\s+you\s+|i(?:'d| would)\s+like\s+you\s+to\s+|i\s+want\s+you\s+to\s+)*(?:write|compose|draft|create|make|generate|produce|give|prepare|put\s+together)\b[\s\S]*?\b(?:about|on|regarding|concerning|covering|of|for)\s+/i,'');
+    if(s===raw){
+      // No "about ___" frame — strip just a leading verb + article/artifact filler if present.
+      s=raw.replace(/^\s*(?:please\s+)?(?:write|compose|draft|create|make|generate|produce|give|prepare|tell\s+me\s+about|explain|describe|summar(?:ize|ise))\b\s*(?:me\s+)?(?:a|an|the|some)?\s*(?:essays?|reports?|pieces?|articles?|overviews?|summar(?:y|ies)|notes?|letters?|analys[ie]s|briefs?)?\s*(?:about|on|of)?\s*/i,'');
+    }
+    s=s.replace(/^["'“”\s]+|["'“”.!?\s]+$/g,'').trim();
+    if(!s)s=raw;
+    return this.truncLabel(s.charAt(0).toUpperCase()+s.slice(1),60);
   }
   // _paragraphDemand — an explicit paragraph count in the ask ("5 paragraphs", "three paragraphs"),
   // the walk's demand ceiling; null when none is named (the caller falls back to the length read).
@@ -4914,6 +4941,12 @@ class Component extends DCLogic {
     const focus=opts.focus||this._composeFocus(q,fold);
     const kind=focus.kind;
     const a=/^[aeiou]/i.test(kind)?'an':'a';
+    // A LONGFORM compose artifact (essay/report/story/…) renders as a document card, same as the
+    // grounded walk; short creative kinds (poem/haiku/sonnet) keep the plain bubble — a full-width
+    // titled card over a three-line haiku reads as chrome-heavy. No sentence-buffering here: creative
+    // text has irregular terminal punctuation, so a boundary buffer would hide most of a poem.
+    const asDoc=/\b(essays?|reports?|articles?|pieces?|stor(?:y|ies)|analys[ie]s|overviews?|letters?|treatise|papers?|guides?|breakdowns?|accounts?|memos?|speech|speeches)\b/i.test(kind);
+    const dTitle=asDoc?this._docTitle(q):'';
     // REUSE the discourse bubble when sendChat's frame-binding fork already created it (and took
     // the read) — relabel it as the compose act and keep its trail, instead of appending a second
     // user echo + bubble. Explicit-compose callers pass no reuseId → own bubble.
@@ -4953,7 +4986,7 @@ class Component extends DCLogic {
     const messages=this._ME.buildChatMessages({question:q,history,now:new Date()});
     this._auditRec(id,'compose-prompt',{prompt:messages.map(mm=>'['+mm.role+']\n'+mm.content).join('\n\n---\n\n')});
     let acc='',raf=0;
-    const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
+    const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]=asDoc?{...m[li],doc:true,docTitle:dTitle,text:acc}:{...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
     const onToken=(piece)=>{const sx=String(piece||'');if(!sx)return;guard.feed();acc+=sx;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
     let raw='';
     try{raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:700,temperature:0.85,onToken,signal:guard.signal}),guard.race]);}
@@ -4975,7 +5008,8 @@ class Component extends DCLogic {
     guard.clear();
     // Keep the first go alongside the revision so the bubble can offer a before/after affordance —
     // the reader can open the original draft and see exactly what the second look changed.
-    finish(revised?{text:out,modelNote:'Revised after a second look',firstDraft:firstGo}:{text:out||'(the model returned nothing to write)'});
+    const docPatch=asDoc?{doc:true,docTitle:dTitle}:{};
+    finish(revised?{...docPatch,text:out,modelNote:'Revised after a second look',firstDraft:firstGo}:{...docPatch,text:out||'(the model returned nothing to write)'});
   }
   // Read the first go back and update only if it falls short. One extra pass: the writer judges its
   // own draft against the request — replies OK when it already lands, or a better full version when it
@@ -5290,7 +5324,15 @@ class Component extends DCLogic {
                 rescued=this._semReprieve(s,semBaseline);
                 if(rescued)step('lead','Kept '+this.short(url)+' — off the words but on the meaning of “'+anchor+'”');
               }
-              if(!rescued){this.tossPage(url);step('warn','Set aside '+this.short(url)+' — drifting off “'+anchor+'”');continue;}
+              // CITED-SOURCE EXEMPTION. A source Wikipedia itself cites is pursued PRECISELY to
+              // ground the encyclopedia's claim — a PubMed abstract or news report legitimately
+              // speaks in a different register than the encyclopedia anchor, so the word-leash
+              // alone must not set it aside (every cited source was tossed on the dolphins run,
+              // collapsing the essay to a single source). The figure/namesake gate below stays the
+              // precision authority, so an off-SUBJECT citation is still caught on the graph.
+              const citedExempt=(node.via==='wiki-cite');
+              if(!rescued&&!citedExempt){this.tossPage(url);step('warn','Set aside '+this.short(url)+' — drifting off “'+anchor+'”');continue;}
+              if(!rescued&&citedExempt)step('lead','Kept '+this.short(url)+' — a source “'+anchor+'” cites, off the encyclopedia’s words but pursued to ground it');
             }
             // NAMESAKE leash, on the graph: known subject, but this page's fold touches NONE of
             // its figures — same topic words, different subject. Coupling is through the graph's
@@ -6127,6 +6169,16 @@ class Component extends DCLogic {
       // While the turn is still working with no answer text yet, the live trail IS the message —
       // suppress the empty pulsing bubble. Once a token streams in (or the turn settles) it shows.
       const showBubble=!thinking&&!(pendingTurn&&!m.text);
+      // DOCUMENT CARD — a longform walk/compose artifact renders as a full-width, titled document
+      // in the thread (not an 80% chat bubble). _walkReply / composeArtifact tag the message with
+      // `doc` + `docTitle`; the card chrome and full-width bubbleStyle ride here, and the body stays
+      // the same typography pending vs settled so nothing reflows when the sources footer attaches.
+      const isDoc=!isUser&&!!m.doc&&(isMd||!!m.text);
+      const docWords=isDoc?String(m.text||'').trim().split(/\s+/).filter(Boolean).length:0;
+      const docStatus=isDoc?(m.pending?'writing…':(docWords?docWords+' word'+(docWords!==1?'s':''):'')):'';
+      const docBubbleStyle='background:var(--card);color:var(--ink);border:1px solid var(--line);'
+        +(regMeta?('border-left:3px '+regMeta.dash+' '+regMeta.edge+';'):'')
+        +'align-self:stretch;width:100%;max-width:100%;padding:16px 20px 18px;border-radius:14px;font-size:14.5px;line-height:1.62;word-break:break-word;box-shadow:0 1px 4px rgba(0,0,0,.05);';
       // main's streaming fills m.text on a still-pending bubble; show it as it arrives.
       return {isUser,pending:!!m.pending,thinking,think:m.think||'',showBubble,text:m.pending?(m.text||m.think||'…'):m.text,isMd:isMd||hasSvg,plain:!(isMd||hasSvg),html:bodyHtml,onCite:(e)=>this._onCite(e),
         thinkRowStyle:'max-width:80%;display:flex;align-items:center;gap:9px;background:var(--card);border:1px solid var(--line);padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;color:var(--ink2);',
@@ -6195,10 +6247,16 @@ class Component extends DCLogic {
         revisionHeadStyle:'font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin:0 0 5px;',
         revisionBeforeStyle:'font-size:13px;line-height:1.55;color:var(--ink2);white-space:pre-wrap;word-break:break-word;',
         rowStyle:'display:flex;flex-direction:column;'+(isUser?'align-items:flex-end;':'align-items:flex-start;')+'margin-bottom:15px;',
-        bubbleStyle:(isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+((m.pending&&!m.text)?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')
+        // DOCUMENT CARD chrome — the header row above the body inside the bubble.
+        isDoc,docTitle:(m.docTitle||'Document'),docIcon:'',docStatus,docStatusHas:!!docStatus,
+        docHeadStyle:'display:flex;align-items:center;gap:8px;padding-bottom:9px;margin-bottom:12px;border-bottom:1px solid var(--line);',
+        docIconStyle:"font-family:'Phosphor';font-size:15px;line-height:1;color:var(--acc);flex:0 0 auto;",
+        docTitleStyle:'flex:1;min-width:0;font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;',
+        docStatusStyle:'flex:0 0 auto;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);',
+        bubbleStyle:isDoc?docBubbleStyle:((isUser?'background:var(--acc);color:#fff;border:1px solid var(--acc);':'background:var(--card);color:'+((m.pending&&!m.text)?'var(--ink3)':'var(--ink)')+';border:1px solid var(--line);')
           // The register's edge: solid green = grounded, dashed violet = creative — legible while scrolling.
           +(regMeta?('border-left:3px '+regMeta.dash+' '+regMeta.edge+';'):'')
-          +'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':''),
+          +'max-width:80%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;'+(m.pending&&!m.text?'animation:eopulse 1.4s infinite;':'')),
         noteStyle:'font-size:10.5px;color:var(--ink3);margin-top:5px;max-width:80%;',
         srcRowStyle:'display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;max-width:80%;',
         srcChipStyle:'display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:6px;padding:2px 8px;cursor:pointer;'};
@@ -7086,6 +7144,14 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     if(/^(external links|further reading|see also|references|notes|bibliography|citations|retrieved from)\b/i.test(t))return true;
     if(/\((?:pdf|video[^)]*)\)\.?\s*$/i.test(t))return true;
     if(/^[A-Z][A-Za-z.&' ]{0,45}\s[–-]\s[A-Z]/.test(t)&&!/\b(is|are|was|were|has|have|had|can|will|would|which|that|when|who|because|since|after|before|during|include|features?)\b/i.test(t))return true;
+    // A VERBLESS Title-Case nominal — a journal/book/organization title from a reference list
+    // ("Journal of the Marine Biological Association of the United Kingdom."). Every word is either
+    // Capitalized or a function word (of/the/and…) and nothing predicates; handed to the writer it
+    // seeds a paragraph on a citation, not a claim. The all-caps-words shape is self-protecting: a
+    // real sentence carries a lowercase verb/noun, so it can never match the pattern.
+    if(t.split(/\s+/).length>=4
+       &&/^(?:[A-Z][A-Za-z0-9'’.\-]*|of|the|and|for|in|on|to|de|van|der|von|la|le|a|an|&)(?:\s+(?:[A-Z][A-Za-z0-9'’.\-]*|of|the|and|for|in|on|to|de|van|der|von|la|le|a|an|&))+\.?$/.test(t)
+       &&!/\b(is|are|was|were|be|been|being|has|have|had|do|does|did|can|could|will|would|shall|should|may|might|must)\b/i.test(t))return true;
     return false;}
   // Drop reference/nav chrome from a groundNotes result — from the spans SHOWN to the talker and the
   // evidence used as CITATION targets alike. Never empties a non-empty grounding to nothing on chrome
