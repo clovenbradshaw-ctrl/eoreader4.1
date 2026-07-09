@@ -82,7 +82,7 @@ inspection.
 | `ground` | bind citations to real spans · run the vetoes (bind-or-veto) | `core`, `perceiver`, `factcheck` |
 | `factcheck` | the fact-check / veto pipeline · edge-grounding corroboration | `core`, `classify`, `converse` |
 | `surfer` | the surfer + the reading trajectory (arrest where the reading was rewritten) | `perceiver`, `enact` |
-| `fold` | `foldNote` · the impression query | `surfer` |
+| `fold` | `foldNote` · the impression query · **deep reading** (the idle reflection at the place of most interest — an enacted EVA held void, `docs/deep-reading.md`) | `surfer` |
 | `enact` / `enactor` | the enacted DEF·EVA·REC loop · reader calibration · frame replay | `perceiver` |
 | `answer` | mechanical short-circuits (math computed, not researched) | `core`, `perceiver` |
 | `arc` | the long-generation arc (`runContinuation`) · span-veto · saturation gate | `ground`, `surfer` |

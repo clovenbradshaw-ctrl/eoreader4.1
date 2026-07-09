@@ -8,7 +8,7 @@
 // source-ordered digest of the spans — still a fold, tighter than a raw dump.
 
 import { consciousness } from '../perceiver/index.js';
-import { buildSubstrate } from './substrate.js';
+import { buildSubstrate, readReflections } from './substrate.js';
 import { projectGroupedNote } from './project.js';
 
 export const foldNote = (spans, opts = {}) => {
@@ -32,7 +32,7 @@ export const foldNote = (spans, opts = {}) => {
     if (opts.grouped && c && c.levels) {
       const substrate = buildSubstrate({
         structure: c.levels.structure, significance: c.levels.significance,
-        surf: opts.surf || null, cursor: opts.cursor ?? null,
+        surf: opts.surf || null, reflections: readReflections(doc), cursor: opts.cursor ?? null,
       });
       const text = projectGroupedNote(substrate);
       if (text) return { text, sources, levels: c.levels, substrate };

@@ -10,6 +10,11 @@
 //                 on one node without exploding (the paraconsistent move).
 //   eo:Reframing  the located REC — the surfer's recCursor written as a node, with
 //                 the axis it broke along and its trigger.
+//   eo:Reflection a DEEP READING (fold/deep-reading.js) — the reading's own enacted EVA at
+//                 the place of most interest, carried as a first-class node at band void and
+//                 witness 'reafferent' (canWitness false — the firewall). It is an
+//                 interpretation the reading deposited when it was not otherwise busy, never
+//                 a witnessed fact; projectGraph skips EVA, so it can ONLY surface here.
 //   (refuse)      the global-consistency reasoner; at a Tension EO is deliberately
 //                 paraconsistent, so a reasoner that flags the held contradiction is
 //                 reasoning at the wrong face.
@@ -39,8 +44,10 @@ const JSONLD_CONTEXT = Object.freeze({
 //   structure     the level-2 surface (figures, relations, defs) — already a log fold
 //   significance  the level-3 reading at the cursor (its named surprises)
 //   surf          the surfer's descent (recAxes — the located RECs)
+//   reflections   the deep-reading EVAs read off the log (readReflections) — the reading's own
+//                 held-open reflections at the places of most interest
 //   cursor        where the significance reading was taken (grounder-side; never crosses)
-export const buildSubstrate = ({ structure, significance = null, surf = null, cursor = null } = {}) => {
+export const buildSubstrate = ({ structure, significance = null, surf = null, reflections = [], cursor = null } = {}) => {
   const relations = structure?.relations || [];
   const defs      = structure?.defs || [];
 
@@ -85,6 +92,22 @@ export const buildSubstrate = ({ structure, significance = null, surf = null, cu
     layer: rec.layer || null,
   }));
 
+  // eo:Reflection — the deep readings the reading deposited when it was not otherwise busy
+  // (fold/deep-reading.js). Each is an EVA at the place of most interest, carried at band
+  // void with witness 'reafferent': it CANNOT witness (the §8 firewall), so it is graphed as
+  // an interpretation the reading holds open, never as a fact. The index (atSentence) stays
+  // grounder-side; the reflection prose and the figure it is about are what the reader shows.
+  const reflectionNodes = (reflections || []).map((r, i) => Object.freeze({
+    id: `f${i}`,
+    atSentence: r.cursor ?? r.sentIdx ?? null,
+    about: r.focus ?? null,
+    reading: String(r.body ?? ''),
+    verdict: r.verdict ?? null,
+    band: 'void',                 // always held open — an interpretation, never firm
+    witness: 'reafferent',        // canWitness false — the firewall, made explicit in the graph
+    grounded: false,
+  })).filter((r) => r.reading);
+
   return Object.freeze({
     '@context': JSONLD_CONTEXT,
     cursor,
@@ -92,11 +115,21 @@ export const buildSubstrate = ({ structure, significance = null, surf = null, cu
     values,
     tensions,
     reframings,
+    reflections: reflectionNodes,
     // The located-REC narration the reading already computes — the Significance
     // appearance today's notes drop. Carried so the membrane can route it to the
     // "Where the reading turns" group. Surface prose, no index.
     surprise: significance?.summary || null,
   });
+};
+
+// readReflections — the deep-reading EVAs a log carries (fold/deep-reading.js). Read off the
+// append-only log at read time, exactly as the substrate reads everything else: a reflection
+// is an enacted EVA tagged `reflection:true`. Empty on any log a deep reading never touched, so
+// buildSubstrate stays byte-identical where no reflection has been deposited.
+export const readReflections = (doc) => {
+  const events = typeof doc?.log?.snapshot === 'function' ? doc.log.snapshot() : (doc?.log?.events || []);
+  return events.filter((e) => e && e.op === 'EVA' && e.reflection === true && e.register === 'enacted');
 };
 
 // detectTensions — the paraconsistent read (P2). Two shapes:
