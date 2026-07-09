@@ -33,3 +33,12 @@ export {
   analogize, relationGraph, wlColors,
   METACOGNITION, CONNECTION,
 } from './weave.js';
+
+// Verdict (fold/verdict.js): the two cross-cutting classifiers of docs/cognition-catalog.md —
+// living-or-dead (the successor-mode verdict over held tensions: sustained · spent-down ·
+// spent-up, with the EVA-row fate names) and sayable-or-not (the narrate-only router).
+// Pure reads over the substrate and the enacted stream; nothing written back.
+export {
+  MODE_OF, FATE_OF, modeOf, verdictOf, classifyTensions, recEventsOf,
+  sayability, routeSubstrate, VERBALIZABLE, NARRATE_ONLY,
+} from './verdict.js';
