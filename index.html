@@ -11431,7 +11431,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       // existing reader's chosen color survives the move to per-workspace accents.
       if(!raw&&this.state.accent)this._lens=M.setColor(this._lens,M.activeId(this._lens),this.state.accent);
       this._lensLoaded=true;}
-    if(!this._lens)this._lens={active:'w0',order:['w0'],workspaces:{w0:{id:'w0',name:'Everything',color:this.state.accent||'#5b34d6',view:'source',pinned:[]}}};
+    if(!this._lens)this._lens={active:'w0',order:['w0'],workspaces:{w0:{id:'w0',name:'Home',color:this.state.accent||'#5b34d6',view:'source',pinned:[]}}};
     return this._lens;}
   lensSave(){const M=this._lensMod();if(M&&this._lens){try{localStorage.setItem('eo_lens_v1',M.serialize(this._lens));}catch(e){}}}
   _lensApply(next){this._lens=next;this.lensSave();this._decoToken=null;this.setState(s=>({lensRev:(s.lensRev||0)+1}));}
@@ -11466,7 +11466,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
   _lensVals(base){const M=this._lensMod();const L=this.lensGet();
     const act=this.activeLens();const acc=this.curAccent();
     const pinN=act?(act.pinned||[]).length:0;const memN=(this.master?this.master.pages.length:0);
-    base.wsName=this.truncLabel((act&&act.name)||'Everything',26);
+    base.wsName=this.truncLabel((act&&act.name)||'Home',26);
     base.wsSubLabel=pinN+' pinned · '+memN+' in memory';
     base.wsChipStyle='width:20px;height:20px;border-radius:6px;flex:0 0 auto;background:'+this.mixWhite(acc,.86)+';color:'+acc+';display:flex;align-items:center;justify-content:center;font-size:11px;';
     base.lensMenuOpen=!!this.state.lensMenu;

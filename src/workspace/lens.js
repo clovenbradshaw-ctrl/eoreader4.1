@@ -35,9 +35,17 @@ let _seq = 0;
 // monotonic token — uniqueness rests on the counter, not the clock.
 const mkId = (id, now) => id || `w${(now || 0).toString(36)}${(_seq++).toString(36)}`;
 
+// The seed lens's name. It is the NARROW grounding pole (a chat narrowed to it
+// grounds in exactly its pins — empty means nothing), so it must never borrow the
+// WIDE pole's word: naming it "Everything" made the narrow control read as the
+// paradox "Narrow to 'Everything'" over an empty pin set, sitting right beside
+// "Widen to memory". "Home" names the place, not the scope. See deserialize for
+// the one-time migration off the old name.
+const SEED_NAME = 'Home';
+
 // A fresh lens state always holds at least one workspace — the shell is never
 // left with no active lens. The seed workspace takes the first accent.
-export const emptyLens = ({ id = 'w0', name = 'Everything', now = 0 } = {}) => ({
+export const emptyLens = ({ id = 'w0', name = SEED_NAME, now = 0 } = {}) => ({
   active: id,
   order: [id],
   workspaces: {
@@ -221,6 +229,14 @@ export const deserialize = (raw) => {
   const rawOrder = Array.isArray(obj.order) ? obj.order.filter((id) => workspaces[id]) : [];
   const order = [...rawOrder];
   for (const id of ids) if (!order.includes(id)) order.push(id);
+  // Migrate the legacy seed name. Early builds named the seed lens "Everything" —
+  // the WIDE pole's word — so its narrow control read as "Narrow to 'Everything'".
+  // Rename ONLY the app-seeded lens (id 'w0') and ONLY while it still carries that
+  // exact old default, so a lens a user deliberately named is never touched. The
+  // rename is idempotent: once migrated, the name no longer matches.
+  if (workspaces.w0 && workspaces.w0.name === 'Everything') {
+    workspaces.w0 = { ...workspaces.w0, name: SEED_NAME };
+  }
   const active = workspaces[obj.active] ? obj.active : order[0];
   return { active, order, workspaces };
 };
