@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   buildReflection, metaReflect, createMetaReader, buildMetaReflection,
   connect, buildConnection, weaveReading,
+  analogize, relationGraph, wlColors,
   buildSubstrate, readReflections, readMetaReflections, readConnections,
   RESTING,
 } from '../src/fold/index.js';
@@ -181,6 +182,72 @@ test('BEARS-ON: a reflection whose focus touches a held tension is connected to 
   const bearsOn = out.connections.filter((c) => c.kind === 'bears-on');
   assert.equal(bearsOn.length, 1, 'the reflection bears on the tension about the same figure');
   assert.equal(bearsOn[0].b, 't0');
+});
+
+// ── ANALOGY — structure-mapping across the corpus ──────────────────────────────────────
+
+// Two documents with ISOMORPHIC relation graphs but NO shared surface words: the analogy is
+// carried by the topology, not the labels. Acme↔Umbra, Bob↔Kane, Corp↔Vortex, Dana↔Lee.
+const BIZ   = 'Acme employs Bob. Acme partners Corp. Corp employs Dana. Bob trusts Dana.';
+const CRIME = 'Umbra hires Kane. Umbra allies Vortex. Vortex hires Lee. Kane trusts Lee.';
+const bizDoc   = () => parseText(BIZ,   { docId: 'biz' });
+const crimeDoc = () => parseText(CRIME, { docId: 'crime' });
+const mapOf = (out) => new Map(out.connections.map((c) => [c.a, c.b]));
+
+test('STRUCTURE-MAPPING: isomorphic graphs map by topology, ignoring the surface labels', () => {
+  const out = analogize([bizDoc(), crimeDoc()], { commit: false });
+  const m = mapOf(out);
+  assert.equal(m.get('Acme'), 'Umbra', 'the source-of-two maps to the source-of-two');
+  assert.equal(m.get('Dana'), 'Lee', 'the sink-of-two maps to the sink-of-two');
+  assert.equal(m.get('Bob'), 'Kane');
+  assert.equal(m.get('Corp'), 'Vortex');
+  assert.equal(out.connections.length, 4, 'the full four-node correspondence, one connection each');
+  for (const c of out.connections) assert.equal(c.sameness, 1, 'every edge preserved — a clean isomorphism');
+});
+
+test('ONTOLOGY + FIREWALL: an analogy is a CON at band void, reafferent, sourced to both sides', () => {
+  const out = analogize([bizDoc(), crimeDoc()], { commit: false });
+  const c = out.connections[0];
+  assert.equal(c.op, 'CON');
+  assert.equal(c.kind, 'analogy');
+  assert.equal(c.band, 'void', 'held open — never a firm structural claim');
+  assert.equal(canWitness(c.prov), false, 'the firewall — structure-mapping is interpretation, not witness');
+  assert.equal(c.aDoc, 'biz');
+  assert.equal(c.bDoc, 'crime');
+  assert.ok(c.sources.length >= 1, 'sourced to the passages that proposed the mapped relations');
+});
+
+test('SYSTEMATICITY: a structurally unrelated document yields no false analogy', () => {
+  const flat = parseText('Sky is blue. Grass is green.', { docId: 'flat' });
+  const out = analogize([bizDoc(), flat], { commit: false });
+  assert.equal(out.connections.length, 0, 'no shared relational role → no correspondence (not a same-degree coincidence)');
+});
+
+test('the WL role signature is label-free: corresponding nodes share a colour across documents', () => {
+  const A = relationGraph(bizDoc());
+  const B = relationGraph(crimeDoc());
+  const ca = wlColors(A), cb = wlColors(B);
+  // Acme (source-of-two) and Umbra share a role colour; Acme and Dana (sink) do not.
+  assert.equal(ca.get('acme'), cb.get('umbra'), 'same structural role → same colour, though no shared words');
+  assert.notEqual(ca.get('acme'), ca.get('dana'), 'source and sink are different roles');
+});
+
+test('SUBGRAPH: the core mapping is robust to extra structure; unmatched roles simply drop', () => {
+  // CRIME plus a disconnected extra relation (Zed→Yara) that has no counterpart in BIZ.
+  const bigger = parseText('Umbra hires Kane. Umbra allies Vortex. Vortex hires Lee. Kane trusts Lee. Zed guards Yara.', { docId: 'bigger' });
+  const out = analogize([bizDoc(), bigger], { commit: false });
+  const m = mapOf(out);
+  assert.equal(m.get('Acme'), 'Umbra', 'the four core roles still map through the added structure');
+  assert.equal(m.get('Dana'), 'Lee');
+  assert.equal(out.connections.length, 4, 'the extra Zed/Yara roles have no counterpart and are not invented');
+  assert.ok(!m.has('Zed') && ![...m.values()].includes('Yara'), 'no spurious correspondence for the unmatched pair');
+});
+
+test('the composed nest folds analogy in when a corpus is given', async () => {
+  const woven = await weaveReading(bizDoc(), { surf: surfFold, corpus: [bizDoc(), crimeDoc()] });
+  const analogies = woven.connections.filter((c) => c.kind === 'analogy');
+  assert.ok(analogies.length >= 1, 'weaveReading with a corpus surfaces analogy connections');
+  for (const c of analogies) assert.equal(c.band, 'void');
 });
 
 // ── THE FIREWALL SURVIVES THE NEST ────────────────────────────────────────────────────

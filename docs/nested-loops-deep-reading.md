@@ -48,8 +48,8 @@ reafferent, sourced to *both* endpoints, and **never upgraded** (the no-upgrade 
   connection: the reading found the same idea in two texts.
 - **bears-on** — a reflection whose focus touches a held `eo:Tension` or an earlier `eo:Reframing`
   (pure, no embedder).
-- **analogy** — same *relational* structure, *different* surface entities (structure-mapping). The
-  seam is defined below; this first cut ships **echo + bears-on**, analogy is the next layer.
+- **analogy** — same *relational* structure, *different* surface entities (structure-mapping, its
+  own section below).
 
 `connect` folds the reflections across one doc or many. Echo is **firewalled**: under a
 spelling-space embedder (`measuresMeaning === false`) a cosine measures nothing, so nothing is
@@ -85,31 +85,55 @@ const substrate = buildSubstrate({ structure, reflections: readReflections(doc) 
 const { connections } = await connect(doc, { embedder, substrate });     // embedder must measure meaning
 const cross = await connect([docA, docB], { embedder });                 // cross-corpus echoes
 
-// the whole nest in one call — loop 1 → loop 2 → connections, every product held void
-const woven = await weaveReading(doc, { surf: surfFold, embedder });
+// analogy — structure-mapping across a corpus (no embedder; pure topology)
+const { connections: analogies } = analogize([docA, docB]);
+
+// the whole nest in one call — loop 1 → loop 2 → echo + analogy, every product held void
+const woven = await weaveReading(doc, { surf: surfFold, embedder, corpus: [docA, docB] });
 ```
 
-## The analogy seam (the next layer)
+## Analogy — structure-mapping across the corpus
 
-Analogy in the structure-mapping sense is a partial **isomorphism between two asserted sub-DAGs**
-(`dag-corpus.md`): same edge-stance shape, different node labels. It reuses the same DEF·EVA·REC loop
-as `proposition-equivalence`, but the similarity signal is over the **relational signature**
-(edge-types + DAG neighborhood) rather than content cosine — matching two reflections by the *role*
-they play in their local structure while their entities differ. It rides the same firewall (an
-`eo:Connection` of `kind:'analogy'`, band `void`, sourced to both passages it bridges) and the same
-Born-rule gate. `connect` already carries the `kind` and the dual `claim-src`; wiring the relational
-signature into the echo path is additive.
+Echo connects reflections that are the *same proposition* (content). Analogy is its complement: the
+*same relational structure* with *different* surface entities. "Acme employs Bob, partners Corp, …"
+and "Umbra hires Kane, allies Vortex, …" share no words, but their relation graphs are isomorphic —
+`Acme↔Umbra`, `Bob↔Kane`. Gentner's structure-mapping: map by the **relations**, ignore the objects.
+So the signal is graph **topology**, not the edge labels — which are exactly the surface that differs.
+
+`analogize(docs)` reads each document's directed, polarity-typed relation graph off the level-2
+structure surface (`relationGraph`), then computes a **label-abstracted Weisfeiler–Lehman role
+signature** per node (`wlColors`): a node's colour starts as its directed-degree/polarity profile
+(labels stripped) and is refined `k` rounds by the multiset of its neighbours' colours. Two nodes
+with the same refined colour occupy the same structural role. A correspondence is asserted only when
+it is **systematic** (Gentner) — it participates in a *preserved* relational structure (≥ 1 incident
+edge of A maps to a real edge of B under the correspondence), never an isolated same-degree
+coincidence. The mapping is built greedily, anchoring on the highest-degree nodes and choosing, within
+each shared-role class, the counterpart that preserves the most edges.
+
+It is deliberately **conservative** (the `dag/` stance: *the one thing worse than missing a cause is
+inventing one*): exact-colour matching declines to fabricate a partial map when the structure is
+perturbed, and a structurally unrelated document contributes no correspondence. Each analogy is an
+`eo:Connection` of `kind:'analogy'`, band `void`, reafferent, sourced to the passages that proposed
+the mapped relations on both sides, carrying the systematicity fraction as its `sameness` — and,
+like every stance in `dag/`, never upgraded. `weaveReading({ corpus })` folds analogy into the nest.
+
+**Honest limits.** The mapping is only as rich as the parser's relation extraction (sparse on free
+prose; clean on SVO), so it finds a *floor* of the analogies a corpus supports, not all of them. WL
+colour equality is strict — it favours precision over recall. A fuller SMT-style largest-consistent
+partial mapping, and reading the signature off the stance-typed `assertedDag` (`dag-corpus.md`) rather
+than the bare relation surface, are the next levers.
 
 ## Where it lives
 
 | concern | file |
 |---|---|
-| metacognition (loop 2) + cross-connections | `src/fold/weave.js` |
+| metacognition (loop 2) + cross-connections + analogy | `src/fold/weave.js` |
 | the new substrate nodes + the log readers | `src/fold/substrate.js` (`eo:MetaReflection`, `eo:Connection`, `readMetaReflections`, `readConnections`) |
 | loop 1 it composes over | `src/fold/deep-reading.js` |
 | the Born-gated sameness echo rides | `src/perceiver/proposition-equivalence.js` |
+| the relation graph analogy reads | `src/perceiver/surfaces.js` (`structureSurface`) |
 | the firewall every level rides | `src/core/provenance.js` (§8, `canWitness`) |
-| tests | `tests/weave.test.js` |
+| tests · local-model demo | `tests/weave.test.js` · `tools/weave/weave-demo.mjs` (`npm run weave:demo`) |
 
 Relates to: `deep-reading.md`, `significance-loop.md`, `dag-corpus.md`, `proposition-equivalence.md`,
 `nested-task-levels.md`, `subjective-frame.md`.

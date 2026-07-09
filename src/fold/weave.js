@@ -34,7 +34,7 @@
 // is testable and any product surface (an idle tick) is pure presentation over this state.
 
 import { fromEnactor, canWitness } from '../core/index.js';
-import { attestEquivalenceFrom } from '../perceiver/index.js';
+import { attestEquivalenceFrom, structureSurface } from '../perceiver/index.js';
 import { readReflections, buildSubstrate } from './substrate.js';
 import { createDeepReader, RESTING, READING } from './deep-reading.js';
 
@@ -272,21 +272,186 @@ export const connect = async (docsIn, {
   return Object.freeze({ connections, live, items: items.length });
 };
 
+// ── ANALOGY — structure-mapping across the corpus (the third connection kind) ───────────
+//
+// Echo connects reflections that are the SAME proposition (content). Analogy is its complement:
+// the SAME relational STRUCTURE with DIFFERENT surface entities. "Acme employs Bob, partners Corp,
+// … " and "Umbra hires Kane, allies Vortex, … " share no words, but their relation graphs are
+// isomorphic — Acme↔Umbra, Bob↔Kane. Gentner's structure-mapping: map by the RELATIONS, ignore the
+// objects. So the signal is graph TOPOLOGY, not the edge labels (which are the surface that differs).
+//
+// The role signature is a label-abstracted Weisfeiler–Lehman refinement: a node's colour starts as
+// its directed-degree/polarity profile (labels stripped), then is refined k rounds by the multiset
+// of its neighbours' colours. Two nodes with the same refined colour occupy the same structural role.
+// A correspondence is asserted only when it is SYSTEMATIC (Gentner) — it participates in a preserved
+// relational structure (≥ minSystematic incident edges of A map to real edges of B), never an
+// isolated same-degree coincidence. Every analogy is a CON at band void, reafferent, sourced to the
+// passages on both sides, and — like every stance in dag/ — never upgraded.
+
+const djb2 = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
+
+// relationGraph — the directed, polarity-typed relation graph of a document, read off the level-2
+// structure surface (the CON/SIG arrows the parser admitted). Labels are kept for display only.
+export const relationGraph = (doc) => {
+  const idxs = (doc?.units || doc?.sentences || []).map((_, i) => i);
+  const s = idxs.length ? structureSurface(doc, idxs) : { relations: [] };
+  const nodes = new Map();
+  const edges = [];
+  for (const r of (s.relations || [])) {
+    const sid = r.src?.id, tid = r.tgt?.id;
+    if (!sid || !tid) continue;
+    if (!nodes.has(sid)) nodes.set(sid, { id: sid, label: r.src.label ?? sid });
+    if (!nodes.has(tid)) nodes.set(tid, { id: tid, label: r.tgt.label ?? tid });
+    edges.push({ src: sid, tgt: tid, pol: r.polarity === '−' ? '−' : '+', via: r.via ?? null, idx: r.idx ?? null });
+  }
+  return { nodes, edges };
+};
+
+// incidenceOf — each node's incident half-edges (direction + polarity + the other endpoint).
+const incidenceOf = ({ nodes, edges }) => {
+  const inc = new Map();
+  for (const id of nodes.keys()) inc.set(id, []);
+  for (const e of edges) {
+    inc.get(e.src).push({ dir: 'o', pol: e.pol, other: e.tgt });
+    inc.get(e.tgt).push({ dir: 'i', pol: e.pol, other: e.src });
+  }
+  return inc;
+};
+
+// wlColors — the label-abstracted WL role signature per node. Round 0 is the directed-degree/polarity
+// profile (surface labels stripped); each further round refines by the sorted multiset of neighbour
+// colours. `rounds` deeper than the graph's radius is a no-op, so k=2 covers small relation graphs.
+export const wlColors = (graph, rounds = 2) => {
+  const inc = incidenceOf(graph);
+  const profile = (id) => {
+    const prof = {};
+    for (const x of inc.get(id)) { const k = x.dir + x.pol; prof[k] = (prof[k] || 0) + 1; }
+    return Object.keys(prof).sort().map((k) => `${k}${prof[k]}`).join(',') || '·';
+  };
+  let color = new Map([...graph.nodes.keys()].map((id) => [id, profile(id)]));
+  for (let r = 0; r < rounds; r++) {
+    const next = new Map();
+    for (const id of graph.nodes.keys()) {
+      const nbr = inc.get(id).map((x) => `${x.dir}${x.pol}:${color.get(x.other)}`).sort().join('|');
+      next.set(id, djb2(`${color.get(id)}#${nbr}`));
+    }
+    color = next;
+  }
+  return color;   // id -> refined WL colour (the structural role)
+};
+
+// A short, human role description from a node's round-0 profile — what the shared role IS.
+const roleDescOf = (graph, id) => {
+  const inc = incidenceOf(graph).get(id) || [];
+  const out = inc.filter((x) => x.dir === 'o').length;
+  const inn = inc.filter((x) => x.dir === 'i').length;
+  const part = (n, verb) => n ? `${verb} ${n}` : '';
+  return [part(out, 'relates to'), part(inn, 'is related to by')].filter(Boolean).join(', ') || 'isolated';
+};
+
+// analogize — structure-mapping across a corpus. Build each document's relation graph and its WL role
+// signatures, pair cross-document nodes that share a role, keep only the SYSTEMATIC correspondences
+// (those embedded in a preserved relational structure), and emit an analogy CON for each — band void,
+// reafferent, sourced to both sides. Returns the connections and the per-pair correspondence map.
+export const analogize = (docsIn, {
+  minSystematic = 1, log = null, commit = true, enactment = CONNECTION,
+} = {}) => {
+  const docs = Array.isArray(docsIn) ? docsIn : [docsIn];
+  const single = !Array.isArray(docsIn) || docs.length === 1;
+  const graphs = docs.map((d) => {
+    const g = relationGraph(d);
+    return { docId: d?.docId || d?.id || null, doc: d, ...g, color: wlColors(g) };
+  });
+
+  const connections = [];
+  const home = log || (single ? docs[0]?.log : null);
+  const emit = (evt) => {
+    const appended = (commit && home && typeof home.append === 'function') ? home.append(evt) : null;
+    connections.push(appended || evt);
+  };
+
+  // an edge lookup per graph: does B hold src→tgt with this polarity?
+  const edgeSet = (g) => new Set(g.edges.map((e) => `${e.src}>${e.tgt}${e.pol}`));
+  // an incident-idx lookup so a correspondence can cite the passage that proposed one of its edges.
+  const anyIdx = (g, id) => (g.edges.find((e) => e.src === id || e.tgt === id) || {}).idx ?? null;
+
+  // Every unordered pair of distinct documents (A, B): build φ from role-matched nodes, greedily
+  // choosing, within each shared-role class, the B-node that preserves the most of A's edges. One
+  // direction suffices — for isomorphic graphs the reverse map is its inverse.
+  for (let ai = 0; ai < graphs.length; ai++) {
+    for (let bi = ai + 1; bi < graphs.length; bi++) {
+      const A = graphs[ai], B = graphs[bi];
+      const bByColor = new Map();
+      for (const [id, c] of B.color) { if (!bByColor.has(c)) bByColor.set(c, []); bByColor.get(c).push(id); }
+
+      const phi = new Map();               // A.id -> B.id
+      const usedB = new Set();
+      const bEdges = edgeSet(B);
+      const preservedCount = (aId, bId, phiSoFar) => {
+        let n = 0;
+        for (const e of A.edges) {
+          const other = e.src === aId ? e.tgt : e.tgt === aId ? e.src : null;
+          if (other == null) continue;
+          const bOther = other === aId ? bId : phiSoFar.get(other);   // self-loops aside
+          if (!bOther) continue;
+          const bSrc = e.src === aId ? bId : phiSoFar.get(e.src);
+          const bTgt = e.tgt === aId ? bId : phiSoFar.get(e.tgt);
+          if (bSrc && bTgt && bEdges.has(`${bSrc}>${bTgt}${e.pol}`)) n++;
+        }
+        return n;
+      };
+      // Assign the highest-degree A-nodes first (they anchor the mapping), unambiguous classes resolve
+      // trivially; ambiguous ones pick the B-node maximizing preserved edges given φ so far.
+      const aOrder = [...A.nodes.keys()].sort((x, y) =>
+        (A.edges.filter((e) => e.src === y || e.tgt === y).length) - (A.edges.filter((e) => e.src === x || e.tgt === x).length));
+      for (const aId of aOrder) {
+        const cands = (bByColor.get(A.color.get(aId)) || []).filter((b) => !usedB.has(b));
+        if (!cands.length) continue;
+        let best = cands[0], bestN = -1;
+        for (const b of cands) { const n = preservedCount(aId, b, phi); if (n > bestN) { bestN = n; best = b; } }
+        phi.set(aId, best); usedB.add(best);
+      }
+
+      // Emit the systematic correspondences (those embedded in a preserved structure).
+      for (const [aId, bId] of phi) {
+        const preserved = preservedCount(aId, bId, phi);
+        if (preserved < minSystematic) continue;
+        const aNode = A.nodes.get(aId), bNode = B.nodes.get(bId);
+        const aEdges = A.edges.filter((e) => e.src === aId || e.tgt === aId).length || 1;
+        emit(buildConnection({
+          kind: 'analogy', a: aNode.label, b: bNode.label,
+          aCursor: anyIdx(A, aId), bCursor: anyIdx(B, bId), aDoc: A.docId, bDoc: B.docId,
+          sameness: Math.round((preserved / aEdges) * 1e4) / 1e4,   // the systematicity fraction
+          body: `${aNode.label} maps to ${bNode.label} — same relational role (${roleDescOf(A, aId)}); ${preserved} shared relation(s) preserved${A.docId !== B.docId ? ` across ${A.docId} ↔ ${B.docId}` : ''}.`,
+          sources: [anyIdx(A, aId), anyIdx(B, bId)].filter((x) => Number.isInteger(x)), enactment,
+        }));
+      }
+    }
+  }
+
+  return Object.freeze({ connections, mappings: graphs.length });
+};
+
 // ── THE COMPOSED NEST — loops on loops ──────────────────────────────────────────────
 
 // weaveReading — the whole nest in one call: loop 1 (deep reading over the document) → loop 2
 // (metacognition over its reflections) → the cross-connections over both. Every product is
 // reafferent and held void; the firewall is intact at every level. surf + embedder are injected.
-export const weaveReading = async (doc, { surf, embedder = null, thread = null, structure = null } = {}) => {
+//   corpus  OPTIONAL — the other documents this one sits among. When given, analogy (structure-
+//           mapping) runs over the whole corpus and its connections are folded in; without it the
+//           nest is single-document (echo/analogy have nothing cross-corpus to find).
+export const weaveReading = async (doc, { surf, embedder = null, thread = null, structure = null, corpus = null } = {}) => {
   const deep = createDeepReader({ doc, surf, thread }).arrive({ anchor: 0 });   // loop 1
   const meta = createMetaReader({ doc }).arrive();                              // loop 2
   const reflections = readReflections(doc);
   const substrate = buildSubstrate({ structure: structure || { relations: [], defs: [] }, reflections });
-  const woven = await connect(doc, { embedder, substrate });                    // cross-connections
+  const woven = await connect(doc, { embedder, substrate });                    // echo + bears-on
+  const docs = Array.isArray(corpus) && corpus.length ? corpus : [doc];
+  const analogies = analogize(docs, { commit: false });                        // structure-mapping
   return Object.freeze({
     reflections: deep.reflections,
     metaReflections: meta.metaReflections,
-    connections: woven.connections,
+    connections: [...woven.connections, ...analogies.connections],
     quiesced: deep.quiesced && meta.quiesced,
   });
 };

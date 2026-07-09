@@ -30,5 +30,6 @@ export {
 export {
   metaReflect, createMetaReader, buildMetaReflection,
   connect, buildConnection, weaveReading,
+  analogize, relationGraph, wlColors,
   METACOGNITION, CONNECTION,
 } from './weave.js';

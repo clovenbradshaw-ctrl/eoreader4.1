@@ -21,7 +21,7 @@ import { parseText } from '../../src/perceiver/parse/index.js';
 import { surfFold } from '../../src/surfer/index.js';
 import { canWitness } from '../../src/core/index.js';
 import {
-  createDeepReader, createMetaReader, connect, buildReflection,
+  createDeepReader, createMetaReader, connect, analogize, buildReflection,
   buildSubstrate, readReflections, readMetaReflections, readConnections,
 } from '../../src/fold/index.js';
 import { createMiniLM } from '../../eoreader4-eval/mechanics/harness.mjs';
@@ -105,6 +105,21 @@ const main = async () => {
   const heldDistractors = !probed.connections.some((c) => [2, 3].includes(c.aCursor) || [2, 3].includes(c.bCursor));
   log(`  paraphrase (s0↔s1) connected: ${gotParaphrase ? 'YES ✓' : 'no'} · distractors held apart: ${heldDistractors ? 'YES ✓' : 'no'}`);
 
+  // ── analogy — structure-mapping: SAME relational shape, DIFFERENT surface entities ─
+  rule('ANALOGY · structure-mapping across the corpus (eo:Connection kind:analogy)');
+  log('two documents with isomorphic relation graphs and NO shared words —');
+  log('  A: Acme employs Bob. Acme partners Corp. Corp employs Dana. Bob trusts Dana.');
+  log('  B: Umbra hires Kane. Umbra allies Vortex. Vortex hires Lee. Kane trusts Lee.');
+  const bizA = parseText('Acme employs Bob. Acme partners Corp. Corp employs Dana. Bob trusts Dana.', { docId: 'biz' });
+  const crimeB = parseText('Umbra hires Kane. Umbra allies Vortex. Vortex hires Lee. Kane trusts Lee.', { docId: 'crime' });
+  const flatC = parseText('Sky is blue. Grass is green.', { docId: 'flat' });
+  const ana = analogize([bizA, crimeB, flatC], { commit: false });
+  log(`\n${ana.connections.length} analogy correspondence(s) (the flat doc contributes none — no shared role):`);
+  for (const c of ana.connections) log(`  · ${c.a} ↔ ${c.b}  (sim ${c.sameness}, ${c.aDoc}↔${c.bDoc}) — ${c.body.replace(/^.*?— /, '')}`);
+  const gotMap = new Map(ana.connections.map((c) => [c.a, c.b]));
+  const mappedRight = gotMap.get('Acme') === 'Umbra' && gotMap.get('Dana') === 'Lee';
+  log(`  topology recovered (Acme↔Umbra, Dana↔Lee): ${mappedRight ? 'YES ✓' : 'no'} · surface ignored, structure mapped`);
+
   // ── the firewall — every deposited act is reafference, held void ──────────────────
   rule('FIREWALL · every deposited act cannot witness');
   let checked = 0, breached = 0;
@@ -113,6 +128,10 @@ const main = async () => {
       checked++;
       if (canWitness(e.prov) !== false || e.band !== 'void') breached++;
     }
+  }
+  for (const c of ana.connections) {   // analogy connections (uncommitted) ride the same firewall
+    checked++;
+    if (canWitness(c.prov) !== false || c.band !== 'void') breached++;
   }
   const sub = buildSubstrate({
     structure: { relations: [], defs: [] },
@@ -123,7 +142,7 @@ const main = async () => {
   log(`  ${checked} acts checked · ${breached} breaches — ${breached === 0 ? 'FIREWALL HOLDS ✓' : 'FIREWALL BREACHED ✗'}`);
   log(`  substrate[metamorphosis]: ${sub.reflections.length} eo:Reflection · ${sub.metaReflections.length} eo:MetaReflection (all band=void, witness=reafferent)`);
 
-  const ok = breached === 0 && probed.live && gotParaphrase && heldDistractors;
+  const ok = breached === 0 && probed.live && gotParaphrase && heldDistractors && mappedRight;
   log(`\n${ok ? '✓ local-model weave run OK' : '✗ something is off — see above'}`);
   process.exit(ok ? 0 : 1);
 };
