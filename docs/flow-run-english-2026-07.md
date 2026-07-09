@@ -150,33 +150,34 @@ documents exists yet — that aggregation is next-phase work, not this run's.
 
 ## Task 6 · Exemplar route — **run (addendum, 2026-07-09)**
 
-The required human selection arrived as eight candidates. Two fail the same
+The required human selection arrived as eight candidates. Two failed the same
 structural floors the corpus was gated on and got no spec: the Peirce
 blog exposition (under the 80-sentence read floor) and the Reuters Institute
-News Atom piece (2 natural sections — flat, the wiki failure mode). A third,
-the Bergman triadic essay, was set aside by editorial choice in favour of the
-Bergson essays. The remaining five form real arcs and were overlaid onto
-`mixed-en-pooled`:
+News Atom piece (2 natural sections — flat, the wiki failure mode). Three more
+were built and then **dropped on provenance**: the sources are copyrighted with
+no reuse license, so no spec derived from them ships here — Rovelli's *Reality
+Is Not What It Seems* (book), the "Jazz, the Omni-American Ideal" essay
+(Substack), and the O'Meally Ellison interview (magazine). The specs retain no
+text — only operator statistics plus an attribution stamp — but the rule for
+this repo is public-domain / freely-licensed sources only. That leaves the two
+Bergson essays, both Project Gutenberg (public domain):
 
-| spec (`data/flow-spec-*.json`) | nSent → sections | own-spec arc | vs pooled arc |
-|---|---|---|---|
-| `rovelli-reality` **(selected)** | 3,264 → 137 | 0.04 | 0.29 |
-| `bergson-laughter` | 1,652 → 153 | 0.04 | 0.97 |
-| `bergson-time-free-will` | 2,274 → 137 | 0.04 | 0.78 |
-| `jazz-omni-american` | 353 → 16 | 0.02 | 0.82 |
-| `omeally-ellison` | 244 → 9 | 0.01 | 0.66 |
+| spec (`data/flow-spec-*.json`) | nSent → sections | own-spec arc | vs pooled arc | source |
+|---|---|---|---|---|
+| `bergson-time-free-will` **(selected)** | 2,274 → 137 | 0.04 | 0.78 | Gutenberg (PD) |
+| `bergson-laughter` | 1,652 → 153 | 0.04 | 0.97 | Gutenberg (PD) |
 
-`rovelli-reality` is the selected driving spec — the target build the
-generator aims for; the other four remain installed as alternatives.
-Calibration is clean on all five (own-spec `meanArcAdherence` 0.01–0.04; the
-committed viruses example reads 0.06). The "vs pooled" column is how
-off-schedule each piece's build reads against the general English corpus —
-Rovelli's is the most corpus-like of the five (0.29), Bergson's *Laughter*
-the most distinctive (0.97). Specs retain operator statistics plus attribution
-only, no text (the O'Meally piece is an interview — its arc is dialogue-shaped;
-stated so it is not mistaken for essay build). Which spec drives generation is
-an editorial choice, not a measured one — all five load unchanged via
-`src/flow/index.js`.
+`bergson-time-free-will` is the selected driving spec — the target build the
+generator aims for (a long, developed philosophical argument); `bergson-laughter`
+is the installed alternative and the more distinctive build (0.97 vs 0.78 off the
+general English corpus). Calibration is clean on both (own-spec
+`meanArcAdherence` 0.04; the committed viruses example reads 0.06). Both load
+unchanged via `src/flow/index.js`. Which drives generation is an editorial
+choice, not a measured one.
+
+The `data/flow-spec-viruses.json` example predates this run (Wikipedia, CC BY-SA,
+attributed, statistics-only) and is referenced by `tests/flow.test.js`; it is
+kept as the test fixture, flagged here for the same provenance review.
 
 ## Reproduction
 
@@ -189,8 +190,43 @@ trajectories) → `install_prior.mjs` → `extract_dag.mjs --json` +
 trajectories are not in the repo (1.3 GB); the Drive link is in the task
 spec.
 
+## Wiring the prior into the walk — **done (addendum, 2026-07-09)**
+
+The load-and-thread weld the earlier "out of scope" note deferred is now built,
+at the amodal seam (details: `docs/flow-prior.md`, "Wiring into eoreader4.1"):
+
+- **`src/flow/select.js` · `loadInstalledPrior`** — the missing caller. Resolves
+  an installed prior by facets (`selectPrior` → fetch → `loadPrior`), null-safe;
+  `{lang:'en'}` → `mixed-en-pooled`. `loadPrior` is no longer zero-caller.
+- **`src/longgen/walk.js`** — the live essay walk takes a `flow = { prior, parse,
+  perSentences }` bundle. `parse` is **injected** (the perceiver's `parseText`), so
+  the flow engine reads the build in operator space and never touches text — the
+  membrane the omnimodal reframing asks for, honored at the one seam it touches.
+  - OBSERVE (live): each accepted paragraph is scored; a per-beat flow record and a
+    whole-piece `res.flow` roll-up ride the trace. Changes no tokens.
+  - SHAPE (`flowShape`, rev-flag, default-off): the arc-demanded move (`arcGapMove`)
+    is fed into the beat prompt as one soft directive.
+- **`src/reader/app.dc.js:_walkReply`** — loads the prior once (`_flowBundle`,
+  memoized) and turns OBSERVE on live: the reader now surfaces its own build as a
+  `flow` audit stage instead of shipping a flat one silently. SHAPE stays off.
+
+Golden parity: with no prior served, or `flow` unset, `walk`/`renderContinuation`
+are byte-identical to before — pinned by `tests/flow-walk.test.js` (5 tests: loader
+selection, graceful null, observe-changes-no-tokens, prompt parity, shape injection).
+Full suite 2,316 pass, 0 fail.
+
+Demonstration (deterministic, no model): running `arcGapMove` over the dolphin
+essay's own trajectory shows the split — at 86% and 100% through the piece the text
+is still `INS` (introduce) while the arc demands `SYN` (synthesize/close), the top
+gap `mention_conc` at +29σ early. The flat "convergent evolution" refrain, read in
+operator space, is exactly a build that never stops introducing. OBSERVE surfaces
+that; SHAPE would push against it. The live prose before/after needs a browser-model
+run (the reader's Llama path) — the engine and the witness are in place for it.
+
 ## Out of scope, restated
 
-Wiring these priors or the DAG into the essay organ / paragraph loop is the
-next phase (needs the self-read weld, the plan-to-proposition resolver, a rev
-flag, and golden parity). Nothing in this run touched a predictive path.
+Turning SHAPE on live (token-steering the reader's essays) and wiring the DAG into
+the paragraph loop remain next-phase — SHAPE needs the browser-model before/after to
+validate that the soft directive helps rather than just moves tokens, and the DAG
+side still needs the plan-to-proposition resolver. The self-read weld is already
+built (`weld.js`); the load-and-thread weld is now built too (above).

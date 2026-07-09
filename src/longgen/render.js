@@ -62,7 +62,7 @@ export const seedFor = ({ beat = {}, slice = [] } = {}) => {
 // above the boundary (under the excerpts header, so EVA's binder and the echo
 // backend both find the citable spans), then the prior paragraph as left-context,
 // then the heading, then the seed. No imperative, no task frame. Pure.
-export const renderContinuation = ({ beat = {}, slice = [], prior = '', coldStart = false, genre = '' } = {}) => {
+export const renderContinuation = ({ beat = {}, slice = [], prior = '', coldStart = false, genre = '', arcDirective = '' } = {}) => {
   const blocks = [];
 
   // Cold-start (first beat, no prior): a genre declaration opens the artifact —
@@ -92,8 +92,17 @@ export const renderContinuation = ({ beat = {}, slice = [], prior = '', coldStar
   const seed = seedFor({ beat, slice });
   if (seed) blocks.push(seed);
 
+  // ARC DIRECTIVE (flowShape only) — the one soft steer, off by default. The build-arc
+  // prior names the move this position wants (relate two things in play, draw the threads
+  // together, …); it rides as a brief parenthetical BEFORE the seed's continuation so it
+  // conditions the move without becoming the text. Absent ('') ⇒ the prompt is
+  // byte-identical to the unshaped walk — the rev-flag parity contract.
+  const system = arcDirective
+    ? `${SYSTEM_CONTINUE}\n\nMove for this paragraph: ${arcDirective}.`
+    : SYSTEM_CONTINUE;
+
   return [
-    { role: 'system', content: SYSTEM_CONTINUE },
+    { role: 'system', content: system },
     { role: 'user', content: blocks.join('\n\n') },
   ];
 };

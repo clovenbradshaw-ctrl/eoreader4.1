@@ -12,7 +12,7 @@ export { buildChatMessages, buildGroundedMessages, shapeForScope, LIBRARIAN_CUE,
 // spec): one paragraph per model call, each a CONTINUATION over a shifting fold,
 // bound and vetoed at claim grain. The reader drives it with a `refold` hook (the
 // self-read weld — generation drives retrieval) and streams via `onParagraph`.
-export { walk, frameLeak, progressAgainst, buildSkeleton } from '../longgen/index.js';
+export { walk, frameLeak, progressAgainst, buildSkeleton, loadInstalledPrior } from '../longgen/index.js';
 export { CODER_MODELS, browserCoders } from '../model/coders.js';
 import '../model/echo.js';
 import '../model/webllm.js';

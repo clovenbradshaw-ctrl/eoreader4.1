@@ -123,18 +123,31 @@ node tools/flow/eo_trajectory.mjs corpus.jsonl --eoreader . --sample 0 --resume
 python3 tools/flow/flow_distill.py trajectories.jsonl --min-sent 300 --grid 24 --out data/flow-prior.json
 ```
 
-## Wiring into eoreader4.1 (all opt-in, default-off)
+## Wiring into eoreader4.1
 
-| Hook | Call | What it adds |
-|---|---|---|
-| `src/write/witness.js` | `witness(text, expect, source, fold, { flow: { prior, prevStep, doc } })` | Per-beat flow verdict on `w.flow`; a lurch (delta > p90) or off-manifold step (residual > p95) is **surfaced** to EVA, never a hard fail. `ok` unchanged. |
-| `src/longgen/shape.js` | `arcPhaseTarget(prior, { remainingFrac })` | The corpus-typical cumulative state at the arc position — the measured *target* for the phase, beside `phaseBias`. |
-| `src/longgen/audit.js` | `exportAudit(result, { flow: { prior, doc } })` | Ships the whole-piece flow report (`audit.flow`) beside `diagnose()`. |
+The load-and-thread weld is **built** (`src/flow/select.js` → `loadInstalledPrior`,
+zero-caller no longer). The live essay walk (`src/longgen/walk.js`, the path the
+reader drives) now takes a `flow` bundle; the reader wires it by default (OBSERVE),
+with token-shaping behind a rev flag (SHAPE).
 
-Live witness wiring: after `spurt.js` renders a beat and the cumulative draft
-re-parses, thread `ctx.witnessOpts.flow = { prior, prevStep, doc, perSentences:N }`
-(a sentence window suits the incremental path) and carry `prevStep = w.flow.step`
-forward. Browser load: `loadPrior(await (await fetch('data/flow-prior.json')).json())`.
+| Hook | Call | What it adds | State |
+|---|---|---|---|
+| `src/flow/select.js` | `loadInstalledPrior({ lang, domain, register }, { base, read })` | Resolves an installed prior by facets (`selectPrior` → fetch → `loadPrior`); null-safe. `{lang:'en'}` → `mixed-en-pooled`. | **live** |
+| `src/longgen/walk.js` | `walk({ …, flow: { prior, parse, perSentences } })` | OBSERVE: each accepted paragraph re-parses the running draft (`parse` is the **injected** in-organ accessor — the engine stays amodal), scores the last section, and rides a per-beat flow record + a whole-piece `res.flow` roll-up on the trace. Changes **no** tokens. | **live** (reader wires it) |
+| `src/longgen/walk.js` + `render.js` | `walk({ …, flow, flowShape: true })` | SHAPE: the arc-demanded move (`arcGapMove`) is fed into the beat prompt as one soft directive (`Move for this paragraph: …`). The only token-changing hook. | **rev-flag, default-off** |
+| `src/write/witness.js` | `witness(text, expect, source, fold, { flow: { prior, prevStep, doc } })` | Per-beat flow verdict on `w.flow` for the `src/write/*` enacted-writer path (a separate walk from the reader's essay path). `ok` unchanged. | built, opt-in |
+| `src/longgen/audit.js` | `exportAudit(result, { flow: { prior, doc } })` | Whole-piece `audit.flow` for the harness export. | built, opt-in |
+
+Reader wiring (`app.dc.js:_walkReply`): `const flow = await this._flowBundle()` loads
+`mixed-en-pooled` once (memoized; null if the registry isn't served) and pairs it with
+`this.E.parseText` as the accessor; the walk's `res.flow` is surfaced as a `flow` audit
+stage. `flowShape` stays off — the reader witnesses its build live, and steering is the
+deliberate next flip. Browser load path: `loadInstalledPrior` fetches
+`data/flow-priors/index.json` via `new URL(rel, document.baseURI)`.
+
+**Parity contract:** with no prior (registry unserved) or `flow` unset, `walk` and
+`renderContinuation` are byte-identical to before — pinned by `tests/flow-walk.test.js`
+(observe changes no tokens; the empty directive is a byte-identical prompt).
 
 ## Validation (36-book prior, this repo)
 
