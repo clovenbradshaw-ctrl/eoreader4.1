@@ -123,12 +123,61 @@ const condense = (s) => {
   return (stop > 60 ? cut.slice(0, stop) : cut.replace(/\s+\S*$/, '')) + '…';
 };
 
+// A reflection is an EVA — the reading EVALUATING a place against its frame. But a figure merely
+// ENTERING (op INS, "X enters") or the focus MOVING (op SEG, "focus shifts off Y") is a PARSE
+// event, not an evaluation: it names what appeared, it does not judge it. The surf arrests on
+// Bayesian surprise, and on a document's reference tail the steepest surprise is often exactly
+// such a bare entry — a row of never-seen proper nouns from a citation — which voiced as a
+// "thought" reads like a parser log ("Princeton University Press enters") and, deposited,
+// enriches nothing. So the model-free reflection forms ONLY where the place carries a real
+// evaluation: a relation or property arrived (CON / SIG / DEF), or a tension is HELD against the
+// frame. Below that bar it returns an empty body and the pass deposits nothing (deepReading and
+// the governed loop both quiesce on an empty body — the same self-terminating discipline).
+const EVALUABLE_OPS = new Set(['CON', 'SIG', 'DEF']);
 const reflectFold = (fold, { focus = null, surprise = null, band = null } = {}) => {
+  const sig = fold?.levels?.significance || null;
+  const surprises = (sig && sig.surprises) || [];
+  const substantive = surprises.filter((x) => EVALUABLE_OPS.has(x.op));
+  const held = !!(sig && sig.held);
+  if (!substantive.length && !held) return { body: '', verdict: null };   // a bare entry/shift — nothing to judge
   const verdict = (surprise != null && band != null) ? (surprise < band ? 'confirm' : 'strain') : null;
-  const sig = fold?.levels?.significance?.summary || null;
+  // Voice the substantive beats — the bond or property that carried the surprise — not the raw
+  // "X enters" list: that is the meaningful content the reading actually found here. Those beats
+  // already NAME their subject, so no focus lead is prepended (it can name a different, warmer
+  // figure and read as a mismatch). A held-steady place with no fresh bond falls back to its own
+  // summary — there the focus lead still orients it — then to the folded prose.
+  if (substantive.length) {
+    return { body: substantive.map((x) => x.text).slice(0, 2).join('; ').trim(), verdict };
+  }
   const lead = focus ? `${focus}: ` : '';
-  const body = (sig ? `${lead}${sig}` : `${lead}${condense(fold?.text || '')}`).trim();
-  return { body, verdict };
+  return { body: `${lead}${sig?.summary || condense(fold?.text || '')}`.trim(), verdict };
+};
+
+// The reference APPARATUS — footnotes, bibliography, Further-reading, External-links. The surf
+// arrests where the reading was most REWRITTEN (Bayesian surprise), and a citation line packs a
+// row of never-seen proper nouns, so it spikes surprise harder than real prose: the "place of
+// most interest" keeps landing on the least meaningful part of a document (a Wikipedia article's
+// tail). A reflection there is worthless. These keep deep reading OFF that matter; the reading
+// and its citations elsewhere in the corpus are untouched (this only bounds WHERE it reflects).
+const APPARATUS_HEAD = /^(references?|further reading|external links?|see also|bibliography|citations?)\b/i;
+const CITATION_LINE = /^↑|\bISBN\b|\bdoi:\s|archived from the original|\bretrieved\s/i;
+const isApparatusLine = (text) => {
+  const t = String(text || '').trim();
+  return !!t && (CITATION_LINE.test(t) || APPARATUS_HEAD.test(t));
+};
+// The apparatus TAIL begins at the first apparatus heading and runs to the end — article tail
+// matter is always terminal, so everything from that boundary on is citation cruft. Memoised per
+// doc (the deep reader re-reads the same doc across many governed passes).
+const _apparatusFrom = new WeakMap();
+const apparatusFrom = (doc) => {
+  if (_apparatusFrom.has(doc)) return _apparatusFrom.get(doc);
+  const sents = doc.units || doc.sentences || [];
+  let at = Infinity;
+  for (let i = 0; i < sents.length; i++) {
+    if (APPARATUS_HEAD.test(String(sents[i] || '').trim())) { at = i; break; }
+  }
+  _apparatusFrom.set(doc, at);
+  return at;
 };
 
 // The spans the fold reads AROUND the place of most interest — a little behind (the frame the
@@ -178,29 +227,38 @@ export const deepReading = (doc, {
   const bayesAt = bayesAtOf(field);
   const focusAt = focusAtOf(field);
 
-  // the place of most interest: the steepest UNVISITED stop (habituation — never re-reflect
-  // a place already read; the cure for rumination, think.js). Nothing fresh → quiesce.
+  // the place of most interest: the steepest UNVISITED stop, OFF the reference apparatus and
+  // habituated (never re-reflect a place already read — the cure for rumination, think.js). Walk
+  // the candidates steepest-first and reflect at the first that clears the EVALUATION bar (the
+  // reflect voice returns an empty body on a bare figure-entry / focus-shift — a parse event, not
+  // an evaluation), so a wall of citation proper-nouns never becomes a "thought". Nothing fresh,
+  // off-apparatus and evaluable in reach → quiesce.
+  const sents = doc.units || doc.sentences || [];
+  const tail = apparatusFrom(doc);
   const seen = visited instanceof Set ? visited : new Set(visited || []);
-  const candidates = s.stops.filter((c) => !seen.has(c));
+  const candidates = s.stops
+    .filter((c) => !seen.has(c) && c < tail && !isApparatusLine(sents[c]))
+    .sort((a, b) => bayesAt(b) - bayesAt(a));
   if (!candidates.length) return null;
-  let peak = candidates[0];
-  for (const c of candidates) if (bayesAt(c) > bayesAt(peak)) peak = c;
 
   const band = median(field.map((f) => f.bayes));
-  const surprise = bayesAt(peak);
-  const focus = focusAt(peak) ?? s.focus ?? null;
 
-  // fold the region at the place of most interest — the unit of evidence the reflection reads.
-  const spans = spansAround(doc, peak);
-  const fold = foldNote(spans, { doc, cursor: peak, surf: s });
-  const sources = (fold.sources && fold.sources.length) ? fold.sources : spans.map((x) => x.idx);
-
-  // reflect about it — an injected model voice, or the model-free inner note.
-  const r = reflect
-    ? reflect(fold, { doc, cursor: peak, focus, surprise, band, surf: s })
-    : reflectFold(fold, { focus, surprise, band });
-  const body = (r && r.body) || '';
-  if (!body) return null;                              // nothing to say → no empty reflection
+  let peak = null, focus = null, surprise = 0, fold = null, sources = null, r = null, body = '';
+  for (const c of candidates) {
+    const f = focusAt(c) ?? s.focus ?? null;
+    const spans = spansAround(doc, c);
+    const fd = foldNote(spans, { doc, cursor: c, surf: s });
+    const src = (fd.sources && fd.sources.length) ? fd.sources : spans.map((x) => x.idx);
+    // reflect about it — an injected model voice, or the model-free inner note.
+    const rr = reflect
+      ? reflect(fd, { doc, cursor: c, focus: f, surprise: bayesAt(c), band, surf: s })
+      : reflectFold(fd, { focus: f, surprise: bayesAt(c), band });
+    const bd = (rr && rr.body) || '';
+    if (!bd) continue;                                 // not an evaluation here — try the next place
+    peak = c; focus = f; surprise = bayesAt(c); fold = fd; sources = src; r = rr; body = bd;
+    break;
+  }
+  if (peak == null) return null;                       // nothing worth reflecting on in reach
 
   const event = buildReflection({
     cursor: peak, focus, particular: focus, verdict: r?.verdict ?? null,

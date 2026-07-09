@@ -67,7 +67,10 @@ test('walk with a deepRead bundle folds a reflection into the beat (source surfe
     'The peregrine has a body length of thirty-four to fifty-eight centimetres.',
   ].map((text, i) => ({ idx: i, score: 0.9 - i * 0.05, text }));
   const refold = async ({ seen }) => POOL.filter((s) => !seen.has(String(s.idx))).slice(0, 3);
-  const source = parseText('The peregrine is the fastest animal alive. In its stoop it exceeds three hundred kilometres per hour. This dive is a controlled fall. Its wings are long and swept. Every proportion trades manoeuvre for velocity. Egyptian sun gods wore its head.', { docId: 'src.txt' });
+  // A source with a real EVALUABLE place — bonds (falcon strikes prey, falconers trained the
+  // peregrine, kings prized the bird), not a bare opening. A reflection is an EVA (an evaluation),
+  // so it forms where a relation arrives, never on a figure merely entering.
+  const source = parseText('The peregrine falcon is a raptor. It hunts other birds in the air. In its stoop the falcon strikes its prey at great speed. The impact kills the prey outright. Falconers trained the peregrine for the hunt. Medieval kings prized the bird above all others.', { docId: 'src.txt' });
   const res = await walk({ fold: [], design: { demand: 2, question: 'falcons' }, model, refold, groundLater: true, deepRead: { source, surf: surfFold } });
   assert.ok(res.paragraphs.length >= 1, 'the walk still produces paragraphs');
   assert.ok(seenPrompts.some((p) => /Reading note \(your own reflection/.test(p)), 'at least one beat prompt carried a reflection, marked as the reader’s own');
