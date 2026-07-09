@@ -55,7 +55,41 @@ genuine development vs churn.
 
 First cheap, decisive test before building it: measure EVA/REC density in the existing
 reason-walk / answer / audit traces and confirm they are dense enough to distill from — the
-direct test of "sparse in text, dense in readings."
+direct test of "sparse in text, dense in readings." **Run below — confirmed.**
+
+## Finding 3 — the reading generates the Significance stream; text does not (12 docs)
+
+Drove the reader's enacted judgment loop (`src/core/enacted/loop.js` — it emits DEF at
+frame-set, EVA at every cursor, REC at each reframe) over real corpus docs, feeding it a
+real per-sentence surprise (operator-distribution change from the parse). Counted the
+Significance operators the *reading* generates vs. what the *text* contains at ingest:
+
+| | at text ingest | in a reading |
+|---|---|---|
+| Significance density | 8.8% of events (~0.14/sentence) | **2.57 ops/sentence (~18×)** |
+| EVA (test) | ~0.04/sentence | ~2.0/sentence (per cursor × 2 layers) |
+| **REC (reframe / cycle-turn)** | **0 across all 12 docs** | **47–837 per doc** |
+
+The load-bearing number is **REC = 0 at ingest, in every doc**. The reframe — the operator
+that turns the interpretive cycle — does not exist in parsed text; it exists only when a
+reader runs. You cannot distill a turn/reframe signal from a text corpus because it is not
+there. This is the mechanism behind Findings 1–2: the flow prior is built from text, text
+has no REC, so the prior has no cycle-turn signal, so it cannot tell development from churn.
+
+**Descent has a metric.** In the readings, **DEF ≈ REC in every doc** (372/370, 334/332,
+493/491, 71/69, …): each reframe is paired with a re-definition — the cycle turns *and
+descends*, re-setting its terms. So the conjecture is operational:
+- `DEF:REC ≈ 1:1` — every reframe re-grounds → **development**
+- `REC ≫ DEF` — reframing that never rebuilds → **churn** (the honeybees failure)
+
+A Significance-cycle prior would distill exactly this — a prior over (turns per piece,
+DEF:REC descent ratio) — from reading traces, the data the text corpus structurally lacks.
+The build is now well-posed: harvest enacted-loop traces over a corpus, distill the
+turn-count × descent distribution, and that is the quality instrument the flow prior isn't.
+
+(Honest edges: the EVA/sentence ≈ 2.0 is partly the loop's two-layer construction, not a
+deep constant; and the absolute REC count depends on the surprise proxy — a jumpier signal
+reframes more. The robust findings are REC=0-in-text vs dense-in-reading, and DEF≈REC descent.)
 
 ## Reproduce
 
