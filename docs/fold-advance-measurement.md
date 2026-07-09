@@ -111,12 +111,51 @@ Each step wants its own golden-parity gate and, ideally, a live-walk redundancy 
 probe, run on the real generated paragraphs rather than selection-only) to confirm the
 selection-grain win survives contact with the talker.
 
+## Step 1 — built behind a flag; the live re-read says NOT YET default-on
+
+Step 1 of the rewire is implemented: `_surpriseRerank` in `src/reader/app.dc.js` re-orders
+the refold's candidate spans by Born-scored prediction error against the running document,
+and the walk's `refold` calls it when `this._foldSurprise` is set. The flag defaults **OFF**
+and flag-off is byte-identical to the similarity refold (same top-6 similar spans, same
+order); a cold meaning embedder or any fault degrades to similarity. Toggle with
+`localStorage 'eo_fold_surprise'='1'`. The candidates are already leashed by groundability —
+`groundNotes` only returns on-topic, citable spans — so this supplies just the surprise term.
+
+Before defaulting it on, the finding above asked for a **live-walk re-read**: does the
+selection-grain win survive the talker? `eoreader4-eval/fold-advance-live-probe.mjs` runs the
+real walk engine with a real CPU talker under each ranking over the same fold and measures
+redundancy of the **generated paragraphs** (consecutive-paragraph cosine + trigram), paired
+and averaged over runs to cancel the talker's sampling noise.
+
+```
+source: metamorphosis-full   beats: 4   talker: SmolLM2-360M base   6 paired runs
+  mean Δ consec-cosine  (surprise − similarity)  +6.4   (surprise slightly MORE redundant)
+  runs where surprise lowered cosine redundancy:  3/6
+  per-run Δcos: [-5, 7, 39, 10, -4, -8]
+
+VERDICT: INCONCLUSIVE / NEGATIVE — keep the flag OFF; re-read on the deployed 3B.
+```
+
+The variance is enormous (one +39 outlier; median ≈ 0), and the mean does not favour surprise.
+On the 360M base talker the selection-grain win **does not cleanly survive into the output** —
+the tiny model's prose is incoherent enough that paragraph-level semantics are dominated by its
+register and degeneration, not by which span it was seeded from. So the selection is better
+(Step 0, deterministic, decisive) but the writing does not carry the difference *on this talker*.
+
+This is the flag doing its job: the capability is built and measurable, and the live gate held
+it back from becoming the default. The remaining step before flipping the default is the same
+re-read on the **deployed Llama-3.2-3B**, whose coherent prose tracks its seed spans far more
+faithfully — not runnable in this CPU harness. Until then, `_foldSurprise` stays off.
+
 ## Reproducing
 
 ```
-NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node eoreader4-eval/fold-advance-probe.mjs
+NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt node eoreader4-eval/fold-advance-probe.mjs        # Step 0 (selection grain)
+LIVE_RUNS=6 COMPLETER_TEMP=0.4 NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt \
+  node eoreader4-eval/fold-advance-live-probe.mjs                                              # Step 1 gate (live output)
 ```
 
-Needs the live MiniLM organ (the meaning embedder the surprise/similarity cosines run in).
-Read-only: it parses the corpus, simulates selection under both rankings, prints the
-measurement, and writes nothing.
+Both need the live MiniLM organ (the meaning embedder the surprise/similarity cosines run in);
+the live probe also loads the CPU completion talker. Read-only: they measure and print, and
+write nothing. The Step 1 code change is `_surpriseRerank` + the `_foldSurprise` flag (default
+off, byte-identical), so the shipped behavior is unchanged until the 3B re-read clears the gate.

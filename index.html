@@ -2148,6 +2148,12 @@ class Component extends DCLogic {
     // whatever's decoding; `_stopGen` latches a user stop until the next turn starts.
     this._activeGuards=new Set(); this._stopGen=false;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
+    // FOLD-ADVANCE by groundable SURPRISE (docs/fold-advance-measurement.md, Step 1).
+    // Default OFF — flag-off is byte-identical to the similarity refold. The Step 0
+    // probe cleared the gate at selection grain; this stays behind the flag until the
+    // live-walk redundancy re-read confirms the win survives the talker. Toggle with
+    // localStorage 'eo_fold_surprise'='1' (or set this._foldSurprise at runtime).
+    this._foldSurprise=false; try{this._foldSurprise=localStorage.getItem('eo_fold_surprise')==='1';}catch(e){}
     // The reader's own identity verdicts ("same person" / "not the same") — user
     // assertions on an open same_as? asterisk (core/asterisk.js), folded back into
     // every rebuild as real SYN events so they carry exactly as much weight as any
@@ -6702,12 +6708,29 @@ class Component extends DCLogic {
     // ask — not that one query went dry.
     const subject=this._walkSubjectTerms(ask,q,o.prev);
     const fallbackPool=this._walkFallbackPool(subject,sources);   // ONE corpus scan per walk
-    const refold=async ({prior,index,seen})=>{
+    const refold=async ({prior,accepted,index,seen})=>{
       try{
         const focus=(index>0&&prior)?(this.norm(prior).split(/\s+/).slice(-40).join(' ')+' '+q):this._groundingQuery(q,o.prev,null);
         let g; try{ g=this.groundNotes(focus,sources); }catch(e){ g=null; }
-        const out=[];
-        for(const s of ((g&&g.spans)||[])){ const i=s.i; if(!Number.isInteger(i)||seen.has(String(i)))continue; if(out.some(x=>x.idx===i))continue; out.push({...s,idx:i}); if(out.length>=6)break; }
+        // The candidate pool. groundNotes returns spans ranked by SIMILARITY to the
+        // focus (prior tail + question) — the span most LIKE what was just said. When
+        // the surprise flag is on we gather a WIDER pool (the pool surprise re-ranks
+        // over) and re-order it by prediction error against the running document; off,
+        // the pool is exactly the top-6 similar spans, byte-identical to before.
+        const wide=this._foldSurprise?18:6;
+        const cands=[];
+        for(const s of ((g&&g.spans)||[])){ const i=s.i; if(!Number.isInteger(i)||seen.has(String(i)))continue; if(cands.some(x=>x.idx===i))continue; cands.push({...s,idx:i}); if(cands.length>=wide)break; }
+        // GROUNDABLE SURPRISE (docs/fold-advance-measurement.md, Step 1). The candidates
+        // are already groundable — groundNotes only returns on-topic, citable spans — so
+        // this is the surprise term on a pre-leashed pool: re-rank by Born-scored
+        // prediction error against the paragraphs written so far. Cold embedder or any
+        // fault → the similarity order stands (honest degrade), never a throw.
+        let out=cands;
+        if(this._foldSurprise&&index>0&&accepted&&accepted.length){
+          const reranked=await this._surpriseRerank(cands,accepted);
+          if(reranked&&reranked.length)out=reranked;
+        }
+        out=out.slice(0,6);
         if(out.length<3){
           const ex=new Set(seen); for(const s of out)ex.add(String(s.idx));
           out.push(...this._walkFallbackPick(fallbackPool,ex,(index>0&&prior)?prior:'',6-out.length));
@@ -6789,6 +6812,35 @@ class Component extends DCLogic {
   _seedParasFrom(text){
     const paras=String(text||'').split(/\n\s*\n/).map(s=>this.norm(s)).filter(Boolean);
     return paras.map((t,i)=>({beat:'b'+i,role:i?'continue':'open',heading:null,topic:'',kind:'connective',seed:'',text:t,sources:[],boundFraction:1,action:'discovered',closes:false}));
+  }
+  // _surpriseRerank — GROUNDABLE SURPRISE fold-advance (docs/fold-advance-measurement.md,
+  // Step 1). Re-order the refold's candidate spans by prediction error against the running
+  // document (the paragraphs written so far) instead of leaving them in similarity order.
+  //   error(span) = 1 − cos(span, doc)     doc = mean embedding of accepted paragraphs
+  //   weight      = Born( error )          err², self-normalizing — significance's own rule
+  // Highest weight = the span the running document least predicts = the largest reducible
+  // surprise, selected FIRST as the next beat's anchor. The candidates are already leashed by
+  // groundability (groundNotes only returns on-topic, citable spans), so this supplies just the
+  // surprise term. Uses the shared MiniLM organ; a COLD embedder or ANY fault returns null and
+  // the caller keeps the similarity order — the honest degrade the measurement prescribes.
+  async _surpriseRerank(cands,accepted){
+    try{
+      if(!Array.isArray(cands)||cands.length<2)return null;
+      const emb=await this._getEmbedder();
+      if(!emb||!emb.isWarm||!emb.isWarm())return null;   // never BLOCK a beat on a model download; degrade to similarity until warm
+      const cos=(a,b)=>{let d=0,na=0,nb=0;const n=Math.min(a.length,b.length);for(let i=0;i<n;i++){d+=a[i]*b[i];na+=a[i]*a[i];nb+=b[i]*b[i];}return d/(Math.sqrt(na)*Math.sqrt(nb)||1);};
+      const docVecs=[];
+      for(const p of accepted){const t=this.norm(p&&p.text||'');if(t)docVecs.push(await emb.embed(t));}
+      if(!docVecs.length)return null;
+      const doc=new Float32Array(docVecs[0].length);
+      for(const v of docVecs)for(let i=0;i<doc.length;i++)doc[i]+=v[i];
+      for(let i=0;i<doc.length;i++)doc[i]/=docVecs.length;
+      const err=[];
+      for(const c of cands){const v=await emb.embed(this.norm(c.text||c.quote||''));err.push(Math.max(0,1-cos(v,doc)));}
+      const sq=err.map(e=>e*e);const tot=sq.reduce((a,b)=>a+b,0);
+      if(!(tot>0))return null;                            // all-zero surprise (degenerate) → keep similarity
+      return cands.map((c,i)=>({c,w:sq[i]/tot})).sort((a,b)=>b.w-a.w).map(x=>x.c);
+    }catch(e){ return null; }
   }
   // _walkSubjectTerms — what the piece is ABOUT, as content terms: the ask (original, when the
   // research path reformulated it) plus the resolved grounding query (which carries the thread's
