@@ -87,6 +87,16 @@ const round = (x) => (Number.isFinite(x) ? Math.round(x * 1e3) / 1e3 : x);
 // on exactly this shape). The audit's firewall check strips these and re-projects.
 const isReflEvent = (e) => e && e.op === 'EVA' && e.reflection === true && e.register === 'enacted';
 
+// A READER-INFERENCE event — anything the reading DEPOSITED as its own (a first-order reflection,
+// a metacognitive note, or a promoted significance CONNECTION: fold/significance.js). All three
+// are reafference (canWitness false); the firewall strips exactly these to recover the witnessed
+// record. Broader than isReflEvent because a significance connection rides op CON, not EVA.
+const isInferenceEvent = (e) => !!e && (e.reflection === true || e.connection === true || e.inferred === true);
+// the WITNESSED subset of a projection's edges — parser/world edges the reader CAN witness. An
+// inference edge carries fromEnactor prov (canWitness false); a parser edge carries none
+// (canWitness true). This is the partition the whole firewall turns on (core/provenance §8).
+const isWitnessedEdge = (e) => canWitness(e && e.prov != null ? e.prov : null) !== false;
+
 const sentsOf = (doc) => (doc && (doc.units || doc.sentences)) || [];
 const sourceTexts = (doc, sources) => {
   const sents = sentsOf(doc);
@@ -119,38 +129,52 @@ const figureCount = (ents) => (ents == null ? 0 : (typeof ents.size === 'number'
 // ── the firewall audit — READ-ONLY, works on any doc (run or not). The claim
 // (docs/deep-reading.md: "the record it can witness is provably untouched") made a measurement.
 //
-// The subtlety that makes this a REAL check and not a tautology: strip by the reflection TAG
-// (`e.reflection === true`), NOT by the EVA op. A legitimate reflection is an EVA, which
-// projectGraph skips by type — so stripping only EVA reflections and comparing would be vacuous
-// (EVA contributes no edge either way). Stripping everything that CLAIMS to be a reflection means
-// a reflection mis-minted with a WITNESSABLE op (a forged `{op:'CON', reflection:true}`) is
-// present in the full projection but absent from the stripped one — so it shows up as an edge the
-// monologue added, and `factsAdded` fires. Two independent teeth, then: the projection delta
-// catches a reflection that became a depicted fact, and the type checks below catch a reflection
-// mis-minted as witnessable in place (firm / grounded / not the enactor door).
+// PROVENANCE-AWARE (docs/monologue-significance.md). The reading is ALLOWED to add edges to the
+// physics — a promoted significance connection (corroborates / contradicts / bears-on) is a real
+// edge the surf and retrieval read (fold/significance.js). What it may NEVER do is add a WITNESSED
+// edge — one a downstream reader would take as world. projectGraph carries each event's provenance
+// onto its edge (core/project.js: "the DOOR rides through the projection"), so the two are
+// separable at the edge: a parser edge has no prov (canWitness true — witnessed); an inference
+// edge carries fromEnactor prov (canWitness false — the reader's own). So the firewall partitions:
+//   factsAdded     WITNESSED edges the inferences added — MUST be 0 (that would be laundering).
+//   inferredAdded  reafferent edges they added — the reader's significance overlay, LEGITIMATE.
+//
+// The teeth: strip by the reader-inference TAG (reflection|connection|inferred), not by op or by
+// provenance. A legitimate inference is reafferent, so it lands in `inferredAdded` and the record
+// is untouched. But a reflection MIS-MINTED as witnessable — a forged `{op:'CON', reflection:true}`
+// with a world-door prov — is stripped from the clean view yet projects a WITNESSED edge in the
+// full view, so `factsAdded` fires. (Were the strip keyed on provenance, that forgery would look
+// witnessed in both views and slip through; keyed on the tag, it cannot.)
 export const firewallAudit = (doc, { frame = {} } = {}) => {
   const all = (typeof doc?.log?.snapshot === 'function') ? doc.log.snapshot() : (doc?.log?.events || []);
-  const marked = all.filter((e) => e && e.reflection === true);     // everything CLAIMING to be a reflection, any op
-  const cleanEvents = all.filter((e) => !(e && e.reflection === true));
+  const marked = all.filter(isInferenceEvent);                 // everything the reading claims as its own inference
+  const cleanEvents = all.filter((e) => !isInferenceEvent(e)); // the witnessed record, as if the reading never ran
 
   const gWith = projectGraph(doc.log, frame);
-  // a bare log-view with every reflection-tagged event removed — projectGraph reads
-  // log.snapshot() and guards on log.length, so this projects "as if the monologue never ran".
+  // projectGraph reads log.snapshot() and guards on log.length, so this bare view re-projects
+  // the record alone.
   const gClean = projectGraph({ snapshot: () => cleanEvents, length: cleanEvents.length }, frame);
 
-  const factsWith = gWith.edges.length, factsClean = gClean.edges.length;
+  const witWith = gWith.edges.filter(isWitnessedEdge);
+  const witClean = gClean.edges.filter(isWitnessedEdge);
+  const factsWith = witWith.length, factsClean = witClean.length;
+  const inferredWith = gWith.edges.length - factsWith;
+  const inferredClean = gClean.edges.length - factsClean;
   const figWith = figureCount(gWith.entities), figClean = figureCount(gClean.entities);
-  const depictedIdentical = JSON.stringify(gWith.edges) === JSON.stringify(gClean.edges);
-  // every reflection-tagged event must be reafferent (canWitness false, enactor door) and void.
+  // compare the WITNESSED subset — an inference edge (canWitness false) must not flip this; only a
+  // reflection that reached the record does.
+  const depictedIdentical = JSON.stringify(witWith) === JSON.stringify(witClean);
+  // every inference event must itself be reafferent (canWitness false, enactor door) and void.
   const allReafferent = marked.every((e) => canWitness(e.prov) === false && e.door === 'enactor');
   const allVoid = marked.every((e) => e.band === 'void' && e.grounded === false);
 
   const intact = depictedIdentical && factsWith === factsClean && figWith === figClean && allReafferent && allVoid;
   return Object.freeze({
     reflections: marked.length,
-    factsWitnessed: factsClean,            // the record's own facts — what the reader CAN witness
-    factsAdded: factsWith - factsClean,    // must be 0 — no reflection ever became a fact (now non-vacuous)
-    figuresAdded: figWith - figClean,      // must be 0
+    factsWitnessed: factsClean,               // the record's own facts — what the reader CAN witness
+    factsAdded: factsWith - factsClean,       // WITNESSED additions — must be 0 (laundering if not)
+    inferredAdded: inferredWith - inferredClean,  // reafferent additions — the reader's significance overlay
+    figuresAdded: figWith - figClean,         // must be 0 — an inference connects existing figures, never invents one
     depictedIdentical, allReafferent, allVoid,
     intact,
   });
@@ -371,7 +395,8 @@ export const reportAudit = (audit, { title = 'inner monologue' } = {}) => {
   if (a.bandMargin != null) L.push(`  band margin ${sig(a.bandMargin)}   (min ${sig(a.minMargin)})`);
   L.push(`  verdicts    ${a.verdictMix.strain} strain · ${a.verdictMix.confirm} confirm`);
   const f = a.firewall;
-  L.push(`  firewall    ${f.intact ? 'INTACT' : 'BREACHED'}  ·  facts added ${f.factsAdded} · figures added ${f.figuresAdded} · witnessed facts untouched (${f.factsWitnessed})`);
+  const overlay = f.inferredAdded ? ` · ${f.inferredAdded} inference edge${f.inferredAdded === 1 ? '' : 's'} (reafferent overlay)` : '';
+  L.push(`  firewall    ${f.intact ? 'INTACT' : 'BREACHED'}  ·  facts added ${f.factsAdded} · figures added ${f.figuresAdded} · witnessed facts untouched (${f.factsWitnessed})${overlay}`);
   if (!f.intact) {
     if (!f.depictedIdentical || f.factsAdded !== 0 || f.figuresAdded !== 0) L.push('              ! the projected graph changed — a reflection reached the record');
     if (!f.allReafferent) L.push('              ! a reflection is not reafferent (canWitness true, or not at the enactor door)');

@@ -31,6 +31,13 @@ export {
 // a doc the reader already rested on; reportAudit renders the verdict.
 export { auditMonologue, auditLog, firewallAudit, reportAudit } from './audit.js';
 
+// Significance (fold/significance.js): the connections the reader INFERS but the text never states
+// — contradicts (a tension), connects (a common-neighbour latent link), corroborates (convergence)
+// — promoted to the graph as reafferent, void, provenance-carrying CON edges. They MOVE the physics
+// (surf, retrieval, the provenance graph) yet never witness: factsAdded 0, inferredAdded N. Impact
+// without laundering (docs/monologue-significance.md).
+export { weaveSignificance, inferSignificance, buildSignificanceEdge, readSignificance, SIGNIFICANCE } from './significance.js';
+
 // Weave (fold/weave.js): loops on loops. Metacognition — the reflection ABOUT the reflections
 // (loop 2) — and cross-connections — CON bonds between held interpretations (echo · bears-on ·
 // analogy). Both reafferent, band void, canWitness false: the firewall holds at every level.
