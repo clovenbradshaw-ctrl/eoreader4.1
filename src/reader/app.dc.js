@@ -4419,9 +4419,10 @@ class Component extends DCLogic {
       {const rd=read||meta;
       if(grounded&&amode!=='creative'&&(this._turnForceWalk||this._paragraphDemand(q)||this._wantsLongform(q,rd)||(rd&&rd.route==='compose'&&rd.kind==='essay'))){
         const eo={model,guard,finish,ground,meta,read,prev,forced:this._turnForceWalk};
-        // A NAMED essay/report runs the real essay organ (a planned, sectioned piece); the softer
-        // longform cues, and the manual Long-form button, stay on the flat multi-paragraph walk.
-        if(!this._turnForceWalk&&this._essayIntent(q,rd))return await this._essayReply(id,q,sources,eo);
+        // The Long-form BUTTON and a typed essay/report both run the real essay organ (the sectioned,
+        // grounded piece — the flagship button gives the flagship output); the softer longform cues (a
+        // bare "develop" length read, a paragraph count) stay on the flat multi-paragraph walk.
+        if(this._turnForceWalk||this._essayIntent(q,rd))return await this._essayReply(id,q,sources,eo);
         return await this._walkReply(id,q,sources,eo);
       }}
       let messages;
@@ -5029,7 +5030,17 @@ class Component extends DCLogic {
     let res;
     try{
       res=await this._ME.runEssay({spine,spans:pool,retrieve,model:streamModel,onEvent,signal:o.guard.signal,
-        knobs:{supplyWidth:14,sectionCeiling:320}});
+        // The research FACETS are the intended structure — keep them stable. maxInserts:0 and a
+        // never-reached splitFloor stop the spine from minting new sections whose intent is a raw
+        // CLAIM sentence (they rendered as sentence-long headings in the e2e run); a thin facet still
+        // merges into a kindred one. retrieve already scoped each section's spans by relevance, so the
+        // organ's LEXICAL off-intent veto and spine-advance gate are turned OFF (floors 0) — otherwise
+        // a facet whose intent words don't share vocabulary with its own spans ("blubber insulates the
+        // dolphin" vs "dolphin anatomy…") has every commitment vetoed off-intent and the whole section
+        // gate-fails, silently dropping the facet (measured: 2 of 4 facets lost). Trust retrieval to
+        // scope; keep the grounding disciplines (bind/veto, contradiction, dedup) that still fire.
+        // Verified end-to-end against a real CPU talker in eoreader4-eval/essay-e2e.drive.mjs (4/4).
+        knobs:{supplyWidth:14,sectionCeiling:320,maxInserts:0,splitFloor:2,fitFloor:0,thesisFloor:0,thin:1,gate:{advanceFloor:0}}});
     }catch(e){ o.guard.clear(); if((e&&e.stopped)||this._stopGen)return; res=null; }
     o.guard.clear();
 
@@ -5046,12 +5057,20 @@ class Component extends DCLogic {
     // behind its heading (and its phrased seam, when the form set one).
     const report=res.report;
     const accepted=(report.order||[]).map(sid=>(report.sections||[]).find(s=>s&&s.id===sid&&s.state==='accepted')).filter(Boolean);
-    const bodyParts=accepted.map(s=>{
-      const h=headingFor(s.id)||this._titleCase(this.norm(s.intent||'').split(/\s+/).slice(0,6).join(' '));
-      const lead=(s.seam&&s.seam.modality==='text'&&s.seam.text)?(this.norm(s.seam.text)+' '):'';
+    // DEDICATED HEADING PROMPTING — a section head is its own tiny generation, titled from the
+    // section's actual PROSE, not derived from the (verbose, sometimes claim-shaped) facet intent.
+    // The derived heading rides as the live placeholder while the section streams and as the fallback
+    // when the title call is cold or comes back malformed; the model gives the accepted piece a clean
+    // 2–5 word title. One short call per section — cheap next to the section itself.
+    const bodyParts=[];
+    for(const s of accepted){
       const prose=untag(s.prose||'');
-      return prose?[h?('## '+h):'',lead+prose].filter(Boolean).join('\n\n'):'';
-    }).filter(Boolean);
+      if(!prose)continue;
+      const derived=headingFor(s.id)||this._essayHeading(s.intent,dTitle);
+      const h=await this._essaySectionTitle(o.model,prose,derived,o.guard);
+      const lead=(s.seam&&s.seam.modality==='text'&&s.seam.text)?(this.norm(s.seam.text)+' '):'';
+      bodyParts.push([h?('## '+h):'',lead+prose].filter(Boolean).join('\n\n'));
+    }
     const text=bodyParts.join('\n\n');
 
     if(!text){
@@ -5084,9 +5103,46 @@ class Component extends DCLogic {
     // names the ANGLE ("History"), not the topic again ("History of dolphins").
     s=s.replace(/\s+(?:of|about|on|for|in|regarding|concerning)\s+.+$/i,(m)=>{
       let hasSubj=false;for(const w of m.toLowerCase().split(/[^a-z0-9]+/))if(subjTerms.has(w))hasSubj=true;return hasSubj?'':m;});
-    const words=s.split(/\s+/).filter(Boolean).slice(0,7);
-    if(!words.length)return this._titleCase(this.norm(String(intent||'')).split(/\s+/).slice(0,4).join(' '))||'The reading';
+    let words=s.split(/\s+/).filter(Boolean);
+    // A facet phrase is short; a spine-revision intent can be a whole CLAIM sentence (insert/split
+    // set intent := claim). A heading must never read as prose, so for a long intent name it by its
+    // salient content words — not the sentence. (The e2e run produced "Breathe air through a
+    // blowhole on the top of the head…" as a heading before this.)
+    if(words.length>6){
+      const stop=this.STOP||new Set();
+      const salient=words.filter(w=>w.length>3&&!stop.has(w.toLowerCase())&&!subjTerms.has(w.toLowerCase()));
+      words=(salient.length?salient:words).slice(0,4);
+    }else{
+      words=words.slice(0,7);
+    }
+    if(!words.length)return 'The reading';
     return this._titleCase(words.join(' ')).replace(/[.,;:!?]+$/,'');
+  }
+  // _essaySectionTitle — a section heading as its OWN small generation, titled from the section's
+  // finished prose. The organ's facet intents are verbose research queries (and a revised spine can
+  // carry a whole claim sentence as an intent), so deriving a heading from the intent reads badly;
+  // titling from the prose gives a clean, faithful head. Strictly bounded — one short line, a couple
+  // of words — and any failure / malformed / over-long return falls back to the derived heading, so
+  // this only ever improves a heading, never breaks one. (User suggestion: dedicated head prompting.)
+  async _essaySectionTitle(model,prose,fallback,guard){
+    if(!model||!this._ME||!this._ME.streamPhrase)return fallback;
+    try{
+      const messages=[
+        {role:'system',content:'You name a section of an essay. Output ONLY the title — 2 to 5 words, Title Case, no quotation marks, no trailing punctuation, no preamble, no explanation.'},
+        {role:'user',content:'Give a short section heading for this passage:\n\n'+this.norm(String(prose||'')).slice(0,700)},
+      ];
+      const raw=await this._ME.streamPhrase(model,messages,{maxTokens:16,temperature:0.3,signal:guard&&guard.signal});
+      let t=this.norm(String(raw||'')).split('\n').map(x=>x.trim()).filter(Boolean)[0]||'';
+      t=t.replace(/^(?:title|heading|section(?:\s+title)?)\s*[:\-–]\s*/i,'')     // strip a "Title:" preamble
+         .replace(/^[\s"'“”*#>\-]+|[\s"'“”*.:;,!?]+$/g,'').trim();               // strip quotes/markdown/punct
+      const words=t.split(/\s+/).filter(Boolean);
+      if(words.length<1||words.length>7)return fallback;   // empty or a sentence → keep the derived head
+      if(/[.!?].*\S/.test(t))return fallback;              // mid-string sentence punctuation → prose, not a title
+      // The small model often answers with a PREAMBLE instead of a title ("Here's the section
+      // heading", "Sure, the title is…"). Reject anything that talks ABOUT a heading rather than being one.
+      if(/\b(?:here|sure|certainly|okay|section|heading|title|passage|response|answer|following|essay|paragraph)\b/i.test(t))return fallback;
+      return t;
+    }catch(e){ return fallback; }
   }
   // _essaySources — the on-subject source set for a long-form essay, so the piece does not drift
   // onto a NAMESAKE that merely shares the subject word. The reader's research pools many pages for
@@ -5488,9 +5544,9 @@ class Component extends DCLogic {
       if(grounded&&amode!=='creative'&&(this._turnForceWalk||this._paragraphDemand(ask)||this._wantsLongform(ask,meta)||(meta&&meta.route==='compose'&&meta.kind==='essay'))){
         const eo={model,guard,finish,ground,meta,read:meta,prev:_prev,ask,forced:this._turnForceWalk};
         // The path "write me an essay about X" actually takes with the web on (compose·essay →
-        // web-as-brain → research → HERE): a named essay/report runs the real essay organ; the
-        // softer longform cues, and the manual Long-form button, stay on the flat walk.
-        if(!this._turnForceWalk&&this._essayIntent(ask,meta))return await this._essayReply(id,q,sources,eo);
+        // web-as-brain → research → HERE): the Long-form button and a named essay/report both run the
+        // real essay organ; the softer longform cues stay on the flat walk.
+        if(this._turnForceWalk||this._essayIntent(ask,meta))return await this._essayReply(id,q,sources,eo);
         return await this._walkReply(id,q,sources,eo);
       }
       let messages;
