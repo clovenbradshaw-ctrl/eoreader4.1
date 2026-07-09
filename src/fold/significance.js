@@ -26,11 +26,26 @@
 // The firewall audit (fold/audit.js) confirms it: factsAdded 0 (no witnessed edge), inferredAdded
 // N (the reader's overlay). Impact without laundering — the version that works.
 //
-// Deterministic and MODEL-FREE, like the reader it extends: the significance is read off the
-// witnessed structure (perceiver/structureSurface), never authored.
+// TWO READINGS, one firewall. There are two ways to reach a connection the text never states:
+//
+//   STRUCTURE-FED (inferSignificance) — read off the witnessed STRUCTURE (perceiver/structureSurface):
+//     a shared neighbour, a polarity clash. This is what is LATENT IN THE STRUCTURE — cheap, total,
+//     and blind to what the reading cared about. Every same-neighbour pair is proposed equally.
+//
+//   FOLD-FED (inferFoldSignificance) — read off the FOLD the reading takes at its places of most
+//     interest (the surf's surprise peaks, fold/deep-reading.js). The connection is drawn between
+//     the figures the reading STRAINED over together — where its own significance arrested, not
+//     everywhere the graph happens to converge. This is "the significance of it all": the fold
+//     carries the meaning in potential (the surprise, the held tension), and the connection is the
+//     reading recognising its OWN recurring concern — Grete's care at the open and her relief at the
+//     close bound as one arc, which no sentence asserts. Fed a fold, gated by significance, attention-
+//     weighted. weaveSignificance runs both when a surf is supplied.
+//
+// Deterministic and MODEL-FREE, like the reader it extends: the significance is read, never authored.
 
 import { fromEnactor, canWitness } from '../core/index.js';
 import { structureSurface } from '../perceiver/index.js';
+import { createDeepReader } from './deep-reading.js';
 
 export const SIGNIFICANCE = 'significance';
 
@@ -145,13 +160,113 @@ export const inferSignificance = (doc, { structure = null, maxPerKind = 12 } = {
   return out;
 };
 
+// ── FOLD-FED — the significance read off the reading's FOLDS at its places of most interest ──
+//
+// inferFoldSignificance — feed the connector the FOLD, not the raw structure. Run the deep reader
+// (fold/deep-reading.js) so it surfs to its surprise peaks and folds each one; then connect the
+// figures the reading STRAINED over TOGETHER — co-engaged in one strained fold, or engaged in two
+// strained folds that share a figure (its recurring concern). The connection is drawn where the
+// reading's own significance arrested, weighted by it — not everywhere the graph converges. It is
+// still promoted only when the pair is NOT already directly witnessed (a genuine "in potential"
+// link), carries the fold's own significance summary as its WHY, and rides the same firewall.
+//   surf   INJECTED (surfFold) — required; without it there are no folds to read.
+export const inferFoldSignificance = (doc, { surf, maxPerKind = 12 } = {}) => {
+  if (typeof surf !== 'function') throw new Error('inferFoldSignificance: surf must be injected');
+  const idxs = (doc?.units || doc?.sentences || []).map((_, i) => i);
+  const full = idxs.length ? structureSurface(doc, idxs) : { relations: [] };
+  const labelOf = new Map();
+  const witnessed = new Set();          // ordered pairs the text directly relates
+  for (const r of (full.relations || [])) {
+    if (!r.src?.id || !r.tgt?.id) continue;
+    labelOf.set(r.src.id, r.src.label ?? r.src.id); labelOf.set(r.tgt.id, r.tgt.label ?? r.tgt.id);
+    witnessed.add(`${r.src.id}|${r.tgt.id}`); witnessed.add(`${r.tgt.id}|${r.src.id}`);
+  }
+  const L = (id) => labelOf.get(id) ?? id;
+
+  // run the reader across the whole document (the surface/app walk), collecting its folds.
+  const reader = createDeepReader({ doc, surf });
+  const n = idxs.length || 1;
+  let anchor = 0, guard = 0;
+  while (anchor < n - 1 && guard++ < Math.max(8, n)) {
+    const before = reader.reflections.length;
+    const fresh = reader.arrive({ anchor }).reflections || [];
+    if (fresh.length) anchor = Math.min(n - 1, fresh[fresh.length - 1].peak + 1);
+    else if (reader.reflections.length === before) anchor += 8;
+  }
+
+  // the figures a fold ENGAGED at its peak: the focus, plus the endpoints of the relations sitting
+  // under the fold's own sources (its little reach). This is what the reading actually held there.
+  const engagedOf = (r) => {
+    const set = new Set();
+    if (r.focus) { const f = String(r.focus).toLowerCase(); set.add(f); if (!labelOf.has(f)) labelOf.set(f, String(r.focus)); }
+    for (const rel of (structureSurface(doc, r.sources || []).relations || [])) {
+      if (rel.src?.id) { set.add(rel.src.id); labelOf.set(rel.src.id, rel.src.label ?? rel.src.id); }
+      if (rel.tgt?.id) { set.add(rel.tgt.id); labelOf.set(rel.tgt.id, rel.tgt.label ?? rel.tgt.id); }
+    }
+    return set;
+  };
+  const strained = reader.reflections.filter((r) => r.verdict === 'strain');
+  const folds = strained.map((r) => ({ r, figs: engagedOf(r), summary: r.fold?.levels?.significance?.summary || r.body || '' }));
+
+  const out = [];
+  const seenPair = new Set();
+  const emit = (a, b, atR, why) => {
+    if (a === b || witnessed.has(`${a}|${b}`)) return;      // not a latent link if already related
+    const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+    if (seenPair.has(key) || out.length >= maxPerKind) return;
+    seenPair.add(key);
+    out.push(buildSignificanceEdge({
+      kind: 'connects', src: a, tgt: b, via: 'bears-on', srcLabel: L(a), tgtLabel: L(b),
+      body: `${L(a)} and ${L(b)} are bound by the reading's recurring concern — ${why} — a significance the text never states.`,
+      sources: Array.isArray(atR?.sources) ? atR.sources.filter(Number.isInteger) : [],
+      strength: 0.6, atSentence: Number.isInteger(atR?.peak) ? atR.peak : null,
+    }));
+  };
+
+  // within a single strained fold: bind the fold's FOCUS — the centre of the reading's concern —
+  // to the other figures it engaged there but the text never directly linked to it. Anchored on
+  // the focus (linear), not every co-engaged pair (quadratic), so a wide fold does not fan out.
+  for (const { r, figs, summary } of folds) {
+    const focus = String(r.focus ?? '').toLowerCase();
+    if (!focus) continue;
+    for (const other of figs) if (other !== focus) emit(focus, other, r, summary);
+  }
+  // across two strained folds that share a figure, the reading's concern RECURS — bind the two
+  // peaks' FOCI (their centres), not the full cross-product: one edge per recurrence, the arc the
+  // shared figure runs between, never a combinatorial fan-out of every co-engaged pair.
+  for (let i = 0; i < folds.length; i++) {
+    for (let j = i + 1; j < folds.length; j++) {
+      const shared = [...folds[i].figs].filter((x) => folds[j].figs.has(x));
+      if (!shared.length) continue;
+      const fa = String(folds[i].r.focus ?? '').toLowerCase(), fb = String(folds[j].r.focus ?? '').toLowerCase();
+      if (fa && fb && fa !== fb) {
+        emit(fa, fb, folds[i].r, `it strains on ${shared.map(L).join(', ')} at §${folds[i].r.peak} and again at §${folds[j].r.peak}`);
+      }
+    }
+  }
+  return out;
+};
+
 // weaveSignificance — infer the connections and (by default) COMMIT them to the log as reafferent
-// edges, so the reading MOVES: the surf, retrieval and the provenance graph now read them. Returns
-// the committed connections, a per-kind tally, and canWitness surfaced (false — the firewall).
+// edges, so the reading MOVES: the surf, retrieval and the provenance graph now read them. Runs the
+// STRUCTURE-FED reading always, and the FOLD-FED reading too when a `surf` is supplied (fed the
+// reading's folds at its surprise peaks — "the significance of it all"). Returns the committed
+// connections, a per-kind tally, and canWitness surfaced (false — the firewall).
+//   surf          INJECTED surfFold — enables the fold-fed reading; omit for structure-fed only.
 //   commit:false  returns the events without appending (peek, or hand to a provenance-aware view).
-export const weaveSignificance = (doc, { structure = null, maxPerKind = 12, commit = true, enactment = SIGNIFICANCE } = {}) => {
+export const weaveSignificance = (doc, { surf = null, structure = null, maxPerKind = 12, commit = true, enactment = SIGNIFICANCE } = {}) => {
   if (!doc || !doc.log) throw new Error('weaveSignificance: a doc with a log is required');
   const events = inferSignificance(doc, { structure, maxPerKind });
+  // fold-fed connections augment the structural ones; dedup by (kind, src, tgt) so a pair the
+  // structure already linked is not re-proposed.
+  if (typeof surf === 'function') {
+    const have = new Set(events.map((e) => `${e.kind}|${e.src}|${e.tgt}`));
+    for (const e of inferFoldSignificance(doc, { surf, maxPerKind })) {
+      const k = `${e.kind}|${e.src}|${e.tgt}`, kr = `${e.kind}|${e.tgt}|${e.src}`;
+      if (have.has(k) || have.has(kr)) continue;
+      have.add(k); events.push(e);
+    }
+  }
   const connections = events.map((e) => (commit ? doc.log.append(e) : e));
   const kinds = { contradicts: 0, corroborates: 0, connects: 0 };
   for (const c of connections) if (kinds[c.kind] != null) kinds[c.kind]++;
