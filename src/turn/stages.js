@@ -596,6 +596,24 @@ export const stages = {
         }
       } catch { arcBlock = ''; }
     }
+    // THE GRADE THROUGH THE MEMBRANE (src/reason, docs/ungrounded-emitted.md). The walk's
+    // REACHES — warranted / idle steps, each voiced as a declarative `said` — ride into the
+    // window as a marked inference block, so the talker hedges them instead of flattening a
+    // reach into confident prose (the passing-off rate, I2). A GROUNDED step is deliberately
+    // left out: its witnessing sentence already rides among the excerpts, asserted; repeating
+    // it here would double-tell. Empty on every turn the walk did not run → no block →
+    // byte-identical.
+    let reasoningBlock = '';
+    if (ctx.reasoning?.steps?.length) {
+      const mark = (s) => s.grade === 'warranted-ungrounded'
+        ? 'follows a pattern in what you read, though it is not stated'
+        : 'your own conjecture';
+      const lines = ctx.reasoning.steps
+        .filter(s => s.grade !== 'grounded' && s.said)
+        .slice(0, 8)
+        .map(s => `- ${s.said} (${mark(s)})`);
+      if (lines.length) reasoningBlock = `Reaching past the lines, your reading also drew these inferences:\n${lines.join('\n')}`;
+    }
     // META-CONVERSATIONAL: the question is ABOUT the conversation (intent.js). Open the
     // FULL session fold to the grounded prompt — the talker's prior answers included —
     // because here the prior topics are the question's SUBJECT, not a premise it might
@@ -618,6 +636,7 @@ export const stages = {
           now:          ctx.now || null,  // hand the talker the real clock — date/time answered directly
           graph:        fedGraph,         // the meaning graph (web path); empty → §2 subjective frame
           arc:          arcBlock,         // the reading's own arc (broadcastArc); empty → no block
+          reasoning:    reasoningBlock,   // the walk's marked reaches (reason stage); empty → no block
           // ANSWER-FIRST, SECTIONED SHAPE: a broad question (compare / survey / list / open how-why)
           // gets the lead-then-sections layout the chat body renders as headings + bold; a pointed
           // lookup answers straight (empty cue). Off on a budgeted reply (a quick, capped lookup).

@@ -113,12 +113,15 @@ const menu = (graph, { rules, synthesised, bondsSeen }) => {
   for (const b of graph.bonds) if (b.canWitness) viaCounts.set(b.via, (viaCounts.get(b.via) || 0) + 1);
   const topVia = [...viaCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'rel';
 
+  // Every candidate carries `note` (the operator trace, for the audit) and `said` (the same
+  // move voiced as a declarative claim — what the membrane hands the talker to hedge).
   // REC — learn each repeated exafferent relation, once.
   for (const [via, n] of viaCounts) {
     if (n >= 2 && !rules.some((r) => r.via === via)) {
       const arrival = new Map([[`rule:${via}`, n], [`licenses:${via}`, 1]]);
       out.push({ op: 'REC', via, support: n, arrival, exaFrac: 1, participants: partiesOf(graph.bonds, via),
-        note: `learn ${via} as a rule (holds across ${n} attested pairs)` });
+        note: `learn ${via} as a rule (holds across ${n} attested pairs)`,
+        said: `“${via}” recurs across what was read (${n} attested pairs)` });
     }
   }
   // CON — bond an unbonded admitted pair. `via` is the graph's most-supported relation.
@@ -128,11 +131,16 @@ const menu = (graph, { rules, synthesised, bondsSeen }) => {
       if (bonded.has(pairKey(a, b)) || bondsSeen.has(pairKey(a, b))) continue;
       const arrival = new Map([[`bond:${pairKey(a, b)}`, 1]]);
       out.push({ op: 'CON', src: a, dst: b, via: topVia, arrival, exaFrac: exaFracOf([a, b], graph.figures),
-        note: `bond ${graph.figures.get(a)?.label} ${topVia} ${graph.figures.get(b)?.label}` });
+        note: `bond ${graph.figures.get(a)?.label} ${topVia} ${graph.figures.get(b)?.label}`,
+        said: `${graph.figures.get(a)?.label} ${topVia} ${graph.figures.get(b)?.label}` });
     }
   }
-  // SYN — promote a bonded pair not yet synthesised.
+  // SYN — promote a bonded pair not yet synthesised. Only a pair of ADMITTED FIGURES is
+  // promotable: the live parser also bonds figures to proposition/role nodes the walk never
+  // admitted, and a synthesis over one of those has no label to voice (the "X and undefined"
+  // figure) and no frontier value.
   for (const b of graph.bonds) {
+    if (!graph.figures.has(b.src) || !graph.figures.has(b.dst)) continue;
     const pk = pairKey(b.src, b.dst);
     if (synthesised.has(pk)) continue;
     const promotedSeq = graph.figures.size + 1 + out.length;
@@ -141,7 +149,8 @@ const menu = (graph, { rules, synthesised, bondsSeen }) => {
     const arrival = new Map([[`syn:${pk}`, 1]]);
     out.push({ op: 'SYN', id, members: [b.src, b.dst], grain: newGrain, pairKey: pk, arrival, exaFrac: exaFracOf([b.src, b.dst], graph.figures),
       label: `${graph.figures.get(b.src)?.label}+${graph.figures.get(b.dst)?.label}`,
-      note: `synthesise a figure over {${graph.figures.get(b.src)?.label}, ${graph.figures.get(b.dst)?.label}}` });
+      note: `synthesise a figure over {${graph.figures.get(b.src)?.label}, ${graph.figures.get(b.dst)?.label}}`,
+      said: `${graph.figures.get(b.src)?.label} and ${graph.figures.get(b.dst)?.label} act as one figure` });
   }
   return out;
 };
@@ -225,7 +234,7 @@ export const walkReasoning = async (log, {
 
     const builtOnSelf = sites.some((id) => graph.figures.get(id)?.door === 'enactor');
     steps.push(Object.freeze({
-      i, op: cand.op, note: cand.note, sites, seq: sealed.seq, grade, warrant, witness,
+      i, op: cand.op, note: cand.note, said: cand.said ?? null, sites, seq: sealed.seq, grade, warrant, witness,
       prov: sealed.prov, classified: classify(sealed.prov),
       canWitness: canWitness(sealed.prov),   // FALSE, by type — the firewall
       builtOnSelf, bits: round3(choice.bits),
