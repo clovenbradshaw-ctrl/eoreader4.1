@@ -2985,6 +2985,99 @@ class Component extends DCLogic {
     return String(text||'').replace(/\s+/g,' ').trim()
       .split(/(?<=[.!?])\s+(?=[A-Z0-9“"'])/).map(s=>s.trim()).filter(s=>s.length>3);
   }
+  // ── REVISION CAPTURE (src/doc/revise.js) — a shipped long answer, treated as a STANDING
+  // DOCUMENT the user can edit block by block. The whole piece never fits the small model, so a
+  // revision changes it one block at a time; here we (a) detect the standing answer, (b) capture it
+  // as a doc edit log grounded against its OWN retained passages. Capture is LAZY (only when a
+  // revision fires) — the routing gate needs only the message's `doc` flag, not the log. ──
+  // The last long answer in this thread, the piece a "revise it" turn edits. Keyed on `doc`
+  // (the longform-card flag) + retained grounding, so a deep-research report captures the same way.
+  _standingDoc(cur){
+    const msgs=(cur&&cur.messages)||[];
+    for(let i=msgs.length-1;i>=0;i--){const m=msgs[i];
+      if(m.role==='asst'&&m.doc&&m.text&&m.text.length>200&&((m.passages&&m.passages.length)||(m.sources&&m.sources.length)))return {msg:m,idx:i};}
+    return null;
+  }
+  _standingDocLabel(cur){const s=this._standingDoc(cur);return s?(s.msg.docTitle||'the piece'):'';}
+  // The grounding Record for a shipped answer: its OWN retained passages in the groundText shape
+  // ({id,text,srcId,host}), so a revision re-grounds against exactly what the piece was built from
+  // — no re-research. Mirrors _docRecord (which reads the whole reading) but scoped to the answer.
+  _essayRecord(msg){
+    return ((msg&&msg.passages)||[]).map((p,i)=>({id:'S'+(p.i!=null?p.i:i),text:this.stripRefs(this.norm(p.text||'')),srcId:this.srcId(p.u),host:this.short(p.u)})).filter(r=>r.text&&r.text.length>8);
+  }
+  // Capture a shipped answer as a src/doc/ standing document: paragraphs → blocks (boundaries
+  // preserved), each grounded against the answer's passages, materialized as an edit log and
+  // back-linked to the message (m.docId) so a later revision reuses it. Returns {id,log,record,lib}.
+  async _captureEssayDoc(cur,hit){
+    const lib=await this._docLib(); if(!lib||typeof lib.blocksFromText!=='function')return null;
+    const msg=hit.msg;
+    const existing=msg.docId&&this._docsMap().get(msg.docId);
+    if(existing)return {id:msg.docId,log:existing.log,record:existing.record||this._essayRecord(msg),lib};
+    const record=this._essayRecord(msg);
+    const raw=lib.blocksFromText(this.stripRefs(this.norm(msg.text))).filter(b=>b.text);
+    const title=msg.docTitle||(cur&&cur.title)||'Document';
+    const id='doc:essay:'+cur.id+':'+hit.idx;
+    const ts=Date.now();let seq=0;const nid=(p)=>p+(++seq)+'_'+ts;
+    const log=[lib.docCreate({id:nid('doc'),title,author:'you',t:seq,ts})];
+    for(const b of raw){const g=lib.groundBlock(b.text,record);log.push(lib.blockAdd({id:nid('e'),docId:'doc',blockId:nid('b'),text:b.text,type:b.type||'p',grounding:g,author:'you',t:seq,ts}));}
+    this._docsMap().set(id,{id,title,log,seed:{title,blocks:raw},record,src:{chatId:cur.id,msgIdx:hit.idx}});
+    this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==cur.id)return c;const m=c.messages.slice();if(m[hit.idx])m[hit.idx]={...m[hit.idx],docId:id};return {...c,messages:m};})}));
+    return {id,log,record,lib};
+  }
+  // Apply revision ops to a doc log in EDITING mode — each op is a CHANGE_PROPOSE accepted in one
+  // step (like the surface's Editing mode), so it lands immediately yet stays on the append-only
+  // log: the version timeline (restore/fork) is the reversible safety net. Returns the grown log.
+  _applyDocOps(log,ops,lib,record){
+    const out=log.slice();const ts=Date.now();let seq=out.length+1;const nid=(p)=>p+(++seq)+'_'+ts;
+    for(const op of ops){
+      const cid=nid('c');
+      const grounding=op.kind==='delete'?{grounded:false}:lib.groundText(op.text||'',record||[]);
+      out.push(lib.changePropose({id:cid,docId:'doc',changeId:cid,kind:op.kind,targetId:op.targetId||null,afterId:op.afterId||null,blockId:nid('b'),text:op.text||'',type:op.type||'p',before:op.before||'',grounding,author:'eo',when:'now',t:seq,ts}));
+      out.push(lib.changeAccept({id:nid('a'),docId:'doc',changeId:cid,t:seq,ts}));
+    }
+    return out;
+  }
+  _reviseSummary(op,ops){
+    const n=ops.length;
+    if(op==='cut')return 'trimmed '+n+' part'+(n!==1?'s':'');
+    if(op==='structural')return 'restructured into '+(ops.filter(o=>o.kind==='insert').length+1)+' sections';
+    return n+' change'+(n!==1?'s':'');
+  }
+  // ── THE REVISE TURN — edit the standing document BLOCK BY BLOCK. The whole piece never enters a
+  // model prompt; a structural edit (regroup + insert headings) and a cut (delete by measured topic
+  // overlap) are pure measurement — no generation at all. Ops land on the doc log in Editing mode
+  // (applied + reversible via history); the chat card re-renders from the revised doc. The captured
+  // doc also appears in the Documents panel, openable with the full editor (suggesting/history). ──
+  async _reviseReply(id,q,cur,{read,standing}){
+    const finish=(patch)=>this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst')m[li]={...m[li],pending:false,text:'',think:'',stance:'ground',research:m[li].research?{...m[li].research,done:true}:undefined,...patch};return {...c,messages:m};})}),()=>this._scrollChat());
+    this._setThink(id,'Revising the piece in place, block by block…');
+    let cap;try{cap=await this._captureEssayDoc(cur,standing);}catch(e){cap=null;}
+    if(!cap||!cap.lib){finish({text:'I couldn’t open the piece as a document to revise it.',groundKind:'model',register:'grounded'});return;}
+    const lib=cap.lib;
+    let doc=lib.projectDoc(cap.log);
+    // The edit family, read off the metacognition's own speech (Born measurement, reviseOp) — never
+    // a keyword peel. structural/cut are the measured, no-model edits shipped here; tone/add (per-
+    // block rewrite/insert) are the fuller path, so an unmeasured op falls back to structural.
+    const op=(read&&(read.reviseOp==='cut'||read.reviseOp==='structural'))?read.reviseOp:'structural';
+    const plan=op==='cut'
+      ? lib.planRevision({doc,op:'cut',leads:(read&&read.leads)||[],record:cap.record})
+      : lib.planRevision({doc,op:'structural',record:cap.record});
+    this._auditRec(id,'revise-plan',{output:'op='+op+' · '+plan.ops.length+' ops',note:plan.ops.map(o=>o.kind+(o.type?(' '+o.type):'')+(o.text?(' “'+this.truncLabel(o.text,24)+'”'):'')).join(' · ')||'no ops'});
+    if(!plan.ops.length){
+      finish({text:op==='cut'?'I looked through the piece for that part to cut, but nothing in it matched — so I left it as it stands rather than removing the wrong thing.':'The piece already reads as one continuous flow — I couldn’t find clean places to break it into sections without guessing, so I left it as it is.',groundKind:'matched',register:'grounded',doc:true,docTitle:(this._docsMap().get(cap.id)||{}).title||'Document',docId:cap.id});
+      return;
+    }
+    const applied=this._applyDocOps(cap.log,plan.ops,lib,cap.record);
+    const rec=this._docsMap().get(cap.id);if(rec)rec.log=applied;
+    doc=lib.projectDoc(applied);
+    const md=lib.docToMarkdown(doc);
+    this._auditRec(id,'revise-done',{output:md,note:'op='+op+' · '+plan.ops.length+' change'+(plan.ops.length!==1?'s':'')+' · '+doc.blocks.length+' blocks · bound '+doc.stats.grounded+'/'+doc.stats.blocks});
+    const summary=this._reviseSummary(op,plan.ops);
+    const title=(this._docsMap().get(cap.id)||{}).title||standing.msg.docTitle||'Document';
+    finish({text:md,doc:true,docTitle:title,docId:cap.id,groundKind:'matched',register:'grounded',
+      modelNote:'Revised in place — '+summary+'. Open “'+this.truncLabel(title,32)+'” in the Documents panel to review every change and restore any earlier version.'});
+    this._onDocChanged&&this._onDocChanged(cap.id);
+  }
   // Documents live in-memory keyed by id (like _tabs, rebuilt on reload): each
   // {id,title,log,seed}. The framework-free doc surface is mounted once into a
   // dock sat over the centre scroll area and shows whichever document is the
@@ -3669,7 +3762,11 @@ class Component extends DCLogic {
       // scope on turn one — before any turn has settled a `warm` source into the fold. Without it the
       // read reports a book-scoped chat as "isolated" and calls the loaded book unspecified. Empty for
       // an isolated (net-new) chat, where the read should stay "an isolated assistant chat".
-      const prompt=M.discoursePrompt(q,fold,{exchange,now:new Date(),scope:this._chatScopeLabel(cur)});
+      // The standing document, if this thread already shipped a long piece — the referent-grounding
+      // twin of `scope`. It lets the read know a piece we wrote is on the page, so "do it again with
+      // better sections" / "body paragraphs" is read as an EDIT to it, not a fresh research ask. The
+      // ROUTE is still the Born measurement of the read (reviseDemand), not this fact.
+      const prompt=M.discoursePrompt(q,fold,{exchange,now:new Date(),scope:this._chatScopeLabel(cur),standing:this._standingDocLabel(cur)});
       this._setThink(id,'Reading the conversation — what is this turn really asking for…');
       // Fail FAST to the fallback when the model is wedged (e.g. just after a user Stop, which can
       // leave the in-browser decoder stalled for the first call of the next turn): a shorter guard
@@ -3692,7 +3789,7 @@ class Component extends DCLogic {
       // FULL (no truncation): the whole read is what the turn runs on, so the reader sees all of it.
       this._liveThink(id,'My read of this turn: '+speech,true);
       this._auditRec(id,'discourse-read',{prompt,output:speech,
-        note:'route='+(measure.route||'abstained')+' · kind='+(measure.kind||'—')+' · length='+(measure.lengthDemand||'—')+' · researchDrive='+Number(measure.researchDrive||0).toFixed(3)+' · developDrive='+Number(measure.developDrive||0).toFixed(3)+' · clarify='+(measure.clarifyDemand||'—')+'/'+Number(measure.clarifyDrive||0).toFixed(3)});
+        note:'route='+(measure.route||'abstained')+' · kind='+(measure.kind||'—')+' · length='+(measure.lengthDemand||'—')+' · researchDrive='+Number(measure.researchDrive||0).toFixed(3)+' · developDrive='+Number(measure.developDrive||0).toFixed(3)+' · clarify='+(measure.clarifyDemand||'—')+'/'+Number(measure.clarifyDrive||0).toFixed(3)+' · revise='+(measure.reviseDemand||'—')+'/'+Number(measure.reviseDrive||0).toFixed(3)+(measure.reviseOp?('/'+measure.reviseOp):'')});
       // The read carries lengthDemand + developDrive so _wantsLongform can key the essay/longform
       // decision off the discourse PHYSICS (meta-route.js) rather than a keyword cliff. It also
       // carries clarifyDemand + clarifyDrive — the USER-gap current — so a turn the metacognition
@@ -3701,6 +3798,7 @@ class Component extends DCLogic {
         researchDrive:measure.researchDrive||0,lengthDemand:measure.lengthDemand||'',developDrive:measure.developDrive||0,
         registerDemand:measure.registerDemand||'',creativeDrive:measure.creativeDrive||0,
         clarifyDemand:measure.clarifyDemand||'',clarifyDrive:measure.clarifyDrive||0,
+        reviseDemand:measure.reviseDemand||'',reviseDrive:measure.reviseDrive||0,reviseOp:measure.reviseOp||'',
         leads:M.leadsOf(speech,{known:q+' '+exchange}).slice(0,3)};
     }catch(e){
       // Fails soft by contract — but keep the WHY inspectable (window.__eoApp._readErr) so a
@@ -4453,6 +4551,22 @@ class Component extends DCLogic {
     if(read&&read.route==='compose'&&read.kind==='poem'){
       const sfold={...fold,stance:'compose',focus:{kind:read.kind,subject:(fold&&fold.focus&&fold.focus.subject)||null}};
       return this.composeArtifact(q,sfold,{reuseId:id});
+    }
+    // REVISE THE STANDING PIECE (docs/discourse-routing.md; src/doc/revise.js): the metacognition
+    // read this turn as an EDIT to the long answer already on the page, and such a piece IS in scope.
+    // Edit that document block by block instead of researching afresh — the fix for "do again with
+    // better sections" / "body paragraphs" drifting into a fresh web pass. The gate is entirely
+    // Born-derived plus a pure state check: `reviseDemand==='revise'` (measured), the revise current
+    // out-competes the research current (the same "two transition currents compete" logic the clarify
+    // fork uses), the read did not settle on `research`, the register is not creative, and a standing
+    // document actually exists (_standingDoc reads the message's doc/passages flags — state, not word-
+    // matching). No regex on the user's words. Soft: no standing piece / a `fresh` read / research
+    // wins → falls straight through to the paths below, unchanged.
+    const standing=read?this._standingDoc(cur):null;
+    if(read&&standing&&read.reviseDemand==='revise'&&read.route!=='research'&&amode!=='creative'
+        &&(read.reviseDrive||0)>(read.researchDrive||0)){
+      await this._reviseReply(id,q,cur,{read,standing});
+      return;
     }
     // ASK BACK, don't guess (docs/discourse-routing.md): the metacognition's clarify current — the
     // USER-side twin of researchDrive — has said this turn is underspecified in a way only the user

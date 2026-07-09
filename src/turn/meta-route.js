@@ -267,6 +267,78 @@ export const CLARIFY_EXEMPLARS = Object.freeze({
   ],
 });
 
+// REVISE_EXEMPLARS — the demand the router was blind to: EDIT the piece already written, do
+// not compose or research anew. A standing longform answer is on the page, and the turn asks
+// to rework THAT text — restructure it, cut a part, tighten it, add a section. This is not
+// `continue` (which re-runs the same act — "another like the last" writes MORE) and not
+// `compose` (which authors a NEW piece): it changes an existing document in place. Because
+// revision presupposes a standing document (a contextual precondition, not a discourse
+// direction), it is an ORTHOGONAL DEMAND read on every route — `reviseDrive` rides out of
+// metaRoute like `developDrive`/`clarifyDrive`, and the CALLER gates it on a document being
+// present. Two members so the crosstalk null is finite and the pair holds each other apart
+// (revise ⟂ fresh); abstains on speech that names neither, so a clear new-piece ask is never
+// mistaken for an edit. Fixtures are METACOGNITION speech (the model describing the turn),
+// like every basis here — not the user's words.
+export const REVISE_EXEMPLARS = Object.freeze({
+  revise: [
+    'they want to revise the piece we already wrote, not start over',
+    'edit the existing draft in place — restructure it, cut a part, tighten it',
+    'rework the essay already on the page, changing its sections and headings',
+    'go back over the last answer and improve it, reorganizing what is there',
+    'they are reshaping the standing document — trim it, reorder it, expand one part',
+    'amend what was written: reorganize its sections, drop a part, reword a passage',
+  ],
+  fresh: [
+    'they want a brand-new piece written from scratch, unrelated to any prior draft',
+    'produce a fresh answer, not an edit of something already written',
+    'compose something new; there is no standing draft to revise',
+    'generate original prose rather than reworking an existing document',
+    'a new composition, starting over rather than touching the old text',
+    'write it anew — this is not a change to a prior answer',
+  ],
+});
+
+// REVISE_OP_EXEMPLARS — once `revise` wins, WHICH edit: the finer grain UNDER revision, the
+// same way KIND_EXEMPLARS sits under compose/essay. `structural` regroups and re-sections;
+// `cut` removes a part; `add` appends a new part; `tone` rewrites the wording/length. Read off
+// the same speech, null-gated argmax, '' when the read names no distinctive edit (the caller
+// falls back to a whole-piece tone pass). Near-degenerate by nature — every one is an edit —
+// so the crosstalk null does the real work.
+export const REVISE_OP_EXEMPLARS = Object.freeze({
+  structural: [
+    'reorganize it into clearer sections with headings',
+    'break the body into titled parts, give it structure',
+    'regroup the paragraphs and add section headings',
+    'restructure the piece, better sections and body paragraphs',
+    'impose an outline — split it into labelled sections',
+    'give it proper sections instead of a wall of paragraphs',
+  ],
+  cut: [
+    'remove the part about that topic, drop that section',
+    'cut the passage that wandered off subject',
+    'delete the irrelevant material, trim what does not belong',
+    'take out the section on that, it does not fit',
+    'strip the tangent, get rid of that portion',
+    'excise the part that strayed from the point',
+  ],
+  add: [
+    'add a conclusion that ties it together',
+    'write an introduction to open it',
+    'append a closing section, a new part at the end',
+    'insert a paragraph covering the missing point',
+    'extend it with a section on that aspect',
+    'add a new part they asked for',
+  ],
+  tone: [
+    'make it shorter and simpler throughout',
+    'tighten the prose, cut the wordiness in every paragraph',
+    'rewrite it in a plainer, more formal voice',
+    'condense each part, say it more concisely',
+    'reword it to read more clearly',
+    'trim the length across the whole thing',
+  ],
+});
+
 // Tuning. The Born weights of a 2–3 sentence paragraph against a ~20-term basis live around
 // 0.02–0.15, so GAIN lifts a clear signal to ~1 where it competes with the resting potentials.
 // REST is the incumbent's head start (continuation-by-default as physics: a transition current
@@ -308,7 +380,7 @@ const crosstalkNull = (profiles, dir, exemplars) => {
 // buildBases(routeExemplars?, formExemplars?) → { route, form, vocab } — profiles + nulls,
 // computed once. Injectable so a caller can grow a direction's exemplars (the tending surface
 // that replaces regex-patching) or swap the space entirely.
-export const buildBases = (routeExemplars = ROUTE_EXEMPLARS, formExemplars = FORM_EXEMPLARS, kindExemplars = KIND_EXEMPLARS, lengthExemplars = LENGTH_EXEMPLARS, registerExemplars = REGISTER_EXEMPLARS, clarifyExemplars = CLARIFY_EXEMPLARS) => {
+export const buildBases = (routeExemplars = ROUTE_EXEMPLARS, formExemplars = FORM_EXEMPLARS, kindExemplars = KIND_EXEMPLARS, lengthExemplars = LENGTH_EXEMPLARS, registerExemplars = REGISTER_EXEMPLARS, clarifyExemplars = CLARIFY_EXEMPLARS, reviseExemplars = REVISE_EXEMPLARS, reviseOpExemplars = REVISE_OP_EXEMPLARS) => {
   const group = (exemplars) => {
     const profiles = new Map();
     for (const [dir, phrases] of Object.entries(exemplars)) profiles.set(dir, profileOf(phrases));
@@ -324,9 +396,11 @@ export const buildBases = (routeExemplars = ROUTE_EXEMPLARS, formExemplars = FOR
   const length = group(lengthExemplars);
   const register = group(registerExemplars);
   const clarify = group(clarifyExemplars);
+  const revise = group(reviseExemplars);
+  const reviseOp = group(reviseOpExemplars);
   const vocab = new Set();
-  for (const g of [route, form, kind, length, register, clarify]) for (const b of g.values()) for (const t of b.profile.keys()) vocab.add(t);
-  return { route, form, kind, length, register, clarify, vocab };
+  for (const g of [route, form, kind, length, register, clarify, revise, reviseOp]) for (const b of g.values()) for (const t of b.profile.keys()) vocab.add(t);
+  return { route, form, kind, length, register, clarify, revise, reviseOp, vocab };
 };
 
 let _DEFAULT = null;
@@ -520,6 +594,48 @@ export const developDrive = (speech, bases = defaultBases()) => {
   return w > b.null ? w : 0;
 };
 
+// reviseDemandOf(speech, bases) → 'revise' | 'fresh' | '' — does the read say the turn EDITS
+// the standing piece or asks for a NEW one? Argmax over the null-gated revise weights,
+// ORTHOGONAL to the route (a ground/continue turn can each be an edit-in-place). '' when the
+// speech names neither, so the caller answers as it would today. Robust to legacy bases → ''.
+export const reviseDemandOf = (speech, bases = defaultBases()) => {
+  if (!bases || !bases.revise) return '';
+  const terms = new Set(tok(String(speech || '')));
+  let demand = '', best = 0;
+  for (const [k, b] of bases.revise) {
+    const w = bornSalience(b.profile, terms);
+    if (w > b.null && w > best) { best = w; demand = k; }
+  }
+  return demand;
+};
+
+// reviseDrive(speech, bases) → the null-gated `revise` current as a graded scalar, exposed
+// REGARDLESS of the route — the edit-in-place twin of `researchDrive`. Where researchDrive says
+// "the WORLD has to answer this," reviseDrive says "this changes the piece already on the page."
+// The caller thresholds it (against researchDrive, and gated on a standing document existing) to
+// edit that document instead of researching afresh. 0 when the basis is absent or the speech does
+// not clear its crosstalk null.
+export const reviseDrive = (speech, bases = defaultBases()) => {
+  const b = bases && bases.revise && bases.revise.get('revise');
+  if (!b) return 0;
+  const w = bornSalience(b.profile, new Set(tok(String(speech || ''))));
+  return w > b.null ? w : 0;
+};
+
+// reviseOpOf(speech, bases) → 'structural' | 'cut' | 'add' | 'tone' | '' — the finer edit grain
+// UNDER revision, argmax over the null-gated reviseOp weights. '' when the read names no
+// distinctive edit, so the caller falls back to a whole-piece tone pass. Robust to legacy → ''.
+export const reviseOpOf = (speech, bases = defaultBases()) => {
+  if (!bases || !bases.reviseOp) return '';
+  const terms = new Set(tok(String(speech || '')));
+  let op = '', best = 0;
+  for (const [k, b] of bases.reviseOp) {
+    const w = bornSalience(b.profile, terms);
+    if (w > b.null && w > best) { best = w; op = k; }
+  }
+  return op;
+};
+
 // metaRoute(speech, fold, {bases, seed}) → the full measurement:
 //   verdict        the routeStance-compatible word ('COMPOSE'|'GROUND'|'ISOLATE'|'CONTINUE')
 //   route          the settled direction ('compose'|'ground'|'research'|'isolate') or null
@@ -545,6 +661,12 @@ export const developDrive = (speech, bases = defaultBases()) => {
 //                  it says it would need to learn something only the user holds.
 //   clarifyDrive   the graded `clarify` current behind that label — the USER-side twin of
 //                  researchDrive, exposed regardless of the winner.
+//   reviseDemand   'revise' | 'fresh' | '' — the edit-in-place demand, orthogonal to the route:
+//                  does the turn EDIT the standing piece or ask for a new one? The caller gates it
+//                  on a standing document being present before acting.
+//   reviseDrive    the graded `revise` current behind that label — the edit-in-place twin of
+//                  researchDrive, exposed regardless of the winner.
+//   reviseOp       'structural' | 'cut' | 'add' | 'tone' | '' — which edit, when revise wins.
 //   weights/currents/activations  the audit — which current won and by how much.
 export const metaRoute = (speech, fold = null, { bases = defaultBases(), seed = {} } = {}) => {
   const { weights, currents } = speechCurrents(speech, bases);
@@ -566,6 +688,9 @@ export const metaRoute = (speech, fold = null, { bases = defaultBases(), seed = 
     creativeDrive: creativeDrive(speech, bases),
     clarifyDemand: clarifyDemandOf(speech, bases),
     clarifyDrive: clarifyDrive(speech, bases),
+    reviseDemand: reviseDemandOf(speech, bases),
+    reviseDrive: reviseDrive(speech, bases),
+    reviseOp: reviseOpOf(speech, bases),
     abstained: settled.abstained,
     weights,
     currents: settled.currents,
@@ -598,14 +723,20 @@ export const createMetaRouter = ({ speech, fold = null, bases, seed } = {}) => {
 // a needless clarify or an ungrounded guess. `now` (a Date, or a preformatted string) anchors the
 // read in time: without it the model cannot tell that "the weather", "the score", "the latest" are
 // asks about a NOW it does not contain — the discourse fact that makes them world-questions.
-export const discoursePrompt = (message, fold = null, { exchange = '', now = null, scope = '' } = {}) => {
+export const discoursePrompt = (message, fold = null, { exchange = '', now = null, scope = '', standing = '' } = {}) => {
   const when = now instanceof Date
     ? now.toLocaleString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })
     : (now ? String(now) : '');
   const reading = String(scope || '').trim();
+  const standingDoc = String(standing || '').trim();
   return (
     'You are watching one conversation. Right now: ' + (reading ? 'reading ' + reading : stanceDescOf(fold)) + '.\n' +
     (reading ? 'That reading is already loaded into this chat and in scope — so when the user says "this", "it", "the book", or "the document" they mean it; it is not unspecified, and you need not ask which book or document they mean.\n' : '') +
+    // The discourse FACT that a piece we wrote is on the page — the referent-grounding twin of the
+    // reading scope. It tells the read the standing document exists so the read's own words can say
+    // "they want to edit the essay"; the ROUTE is still the Born measurement of that read, not this
+    // text. It states the fact and names the referents; it does not enumerate trigger phrases.
+    (standingDoc ? 'A long answer you wrote earlier — "' + standingDoc + '" — is on the page and in scope as a standing document. When the user says "the essay", "it", "that part", or "the piece", they mean THAT document, and an ask to change it (reword, restructure, cut, expand, shorten) is an edit to what is already written, not a request for new research.\n' : '') +
     (when ? 'It is now ' + when + '.\n' : '') +
     (exchange ? 'The last exchange:\n' + exchange + '\n' : '') +
     'The user just said: "' + String(message || '') + '"\n' +
