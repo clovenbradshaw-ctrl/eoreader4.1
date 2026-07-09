@@ -6,7 +6,8 @@ export { impressionQuery } from './impression.js';
 // The reading substrate (rich-notes §2·§3): the typed open-world graph the notes
 // project from, and the membrane that crosses it to the talker as plain groups.
 export {
-  buildSubstrate, detectTensions, substrateToEOT, substrateToJSONLD, renderLines, readReflections,
+  buildSubstrate, detectTensions, substrateToEOT, substrateToJSONLD, renderLines,
+  readReflections, readMetaReflections, readConnections,
 } from './substrate.js';
 export { projectNotes, projectGroupedNote, assertNotesNoLeak } from './project.js';
 
@@ -22,3 +23,12 @@ export {
 export {
   SIGNIFICANCE_REFLECT_SYSTEM, significanceReflectMessages, reflectionInput, REFLECT_DECODE, cleanReflection,
 } from './reflect-prompt.js';
+
+// Weave (fold/weave.js): loops on loops. Metacognition — the reflection ABOUT the reflections
+// (loop 2) — and cross-connections — CON bonds between held interpretations (echo · bears-on ·
+// analogy). Both reafferent, band void, canWitness false: the firewall holds at every level.
+export {
+  metaReflect, createMetaReader, buildMetaReflection,
+  connect, buildConnection, weaveReading,
+  METACOGNITION, CONNECTION,
+} from './weave.js';
