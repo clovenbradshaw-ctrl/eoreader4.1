@@ -29,6 +29,13 @@ export const DEFAULT_GENRE = 'The following is a grounded explanatory piece.';
 // and matches the document's register below it.
 const BOUNDARY = '———';
 
+// The reflection marker — deliberately NOT the excerpts header (the binder keys on
+// that to find citable spans, so a reflection under it would become a groundable
+// "fact"). This header names the block as the reader's OWN reading, held open: the
+// model composes with the thought, the grounder never cites it. The epistemics in the
+// prompt, matching the enactor-door provenance the reflection event carries.
+const REFLECTION_HEADER = 'Reading note (your own reflection on the above — a reading, not a source to cite):';
+
 // Wikipedia-style extractors sometimes GLUE a section heading onto the first sentence
 // beneath it — "Evolution Dolphins display…", "Behavior A pod…", "Locomotion Dolphins…".
 // The heading is a lone Title-Case word that predicates nothing; left in the seed it opens
@@ -84,7 +91,7 @@ export const seedFor = ({ beat = {}, slice = [] } = {}) => {
 // above the boundary (under the excerpts header, so EVA's binder and the echo
 // backend both find the citable spans), then the prior paragraph as left-context,
 // then the heading, then the seed. No imperative, no task frame. Pure.
-export const renderContinuation = ({ beat = {}, slice = [], prior = '', coldStart = false, genre = '', arcDirective = '' } = {}) => {
+export const renderContinuation = ({ beat = {}, slice = [], prior = '', coldStart = false, genre = '', arcDirective = '', reflection = '' } = {}) => {
   const blocks = [];
 
   // Cold-start (first beat, no prior): a genre declaration opens the artifact —
@@ -96,6 +103,15 @@ export const renderContinuation = ({ beat = {}, slice = [], prior = '', coldStar
   // not answer a question ABOUT them.
   if (slice.length)
     blocks.push(`${EXCERPTS_HEADER}\n${slice.map(s => s.text).join('\n')}`);
+
+  // The REFLECTION — a deep-reading note at the place of most interest (the model
+  // reading its own surprise). It rides BELOW the excerpts header on purpose: it is NOT
+  // a citable span, so the binder never grounds a claim on it — the epistemic firewall
+  // made concrete (a reflection is reafference, canWitness === false; docs/deep-reading.md).
+  // Marked plainly as the reader's OWN reading, held open — so the model composes WITH the
+  // thought but never mistakes it for a source fact. Absent ('') ⇒ byte-identical prompt.
+  if (reflection && String(reflection).trim())
+    blocks.push(`${REFLECTION_HEADER}\n${String(reflection).trim()}`);
 
   blocks.push(BOUNDARY);
 

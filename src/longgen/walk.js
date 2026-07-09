@@ -37,6 +37,31 @@ import { REBIND_THRESHOLD, FLOOR_TOKENS, ceilingFor, EPSILON } from '../arc/inde
 import { groundSaturation } from '../arc/index.js';
 import { flowVerdict } from '../flow/index.js';
 import { arcGapMove, OP_DIRECTIVES } from './fold.js';
+import { deepReading } from '../fold/deep-reading.js';
+
+// DEEP READING → the reflection handed to the generation model (docs/deep-reading.md).
+// Before a beat is written, the reading turns back on the SOURCE it is writing from,
+// surfs to its place of most interest (the reader's own surprise peak), and folds a
+// reflection there — "think deeply about the surprising place before giving it to the
+// model". The reflection rides into the beat prompt as the reader's OWN reading (a
+// reafferent note under REFLECTION_HEADER, never the citable Record), so the model
+// composes WITH the thought while the grounder never cites it — the epistemic firewall
+// (canWitness === false) carried into generation. `deepRead = { source, surf, reflect? }`:
+//   source  the parsed doc the walk is writing from (the reading being surfed)
+//   surf    the injected surfer (surfFold) — kept an accessor so the walk stays decoupled
+//   reflect OPTIONAL model voice (fold,ctx)→{body}; absent → the model-free inner note
+// beatReflection — one reflection body for this beat, habituated across beats (never
+// re-reflect a place — the rumination cure). Null-safe: no bundle ⇒ '' and the prompt
+// is byte-identical to the unwired walk.
+const beatReflection = (deepRead, visited) => {
+  if (!deepRead || !deepRead.source || typeof deepRead.surf !== 'function') return '';
+  let r; try {
+    r = deepReading(deepRead.source, { surf: deepRead.surf, reflect: deepRead.reflect || null, visited, commit: false });
+  } catch { return ''; }
+  if (!r || !r.body) return '';
+  if (visited instanceof Set && Number.isInteger(r.peak)) visited.add(r.peak);   // habituate
+  return r.body;
+};
 
 // FLOW — the amodal build-arc witness/shaper (docs/flow-prior.md). The walk owns the
 // grounded-paragraph floor; the flow prior owns the SHAPE floor: is the build going
@@ -257,7 +282,7 @@ const carveDesign = ({ design, fold, question }) => {
 // never a gate that deletes. The only birth-time strike is the editor-register
 // leak, which is hygiene (the model narrating the writing), not grounding. `gated`
 // is still computed so the citation labels and sources ride along.
-const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal, weld = null, groundLater = false, arcDirective = '' }) => {
+const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal, weld = null, groundLater = false, arcDirective = '', reflection = '' }) => {
   const seed = seedFor({ beat, slice });
   const ceiling = ceilingFor({ mass: slice.reduce((m, s) => m + (s.score || 0), 0) / slice.length, spans: slice });
   let paragraph = null, gated = null, action = 'regen', leak = null;
@@ -265,7 +290,7 @@ const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal
     // The design is the length spec: stop at the next heading marker so the model
     // bridges one paragraph's worth to the gap, never a "one paragraph" instruction.
     // A backend without stop sequences ignores it, byte-identical.
-    const messages = renderContinuation({ beat, slice, prior, coldStart, genre, arcDirective });
+    const messages = renderContinuation({ beat, slice, prior, coldStart, genre, arcDirective, reflection });
     const raw = await model.phrase(messages, { maxTokens: ceiling, minTokens: FLOOR_TOKENS, stop: ['\n##'], signal });
     // The paragraph is the seed (the DEF the model was handed) plus its
     // continuation — the topic sentence the model finished.
@@ -381,9 +406,18 @@ export const walk = async ({
   flowShape = false,      // SHAPE (rev-flag opt-in) — feed the arc-demanded move into the beat prompt
                           // as a soft directive. Requires `flow.prior`. Default OFF: the observe path
                           // measures without steering; only this flips tokens.
+  deepRead = null,        // DEEP READING — { source, surf, reflect? }. Before each beat, surf the
+                          // source to its place of most interest and fold a reflection there; it rides
+                          // the beat prompt as the reader's OWN reading (reafferent, never citable), so
+                          // the model composes with the thought and the grounder never grounds it
+                          // (docs/deep-reading.md). Null ⇒ byte-identical prompt.
   onParagraph = null,     // (record, i) -> void — called as each paragraph is accepted (UI streaming)
   signal = null,
 } = {}) => {
+  // Deep-reading habituation — places already reflected on across this walk (never
+  // re-reflect a place; the rumination cure). Shared across beats so each beat's
+  // reflection lands on a FRESH surprise peak.
+  const drVisited = new Set();
   // Normalise the fold idx so a span's identity is stable across calls.
   const pool = (fold || []).map((s, i) => ({ ...s, idx: s.idx ?? i }));
 
@@ -437,7 +471,10 @@ export const walk = async ({
       // SHAPE (flowShape only) — the arc-demanded move at this position, derived off the
       // build so far (prevStep), fed to the prompt as a soft directive. '' when off/underived.
       const arcDirective = flowShape ? arcDirectiveFor(flow, prevStep, idx, flowTotal) : '';
-      const { paragraph, gated, action, leak, seed, weld: welded } = await composeBeat(model, { beat, slice, prior, coldStart, genre, signal, weld, groundLater, arcDirective });
+      // DEEP READING — a reflection at the source's next place of most interest (habituated),
+      // handed to the model as its own reading (reafferent, never citable). '' when unwired.
+      const reflection = beatReflection(deepRead, drVisited);
+      const { paragraph, gated, action, leak, seed, weld: welded } = await composeBeat(model, { beat, slice, prior, coldStart, genre, signal, weld, groundLater, arcDirective, reflection });
       // Spend only what the beat CONSUMED: its anchor (a walked beat is never
       // retried against the same anchor — monotone), plus every span the accepted
       // paragraph actually CITED (re-anchoring a cited span later would restate
