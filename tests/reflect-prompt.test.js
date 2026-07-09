@@ -7,11 +7,12 @@ import { significanceReflectMessages, cleanReflection, SIGNIFICANCE_REFLECT_SYST
 // surprise peak (reafferent by construction — "to you"), and cleanReflection enforces the
 // one-plain-sentence form a small model won't hold on its own.
 
-test('the prompt is first-person and surprise-oriented, over the folded region', () => {
+test('the prompt asks for the implicit connection over the folded region (not "what is interesting")', () => {
   const msgs = significanceReflectMessages('Explosive eruptions are driven by dissolved gases expanding as pressure drops.');
   assert.equal(msgs[0].content, SIGNIFICANCE_REFLECT_SYSTEM);
   assert.match(msgs[1].content, /Explosive eruptions are driven/);
-  assert.match(msgs[1].content, /what is most surprising and\/or interesting about this to you\?/);
+  assert.match(msgs[1].content, /connection between these is implied but not stated/);
+  assert.ok(!/most surprising|interesting/i.test(msgs[1].content), 'the surfer already found the interesting place — we do not re-ask');
 });
 
 test('cleanReflection strips a leaked preamble and keeps one plain sentence', () => {
@@ -60,4 +61,19 @@ test('cleanReflection strips the parroted evaluation frame, leaving the observat
   const b = cleanReflection('The most surprising and interesting aspect of dolphins is how they sleep with half a brain.');
   assert.notEqual(a, b);
   assert.ok(!/most surprising/i.test(a) && !/most surprising/i.test(b));
+});
+
+test('cleanReflection strips the parroted CONNECTION frame, leaving the link', () => {
+  assert.equal(
+    cleanReflection('The connection between echolocation and whistles is that both rely on sound to organise social life.'),
+    'Both rely on sound to organise social life.',
+  );
+  assert.equal(
+    cleanReflection('These statements imply that magma composition governs how violently a volcano erupts.'),
+    'Magma composition governs how violently a volcano erupts.',
+  );
+  assert.equal(
+    cleanReflection('Together they suggest that the reef and the algae are one organism, not two.'),
+    'The reef and the algae are one organism, not two.',
+  );
 });
