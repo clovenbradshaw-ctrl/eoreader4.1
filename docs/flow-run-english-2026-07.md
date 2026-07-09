@@ -220,8 +220,18 @@ essay's own trajectory shows the split — at 86% and 100% through the piece the
 is still `INS` (introduce) while the arc demands `SYN` (synthesize/close), the top
 gap `mention_conc` at +29σ early. The flat "convergent evolution" refrain, read in
 operator space, is exactly a build that never stops introducing. OBSERVE surfaces
-that; SHAPE would push against it. The live prose before/after needs a browser-model
-run (the reader's Llama path) — the engine and the witness are in place for it.
+that; SHAPE would push against it.
+
+**Live A/B (real model, 2026-07-09) — SHAPE tested NEGATIVE.** A controlled A/B on a
+real CPU model (Qwen2.5-0.5B, greedy, same sources, only `flowShape` varied; harness
+`eoreader4-eval/flow-shaping-ab.mjs`, writeup `docs/flow-shaping-ab-2026-07.md`) found
+that injecting the arc directive did **not** improve long-form prose and modestly hurt
+it on prior-independent repetition metrics (mean Δ maxPair +0.38); only the circular
+flow metric improved. On a small model the `SYN`/`REC` directives induce restatement —
+"synthesize" is obeyed by summarising prior content. So OBSERVE is kept live but
+`flowShape` stays **off by default**; the flow prior is a diagnostic, not a quality
+lever. The higher-value untested lever is grounding *enforcement* (stop `ground-later`
+shipping a 0.071 paragraph), which targets the coherence failure flow is blind to.
 
 ## Out of scope, restated
 
