@@ -24,7 +24,7 @@ import { segmentSentences }       from '../perceiver/parse/index.js';
 import { parseRelations, headVerb } from '../perceiver/parse/index.js';
 import { clauseForVerb }           from '../perceiver/parse/index.js';
 import { checkRelationConflict, checkObjectFunctionalConflict, checkRelationAgree, typeOf } from '../core/index.js';
-import { coherence, terrainInfo }  from '../core/index.js';
+import { coherence, terrainInfo, canWitness }  from '../core/index.js';
 import { operatorsByDomain }       from '../core/index.js';
 
 // The four-way verdict vocabulary now lives in core (a leaf both factcheck and
@@ -398,10 +398,30 @@ const diagonalGuard = (claims, terrain) => {
 // verdicts to `edgeVerdicts` alongside the four-way ones. Absent, the guard is inert.
 export const factCheck = async ({ prose, doc, graph, classifier, adjacency, cursor = Infinity, terrain = null, changeOfState = false } = {}) => {
   const claims  = claimedEdges({ prose, doc, cursor, referents: changeOfState });
+  // THE TYPE LAW AT THE WITNESS (core/provenance §8). Only an EXAFFERENT edge adjudicates a
+  // claim — corroborates it, contradicts it, cites it. An ENACTOR-door edge (the reasoning
+  // walk's committed reach, src/reason/walk.js) is reafference: it can ORIENT the turn but
+  // never witness the talker's claim as world. Without this split, the walk commits "A
+  // employs B" and the talker voicing it back gets CORROBORATED against the walk's own
+  // event — confabulation with perfect internal citations, the exact drift the door exists
+  // to prevent. So adjudication runs on the witness view; a claim that matches only a
+  // reafferent edge is annotated `reach: true` — the deliberate, marked reach the veto
+  // battery surfaces as `marked-reach` instead of mislabelling it a grounding failure.
+  // A prov-less edge (the parser's) classifies exafferent, so the default path — no walk
+  // ran — is byte-identical: the witness view IS the graph.
+  const reafferent = (graph?.edges || []).filter(e => !canWitness(e.prov ?? null));
+  const witnessed  = reafferent.length
+    ? Object.freeze({ ...graph, edges: Object.freeze((graph?.edges || []).filter(e => canWitness(e.prov ?? null))) })
+    : graph;
+  const rep = graph?.representative || ((id) => id);
+  const reaches = (claim) => claim.resolved && reafferent.some(e => {
+    const f = rep(e.from), o = rep(e.to), s = rep(claim.src), t = rep(claim.tgt);
+    return (f === s && o === t) || (f === t && o === s);
+  });
   const checked = [];
   for (const claim of claims) {
-    const v = await checkClaim(claim, { doc, graph, classifier, adjacency, changeOfState });
-    checked.push(Object.freeze({ ...claim, ...v }));
+    const v = await checkClaim(claim, { doc, graph: witnessed, classifier, adjacency, changeOfState });
+    checked.push(Object.freeze({ ...claim, ...v, ...(reaches(claim) ? { reach: true } : {}) }));
   }
 
   const counts = {
@@ -420,7 +440,12 @@ export const factCheck = async ({ prose, doc, graph, classifier, adjacency, curs
   const fired = [];
   if (refusing)            fired.push({ id: 'edge-contradicted',      refuses: true,  message: 'A claimed relation is denied by the document reading.' });
   else if (weakContra)     fired.push({ id: 'edge-contradicted-weak', refuses: false, message: 'A claimed relation conflicts with the document reading, but the relation typing is too uncertain to refuse on.' });
-  if (counts.unsupported)  fired.push({ id: 'edge-unsupported',       refuses: false, message: 'A claimed relation has no witness in the document reading.' });
+  // A claim that matches only the walk's own committed reach is a correctly MARKED ungrounded
+  // emission, not a grounding failure — bind-or-mark, not bind-or-veto. The plain unsupported
+  // flag keeps to claims with no walk step behind them.
+  const unsupportedPlain = checked.filter(c => c.verdict === VERDICTS.UNSUPPORTED && !c.reach).length;
+  if (unsupportedPlain)    fired.push({ id: 'edge-unsupported',       refuses: false, message: 'A claimed relation has no witness in the document reading.' });
+  if (checked.some(c => c.reach)) fired.push({ id: 'marked-reach', refuses: false, message: 'A claim rests on the reading’s own reasoning — a deliberate inference past the text, marked as such, never attested by the document.' });
 
   // The diagonal guard's off-diagonal verdicts ride in `edgeVerdicts` beside the
   // four-way ones; the veto battery reads them by `verdict:'off_diagonal'`.
@@ -434,6 +459,7 @@ export const factCheck = async ({ prose, doc, graph, classifier, adjacency, curs
         sentence: c.sentence, src: c.src, tgt: c.tgt,
         verdict: c.verdict, reason: c.reason, citation: c.citation || null,
         confidence: c.confidence ?? null,   // the likelihood the gate reads downstream
+        ...(c.reach ? { reach: true } : {}),   // traces to a walk step — marked, not mislabelled
       })),
       ...offDiagonal,
     ]),

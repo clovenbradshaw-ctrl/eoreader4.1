@@ -319,6 +319,8 @@ export const buildGroundedMessages = ({
   now = null,
   graph = '',
   arc = '',                // the reading's own arc (write/gravity.js arcLines); '' → no block, byte-identical
+  reasoning = '',          // the reasoning walk's marked reaches (turn/stages.js `prompt`, src/reason);
+                           // '' → no block, byte-identical. Pre-rendered lines, each carrying its grade mark.
   shape = '',              // the answer-first/sectioned shape cue (shapeForScope); '' → no block, byte-identical
   steer = '',              // the discourse read's BRIEF — what THIS user actually wants (app.dc.js _steerLine);
                            // folded in just before the answer clause and echoed in it. '' → no block, byte-identical.
@@ -369,6 +371,15 @@ export const buildGroundedMessages = ({
   // What the reading found — the verbatim lines it turned up, ordered for the frame (§3). The ONE channel.
   if (spans.length)
     blocks.push(`${EXCERPTS_HEADER}\n${orderSpansForFrame(spans).map(s => s.text).join('\n')}`);
+
+  // THE MARKED REACHES — the reasoning walk's own inferences (src/reason/walk.js), each line
+  // already carrying its grade mark from the turn. The grade survives the membrane HERE: the
+  // lines above are asserted (the text says them); these are hedged (the reading inferred
+  // them). The instruction is the epistemics, said once — hedge an inference as an inference,
+  // never state it as what the text says. Empty on every turn the walk did not run →
+  // no block → byte-identical.
+  if (reasoning)
+    blocks.push(`${reasoning}\n(Those are your own inferences, not lines you read — if one helps the answer, offer it hedged, as a reading of the pattern (“this suggests…”, “it may be that…”), never as something the text states.)`);
 
   // The conversation so far, in the reader's register — never document content (§1, §6).
   if (metaConv) {

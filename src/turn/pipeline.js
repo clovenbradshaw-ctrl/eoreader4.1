@@ -115,8 +115,12 @@ const llmBrief = (ctx) => {
 // byte-identical), it reads another pass on the engine's OWN open question — a figure the
 // retrieved spans keep mentioning but that never acts — and folds the results in as citable
 // spans before the fold builds the reading (turn/stages.js, write/think.js).
+// `reason` sits between `gate` and `prompt`: the reasoning walk (src/reason) commits its
+// SYN/CON/REC steps to the document's log on an OPEN turn (explain / compose) only, after the
+// answerability floor has had its chance to refuse — a gated turn terminates and the walk is
+// never run — and before the prompt reads the graph the walk just grew.
 const PIPELINE = [
-  'route', 'expect', 'converse', 'retrieve', 'inquire', 'fold', 'predict', 'answerable', 'gate', 'prompt', 'llm', 'bind', 'factcheck', 'revise', 'veto', 'settle',
+  'route', 'expect', 'converse', 'retrieve', 'inquire', 'fold', 'predict', 'answerable', 'gate', 'reason', 'prompt', 'llm', 'bind', 'factcheck', 'revise', 'veto', 'settle',
 ];
 
 // `classifier`/`adjacency` are the geometric organ the edge-grounding fact-check needs
@@ -401,6 +405,14 @@ const summarize = (name, ctx, ms) => {
     case 'answerable': return ctx.voidMeasure
       ? { ...base, verdict: 'answer', terrain: 'void', kind: ctx.voidMeasure.kind, rode: ctx.voidMeasure.rode }
       : { ...base, verdict: 'answer' };
+    // The reasoning walk, when the intent gate opened it: how many steps committed, the grade
+    // census (grounded / warranted-ungrounded / idle-ungrounded), whether the field quiesced it
+    // (saturation, not the backstop), and the firewall reading — `mine` must always be true.
+    case 'reason':   return ctx.reasoning ? { ...base,
+                              steps: ctx.reasoning.steps.length,
+                              grades: ctx.reasoning.gradeCounts,
+                              quiesced: ctx.reasoning.quiesced,
+                              mine: ctx.reasoning.everyStepIsMine } : base;
     case 'prompt':   return { ...base, promptLen: ctx.promptText?.length || 0,
                               // the arc broadcast rode this turn's window (broadcastArc)
                               ...(ctx.arcBlock ? { arc: true } : {}) };

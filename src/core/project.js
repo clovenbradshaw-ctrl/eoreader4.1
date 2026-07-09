@@ -167,6 +167,11 @@ const computeProjection = (log, frame) => {
           // kinship hop) is defeasible. The edge-grounding veto reads this flag —
           // a derived filler never satisfies the functional-axiom witness rule.
           derived: !!e.derived,
+          // The DOOR rides through the projection (core/provenance §8): the fact-check's
+          // witness view reads it — an enactor-door edge (the reasoning walk's committed
+          // reach) can orient but never corroborate a claim as world. Absent on a parser
+          // edge (prov-less → classifies exafferent), so the default projection is unchanged.
+          ...(e.prov ? { prov: e.prov } : {}),
           // §4 — how surely the reader apprehended this proposition from the text.
           // Rides through verbatim when the total read graded it (absent otherwise),
           // so the surfer, the synthesis, and the fact-check can weight by it.

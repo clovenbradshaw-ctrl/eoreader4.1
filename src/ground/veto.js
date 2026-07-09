@@ -127,10 +127,24 @@ export const VETOES = [
     message: 'A claimed relation conflicts with the document reading, but the relation typing is too uncertain to refuse on.',
   },
   {
+    // A claim tracing to the reasoning walk's own committed step (`reach`, factcheck/
+    // correspond.js) is EXCLUDED here: an unwitnessed reach the engine chose to make is
+    // bind-or-MARK, not a grounding failure — the marked-reach veto below carries it.
     id: 'edge-unsupported',
-    test: ({ edgeVerdicts }) => (edgeVerdicts || []).some(v => v.verdict === 'unsupported'),
+    test: ({ edgeVerdicts }) => (edgeVerdicts || []).some(v => v.verdict === 'unsupported' && !v.reach),
     refuses: false, // flag-only; the claim rides, marked unwitnessed
     message: 'A claimed relation has no witness in the document reading.',
+  },
+  {
+    // The deliberate reach, marked (docs/ungrounded-emitted.md). The claim matches a step the
+    // reasoning walk committed through the enactor door — reafference, which can never witness
+    // (the type law keeps it out of corroboration entirely). It is not an invention the talker
+    // smuggled in; it is the engine's own inference, shipped with its mark. Flag-only, and the
+    // honest label the passing-off rate (I2) is measured against.
+    id: 'marked-reach',
+    test: ({ edgeVerdicts }) => (edgeVerdicts || []).some(v => v.reach),
+    refuses: false,
+    message: 'A claim rests on the reading’s own reasoning — a deliberate inference past the text, marked as such, never attested by the document.',
   },
   // The diagonal guard's verdicts (P1, core/cube.js `coherence`) — a specific
   // (Figure-grain) claim asserted where the reading typed Ground. Both are FLAG-ONLY:

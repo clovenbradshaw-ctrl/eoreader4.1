@@ -27,6 +27,7 @@ import { runVetoes, isUnbound, classifyProvenance } from '../ground/index.js';
 import { canGroundedSpeak, groundedSpeak, RULES_REV } from '../organs/out/speech/index.js';
 import { projectGraph, VERDICTS } from '../core/index.js';
 import { answerabilityGate } from '../longgen/answerable.js';
+import { walkReasoning } from '../reason/index.js';
 import { factCheck, auditPropositions } from '../factcheck/index.js';
 import { streamParagraphs } from '../write/index.js';
 import { streamPhrase }     from '../model/index.js';
@@ -514,6 +515,33 @@ export const stages = {
     };
   },
 
+  // THE REASONING WALK (src/reason/walk.js) — the one stage that COMMITS structure. It appends
+  // real SYN / CON / REC events to the document's own log through the ENACTOR door, so every
+  // stage after this one reads a graph that includes them (continuity by accumulation), while
+  // canWitness stays false for every step by the provenance type law — a committed step can
+  // ORIENT the next step but never witness a later claim as world. Each step carries its grade
+  // (grounded / warranted-ungrounded / idle-ungrounded), read off the log, never elected.
+  //
+  // INTENT-GATED — this is the answerability VOID gate's conditioning (docs/answerability.md):
+  // only an OPEN, analytical turn reaches. `explain` (turn/intent.js taskOf) runs the walk; so
+  // does a composer route when a caller threads one (ctx.metaRoute === 'compose'). A pointed
+  // fact-lookup (`answer`) keeps today's behaviour exactly — there, retrieval finding nothing
+  // IS the absence, and a reach would be a lie. The Pattern tasks (summary / list) reorganize
+  // what the document already holds, so they do not reach either. Chat has no corpus log to
+  // commit to. Sits after `gate` on purpose: an unanswerable turn terminates with the refusal
+  // atom and the walk is never run.
+  //
+  // Best-effort and bounded: saturation is the terminator, maxSteps the hard backstop, and a
+  // faulting walk must never cost the turn.
+  async reason(ctx) {
+    const open = ctx.task === 'explain' || ctx.metaRoute === 'compose';
+    if (ctx.route !== 'grounded' || ctx.meta || !open || !ctx.doc?.log || !ctx.spans?.length) return ctx;
+    try {
+      const r = await walkReasoning(ctx.doc.log, { enactment: 'reason', maxSteps: 12 });
+      return r.steps.length ? { ...ctx, reasoning: r } : ctx;
+    } catch { return ctx; }
+  },
+
   async prompt(ctx) {
     // The register is the route the grounding chip selected upstream — not just
     // "did we get spans". A strict-grounded turn with no spans still builds a
@@ -568,6 +596,24 @@ export const stages = {
         }
       } catch { arcBlock = ''; }
     }
+    // THE GRADE THROUGH THE MEMBRANE (src/reason, docs/ungrounded-emitted.md). The walk's
+    // REACHES — warranted / idle steps, each voiced as a declarative `said` — ride into the
+    // window as a marked inference block, so the talker hedges them instead of flattening a
+    // reach into confident prose (the passing-off rate, I2). A GROUNDED step is deliberately
+    // left out: its witnessing sentence already rides among the excerpts, asserted; repeating
+    // it here would double-tell. Empty on every turn the walk did not run → no block →
+    // byte-identical.
+    let reasoningBlock = '';
+    if (ctx.reasoning?.steps?.length) {
+      const mark = (s) => s.grade === 'warranted-ungrounded'
+        ? 'follows a pattern in what you read, though it is not stated'
+        : 'your own conjecture';
+      const lines = ctx.reasoning.steps
+        .filter(s => s.grade !== 'grounded' && s.said)
+        .slice(0, 8)
+        .map(s => `- ${s.said} (${mark(s)})`);
+      if (lines.length) reasoningBlock = `Reaching past the lines, your reading also drew these inferences:\n${lines.join('\n')}`;
+    }
     // META-CONVERSATIONAL: the question is ABOUT the conversation (intent.js). Open the
     // FULL session fold to the grounded prompt — the talker's prior answers included —
     // because here the prior topics are the question's SUBJECT, not a premise it might
@@ -590,6 +636,7 @@ export const stages = {
           now:          ctx.now || null,  // hand the talker the real clock — date/time answered directly
           graph:        fedGraph,         // the meaning graph (web path); empty → §2 subjective frame
           arc:          arcBlock,         // the reading's own arc (broadcastArc); empty → no block
+          reasoning:    reasoningBlock,   // the walk's marked reaches (reason stage); empty → no block
           // ANSWER-FIRST, SECTIONED SHAPE: a broad question (compare / survey / list / open how-why)
           // gets the lead-then-sections layout the chat body renders as headings + bold; a pointed
           // lookup answers straight (empty cue). Off on a budgeted reply (a quick, capped lookup).
