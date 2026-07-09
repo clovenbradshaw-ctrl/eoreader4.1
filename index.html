@@ -2436,6 +2436,10 @@ class Component extends DCLogic {
     // Live model-generation tracking: every stall guard registers here so a single Stop can abort
     // whatever's decoding; `_stopGen` latches a user stop until the next turn starts.
     this._activeGuards=new Set(); this._stopGen=false;
+    // Every live typewriter (the paced letter-by-letter reveal of a streamed reply) registers
+    // here so a single Stop freezes them all at once. _typeCps is the reveal speed in characters
+    // per second — tune at runtime (app._typeCps=…); it paces the PAINT only, never the decode.
+    this._activeType=new Set(); this._typeCps=200;
     this._muted=new Set(); try{this._muted=new Set(JSON.parse(localStorage.getItem('eo_muted')||'[]'));}catch(e){}
     // FOLD-ADVANCE by groundable SURPRISE (docs/fold-advance-measurement.md, Step 1).
     // Default OFF — flag-off is byte-identical to the similarity refold. The Step 0
@@ -6253,15 +6257,16 @@ class Component extends DCLogic {
         'This request is underspecified — you cannot answer it well until the user says what they mean. '+
         'Ask them ONE short, friendly clarifying question that would let you proceed. '+
         'Ask only the question — no preamble, no answer, no apology, one sentence.';
-      let acc='',raf=0;
-      const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,think:'Asking what you mean…'};return {...c,messages:m};})}),()=>this._scrollChat());};
-      const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+      // Type the clarifying question out letter by letter too (see _typewriter), for one consistent surface.
+      const type=this._typewriter((vis)=>{this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:vis,think:'Asking what you mean…'};return {...c,messages:m};})}),()=>this._scrollChat());});
+      const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();type.feed(s);};
       this._auditRec(id,'clarify-prompt',{prompt});
       const raw=await Promise.race([this._ME.streamPhrase(model,[{role:'user',content:prompt}],{maxTokens:64,temperature:0.3,onToken,signal:guard.signal}),guard.race]);
       guard.clear();
+      await type.finish();
       this._auditRec(id,'clarify-raw',{output:String(raw||'')});
       commit(this.norm(raw)||fallback);
-    }catch(e){guard.clear();commit(fallback);}
+    }catch(e){guard.clear();if(this._activeType)for(const t of [...this._activeType]){try{t.cancel();}catch(e2){}}commit(fallback);}
   }
   // How many clarifying questions we've asked in the CURRENT unbroken run — the trailing clarify
   // bubbles (groundKind==='clarify') at the tail of the thread, before any real answer. `cur` is
@@ -6575,6 +6580,44 @@ class Component extends DCLogic {
     arm();
     return g;
   }
+  // ── The typewriter: a paced letter-by-letter reveal for a streamed reply ─────────────────
+  // The model decodes in BURSTS — whole tokens, or (on an instant backend like echo) the whole
+  // reply at once. The reader should see it arrive as a steady left-to-right crawl of characters,
+  // not in chunks. feed(piece) buffers decoded text at ANY granularity; an rAF pump reveals it at
+  // ~_typeCps characters/second — decoupled from the decode rate, so the buffer absorbs bursts and
+  // keeps typing the tail after the decode settles — calling show(visibleSoFar) each time the
+  // visible text grows. finish() resolves once every fed character has been shown (await it before
+  // re-rendering the final bound markdown); cancel() (a Stop) freezes the reveal where it is. Every
+  // live typewriter registers in _activeType so stopGeneration can freeze them all at once.
+  _nowMs(){return (typeof performance!=='undefined'&&performance.now)?performance.now():Date.now();}
+  _typewriter(show,opts={}){
+    const self=this;
+    const cps=Math.max(1,(opts&&opts.cps)||this._typeCps||200);
+    const raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame:(fn)=>setTimeout(()=>fn(self._nowMs()),16);
+    let full='',shown=0,running=false,last=0,cancelled=false;const waiters=[];
+    const settle=()=>{const w=waiters.splice(0);for(const r of w){try{r();}catch(e){}}};
+    const retire=()=>{running=false;if(self._activeType)self._activeType.delete(api);};
+    const step=(t)=>{
+      if(cancelled){retire();settle();return;}
+      const now=(+t)||self._nowMs();const dt=Math.max(0,now-last);last=now;
+      if(shown<full.length){
+        const grow=Math.max(1,Math.round(cps*dt/1000));   // time-accurate: chars owed since the last frame
+        shown=Math.min(full.length,shown+grow);
+        try{show(full.slice(0,shown));}catch(e){}
+      }
+      if(shown<full.length&&!cancelled)raf(step);
+      else{retire();settle();}
+    };
+    const pump=()=>{if(running||cancelled)return;running=true;if(self._activeType)self._activeType.add(api);last=self._nowMs();raf(step);};
+    const api={
+      feed(piece){const s=String(piece==null?'':piece);if(!s||cancelled)return;full+=s;if(shown<full.length)pump();},
+      finish(){if(cancelled||shown>=full.length)return Promise.resolve();return new Promise(res=>{waiters.push(res);pump();});},
+      cancel(){if(cancelled)return;cancelled=true;retire();settle();},
+      shown:()=>full.slice(0,shown),
+      full:()=>full,
+    };
+    return api;
+  }
   // STOP — the user's pull-cord for any in-flight generation (the chat decode, a longform arc, or a
   // research walk). Aborts every live stall guard (which cancels the backend decode and trips each
   // answer path into its stopped branch), drops the research busy flag so the curiosity walk bails
@@ -6584,6 +6627,7 @@ class Component extends DCLogic {
   stopGeneration(){
     this._stopGen=true;
     if(this._activeGuards)for(const g of [...this._activeGuards]){try{g.abort();}catch(e){}}
+    if(this._activeType)for(const t of [...this._activeType]){try{t.cancel();}catch(e){}}   // freeze any letter-by-letter reveal where it stands
     this._busy=false;
     this.setState(s=>({busy:false,modelStatus:'',chats:(s.chats||[]).map(c=>{
       const m=c.messages.slice();let touched=false;
@@ -7144,14 +7188,14 @@ class Component extends DCLogic {
         messages=this._ME.buildChatMessages({question:q,history,now:new Date()});
       }
       this._auditRec(id,'answer-prompt',{prompt:messages.map(mm=>'['+mm.role+']\n'+mm.content).join('\n\n---\n\n')});
-      // Stream the reply into the pending bubble token by token (model/stream.js).
-      // streamPhrase drives the backend's onToken when it can decode incrementally
-      // (webllm, echo), and falls back to draw-then-emit otherwise — either way it
-      // returns the full reply, which `finish` then re-renders as bound markdown.
+      // Stream the reply into the pending bubble as a paced letter-by-letter crawl (the typewriter,
+      // _typewriter above): streamPhrase drives onToken with whatever the backend decodes (webllm/echo
+      // tokens, or the whole beat at once on a draw-then-emit fallback), and the typewriter reveals it
+      // one character at a time, decoupled from the decode rate. `vis` is the text shown so far; the
+      // full reply is `raw` below, which `finish` re-renders as bound markdown once the crawl catches up.
       this._setThink(id,this._composeOpen(grounded,ground));
-      let acc='',raf=0;
-      const paint=()=>{raf=0;this._captureStick();const head=this._composeTick(acc);this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,think:head};return {...c,messages:m};})}),()=>this._scrollChat());};
-      const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+      const type=this._typewriter((vis)=>{this._captureStick();const head=this._composeTick(vis);this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:vis,think:head};return {...c,messages:m};})}),()=>this._scrollChat());});
+      const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();type.feed(s);};
       // A turn the discourse metacognition reads as BROAD/DEVELOPED gets the 900-token room to
       // breathe; a pointed lookup — and a longform ask we're deliberately keeping short and grounded
       // — stays on the tighter 512. The room now keys off the same read that steers the shape
@@ -7159,6 +7203,8 @@ class Component extends DCLogic {
       // The creative register writes hotter — invention is the point; grounded stays cool and faithful.
       const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:(grounded&&this._wantsRoom(meta)&&!longform)?900:512,temperature:amode==='creative'?0.85:0.4,onToken,signal:guard.signal}),guard.race]);
       guard.clear();
+      await type.finish();               // let the last characters type out before we re-render as bound markdown
+      if(this._stopGen)return;           // a Stop during the tail: stopGeneration already finalized the bubble
       this._auditRec(id,'answer-raw',{output:String(raw||'')});
       // An isolated chat draws on nothing read, so there's no structural fallback to pull from.
       const text=this.normMd(raw)||(isolated||amode==='creative'?'':this.answerQuestion(q,sources).text)||'(no answer)';
@@ -7196,6 +7242,7 @@ class Component extends DCLogic {
       }
     }catch(e){
       guard.clear();
+      if(this._activeType)for(const t of [...this._activeType]){try{t.cancel();}catch(e2){}}   // stop the crawl so its tail can't overwrite the fallback
       // User stop — stopGeneration already finalized the bubble with whatever streamed. Don't
       // overwrite it with a structural fallback.
       if((e&&e.stopped)||this._stopGen)return;
@@ -8148,12 +8195,14 @@ class Component extends DCLogic {
     const history=prev.slice(-8).map(m=>({role:m.role==='user'?'user':'assistant',content:m.text}));
     const messages=this._ME.buildChatMessages({question:q,history,now:new Date()});
     this._auditRec(id,'compose-prompt',{prompt:messages.map(mm=>'['+mm.role+']\n'+mm.content).join('\n\n---\n\n')});
-    let acc='',raf=0;
-    const paint=()=>{raf=0;this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]=asDoc?{...m[li],doc:true,docTitle:dTitle,text:acc}:{...m[li],text:acc};return {...c,messages:m};})}),()=>this._scrollChat());};
-    const onToken=(piece)=>{const sx=String(piece||'');if(!sx)return;guard.feed();acc+=sx;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+    // `acc` keeps the full decoded text (the fallback `raw` on a Stop/stall); the typewriter drives the
+    // paced letter-by-letter reveal into the bubble (`vis`), decoupled from the decode rate (see _typewriter).
+    let acc='';
+    const type=this._typewriter((vis)=>{this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]=asDoc?{...m[li],doc:true,docTitle:dTitle,text:vis}:{...m[li],text:vis};return {...c,messages:m};})}),()=>this._scrollChat());});
+    const onToken=(piece)=>{const sx=String(piece||'');if(!sx)return;guard.feed();acc+=sx;type.feed(sx);};
     let raw='';
-    try{raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:700,temperature:0.85,onToken,signal:guard.signal}),guard.race]);}
-    catch(e){raw=acc;}
+    try{raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:700,temperature:0.85,onToken,signal:guard.signal}),guard.race]);await type.finish();}
+    catch(e){raw=acc;type.cancel();}
     this._auditRec(id,'compose-raw',{output:String(raw||'')});
     // THE FIRST GO, THEN EVALUATE (the lag posture, spec-enacted-writer §6). The piece shown above
     // is a NORMAL answer, not a tentative "first go" — the writer still reads it back once and may
@@ -8274,15 +8323,18 @@ class Component extends DCLogic {
       }else{messages=this._ME.buildChatMessages({question:q,history:[],now:new Date()});}
       this._auditRec(id,'answer-prompt',{prompt:messages.map(mm=>'['+mm.role+']\n'+mm.content).join('\n\n---\n\n')});
       this._setThink(id,this._composeOpen(grounded,ground));
-      let acc='',raf=0;
-      const paint=()=>{raf=0;this._captureStick();const head=this._composeTick(acc);this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,think:head};return {...c,messages:m};})}),()=>this._scrollChat());};
-      const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+      // Paced letter-by-letter reveal (see _typewriter): the decoded pieces are buffered and shown one
+      // character at a time. `vis` is the visible text; `raw` below is the full reply `finish` renders.
+      const type=this._typewriter((vis)=>{this._captureStick();const head=this._composeTick(vis);this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:vis,think:head};return {...c,messages:m};})}),()=>this._scrollChat());});
+      const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();type.feed(s);};
       // A turn the discourse metacognition reads as BROAD/DEVELOPED gets the 900-token room to
       // breathe; a pointed lookup — and a longform ask we're deliberately keeping short and grounded
       // — stays on the tighter 512. The room keys off the same read that steers the shape
       // (_wantsRoom), not a keyword shape cue.
       const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:(grounded&&this._wantsRoom(meta)&&!longform)?900:512,temperature:0.4,onToken,signal:guard.signal}),guard.race]);
       guard.clear();
+      await type.finish();               // let the last characters type out before the bound re-render
+      if(this._stopGen)return;           // a Stop during the tail: stopGeneration already finalized the bubble
       this._auditRec(id,'answer-raw',{output:String(raw||'')});
       // normMd (not norm): keep the reply's line structure so lists/headings survive into _md.
       const text=this.normMd(raw)||(isolated?'':this.answerQuestion(q,sources).text)||'(no answer)';
@@ -8296,6 +8348,7 @@ class Component extends DCLogic {
         register:grounded?'grounded':'creative',reflection:grounded?this._reflect(text):null});
     }catch(e){
       guard.clear();
+      if(this._activeType)for(const t of [...this._activeType]){try{t.cancel();}catch(e2){}}   // stop the crawl so its tail can't overwrite the fallback
       // User stop — keep the partial bubble stopGeneration already finalized.
       if((e&&e.stopped)||this._stopGen)return;
       if(isolated){finish({text:'I couldn’t load a model to answer.',groundKind:'model'});this.setState({modelStatus:''});return;}
