@@ -250,6 +250,10 @@ export const REGISTER_EXEMPLARS = Object.freeze({
 // a clear ask never gets a needless question back.
 export const CLARIFY_EXEMPLARS = Object.freeze({
   clarify: [
+    // "the user" stays here on purpose: this exemplar mirrors the metacognition model's own
+    // register (it describes the turn in the third person), and its "user" token seeds the
+    // bases' scaffold vocabulary so leadsOf scrubs the model's "the user" framing out of the
+    // walk's seeds (dolphin-disambiguation.test.js). It is a measurement anchor, never shown.
     'only the user can say which one they mean',
     'the request is ambiguous — I would have to ask them to clarify',
     'underspecified: which one, whose, what precisely — they must tell me',
@@ -731,22 +735,22 @@ export const discoursePrompt = (message, fold = null, { exchange = '', now = nul
   const standingDoc = String(standing || '').trim();
   return (
     'You are watching one conversation. Right now: ' + (reading ? 'reading ' + reading : stanceDescOf(fold)) + '.\n' +
-    (reading ? 'That reading is already loaded into this chat and in scope — so when the user says "this", "it", "the book", or "the document" they mean it; it is not unspecified, and you need not ask which book or document they mean.\n' : '') +
+    (reading ? 'That reading is already loaded into this chat and in scope — so when they say "this", "it", "the book", or "the document" they mean it; it is not unspecified, and you need not ask which book or document they mean.\n' : '') +
     // The discourse FACT that a piece we wrote is on the page — the referent-grounding twin of the
     // reading scope. It tells the read the standing document exists so the read's own words can say
     // "they want to edit the essay"; the ROUTE is still the Born measurement of that read, not this
     // text. It states the fact and names the referents; it does not enumerate trigger phrases.
-    (standingDoc ? 'A long answer you wrote earlier — "' + standingDoc + '" — is on the page and in scope as a standing document. When the user says "the essay", "it", "that part", or "the piece", they mean THAT document, and an ask to change it (reword, restructure, cut, expand, shorten) is an edit to what is already written, not a request for new research.\n' : '') +
+    (standingDoc ? 'A long answer you wrote earlier — "' + standingDoc + '" — is on the page and in scope as a standing document. When they say "the essay", "it", "that part", or "the piece", they mean THAT document, and an ask to change it (reword, restructure, cut, expand, shorten) is an edit to what is already written, not a request for new research.\n' : '') +
     (when ? 'It is now ' + when + '.\n' : '') +
     (exchange ? 'The last exchange:\n' + exchange + '\n' : '') +
-    'The user just said: "' + String(message || '') + '"\n' +
-    'In two or three plain sentences, say what the user is doing, what would satisfy them, ' +
+    'They just said: "' + String(message || '') + '"\n' +
+    'In two or three plain sentences, say what they are doing, what would satisfy them, ' +
     'and what — if anything — would have to be found out that neither the conversation nor ' +
     'the loaded reading already holds. A broad, open request — "research X", "tell me about X" — ' +
     'is satisfied by a general overview of what the reading holds; that is not a gap, and their ' +
     'possibly wanting some specific aspect they never named is not something that has to be found ' +
     'out or clarified. Name a gap only when the ask genuinely turns on a choice the reading cannot ' +
-    'settle. If that gap is something only the user can settle — their request is ambiguous or ' +
+    'settle. If that gap is something only they can settle — their request is ambiguous or ' +
     'underspecified and you would have to ask them to clarify which one, whose, or what exactly ' +
     'they mean — say so. Speak naturally.'
   );
