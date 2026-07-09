@@ -24,6 +24,13 @@ export {
   SIGNIFICANCE_REFLECT_SYSTEM, significanceReflectMessages, reflectionInput, REFLECT_DECODE, cleanReflection,
 } from './reflect-prompt.js';
 
+// The audit (fold/audit.js): is the inner monologue actually HELPING? Measures the monologue's
+// own output on the system's terms — distinct (not ruminating), novel (not restating the
+// record), significant (beats the band), and SAFE (the firewall held — no reflection became a
+// fact). auditMonologue RUNS a fresh reader over a doc and audits it; auditLog is read-only over
+// a doc the reader already rested on; reportAudit renders the verdict.
+export { auditMonologue, auditLog, firewallAudit, reportAudit } from './audit.js';
+
 // Weave (fold/weave.js): loops on loops. Metacognition — the reflection ABOUT the reflections
 // (loop 2) — and cross-connections — CON bonds between held interpretations (echo · bears-on ·
 // analogy). Both reafferent, band void, canWitness false: the firewall holds at every level.

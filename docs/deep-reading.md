@@ -188,4 +188,5 @@ fresh surprise peak. Measured churn-detection payoff for the model-voiced form:
 | the firewall it rides | `src/core/provenance.js` (§8, `canWitness`) |
 | the operator it is | `src/core/operators.js` (EVA), `src/enact/register.js` |
 | **into generation** | `src/longgen/walk.js` (`deepRead`), `src/longgen/render.js` (`REFLECTION_HEADER`) |
-| tests | `tests/deep-reading.test.js`, `tests/deep-reading-fold.test.js` |
+| **is it helping?** (the audit) | `src/fold/audit.js`, `docs/monologue-audit.md`, `eoreader4-eval/monologue-audit.mjs` |
+| tests | `tests/deep-reading.test.js`, `tests/deep-reading-fold.test.js`, `tests/monologue-audit.test.js` |

@@ -19,7 +19,7 @@
 // alike, and — like the reflection itself — runs with no model, no embedder, no weights.
 
 import { ingestText } from '../organs/in/text.js';
-import { createDeepReader, readReflections, buildSubstrate } from '../fold/index.js';
+import { createDeepReader, readReflections, buildSubstrate, auditLog } from '../fold/index.js';
 import { surfFold } from '../surfer/index.js';
 
 const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -135,6 +135,30 @@ const SURFACE_CSS = `
 .mns-th-at{margin-top:6px;font-size:12px;line-height:1.45;color:#6b7488;font-style:italic}
 .mns-th-at .p{color:#8791a3;font-style:normal}
 
+/* the audit — IS THE MONOLOGUE HELPING? A verdict over what it deposited (fold/audit.js). */
+.mns-audit{margin:0 0 18px;padding:11px 12px;border-radius:9px;background:#0d1017;border:1px solid #1b2130}
+.mns-audit .mns-g-h{margin:0 0 9px}
+.mns-audit-hint{font-size:11.5px;color:#565f73;line-height:1.5}
+.mns-verdict-row{display:flex;align-items:baseline;gap:10px;margin-bottom:3px}
+.mns-verdict-chip{font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:20px;border:1px solid #2d3444;color:#8791a3}
+.mns-verdict-chip.helping{color:#9ece6a;border-color:#33482a;background:#111a10}
+.mns-verdict-chip.echoing{color:#e0af68;border-color:#4a3d24;background:#191509}
+.mns-verdict-chip.ruminating{color:#f7768e;border-color:#5a2a34;background:#1a0e11}
+.mns-verdict-chip.noise{color:#f7768e;border-color:#5a2a34;background:#1a0e11}
+.mns-verdict-chip.idle{color:#8791a3;border-color:#2d3444}
+.mns-verdict-chip.unsafe{color:#fff;background:#7a1f2b;border-color:#b0344a}
+.mns-audit-score{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:16px;font-weight:700;color:#e6e9ef}
+.mns-audit-reason{font-size:11.5px;color:#8791a3;line-height:1.5;margin-bottom:10px}
+.mns-audit-dim{margin:7px 0}
+.mns-audit-dim .lab{display:flex;justify-content:space-between;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:#8791a3;margin-bottom:3px}
+.mns-audit-dim .lab b{color:#c0caf5}
+.mns-audit-track{height:5px;border-radius:3px;background:#1b2130;overflow:hidden}
+.mns-audit-track .fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#7aa2f7,#9ece6a)}
+.mns-audit-track.warn .fill{background:linear-gradient(90deg,#e0af68,#f7768e)}
+.mns-audit-fire{margin-top:11px;font-family:ui-monospace,Menlo,monospace;font-size:10px;letter-spacing:.03em;padding:6px 8px;border-radius:6px;line-height:1.5}
+.mns-audit-fire.ok{color:#9ece6a;background:#101710;border:1px solid #26331f}
+.mns-audit-fire.bad{color:#f7768e;background:#180d10;border:1px solid #4a2029}
+
 /* the trail spine — every place the surf considered, worth or below-band. */
 .mns-spine{display:flex;align-items:flex-end;gap:3px;height:52px;margin:6px 0 4px;padding:0 1px}
 .mns-tick{flex:1 1 0;min-width:2px;border-radius:2px 2px 0 0;background:#2d3444;position:relative}
@@ -202,6 +226,7 @@ export const mountMonologueSurface = (el, opts = {}) => {
         ? '<button class="mns-btn mns-tick-btn">Reflect now</button>'
         : '<button class="mns-btn mns-tick-btn">Idle tick ▸</button><button class="mns-btn mns-auto">Let it rest</button>'}
       <span class="mns-sp"></span>
+      ${driven ? '' : '<button class="mns-btn mns-audit-btn" title="Audit what the monologue deposited — is it distinct, novel, and safe?">Is this helping?</button>'}
       <span class="mns-tally"></span>
     </div>
     <div class="mns-cols" style="display:${driven ? '' : 'none'}">
@@ -209,6 +234,10 @@ export const mountMonologueSurface = (el, opts = {}) => {
         ? 'Nothing on its mind yet.<br><small>When you\'re not chatting, it thinks about what it has read — its thoughts appear here.</small>'
         : 'The reading is held, at rest.<br><small>Press <b>Idle tick</b> once, or <b>Let it rest</b> — when nothing else is happening the reading surfs to the place of most interest and reflects there.</small>'}</div></div>
       <div class="mns-graph">
+        <div class="mns-audit">
+          <p class="mns-g-h">Is this helping?</p>
+          <div class="mns-audit-body"><div class="mns-audit-hint">Let the reading rest, then press <b>Is this helping?</b> — the monologue's own output is audited: distinct (not looping), novel (not restating the source), and <b>firewalled</b> (no reflection ever became a fact).</div></div>
+        </div>
         <p class="mns-g-h">Deposited into the graph</p>
         <div class="mns-g-stat"><span>reflections · significance</span><b class="mns-c-refl">0</b></div>
         <div class="mns-g-stat firm"><span>facts witnessed</span><b>0</b></div>
@@ -249,6 +278,8 @@ export const mountMonologueSurface = (el, opts = {}) => {
   const trail = [];         // every place considered (from reader.trail)
   let autoTimer = null;
   let restedFully = false;
+  let auditShown = false;   // once the audit is opened it re-runs as fresh thoughts stream in
+  let lastAuditCount = -1;  // guard: only re-audit when a new reflection actually arrived
 
   const setPosture = (mode) => {
     postureEl.className = 'mns-posture ' + mode;
@@ -284,7 +315,44 @@ export const mountMonologueSurface = (el, opts = {}) => {
     nodesEl.innerHTML = nodes.length
       ? nodes.map((n) => `<div class="mns-node"><span class="nid">${esc(n.id)}</span> · <span class="nat">§${n.atSentence ?? '—'}</span>${n.about ? ' · ' + esc(clean(n.about)) : ''}<br><span class="nread">${esc(clean(n.reading))}</span></div>`).join('')
       : '<div class="mns-node" style="border:none;color:#565f73">none yet</div>';
+    refreshAudit();
   };
+
+  // THE AUDIT — is the monologue helping? A read-only verdict over what it deposited
+  // (fold/audit.js's auditLog): distinct (not looping), novel (not restating the source), and
+  // firewalled (no reflection ever became a fact). Pure presentation over the audit — no model.
+  const auditPct = (x) => (x == null ? '—' : Math.round(x * 100) + '%');
+  const renderAudit = () => {
+    const body = $('.mns-audit-body');
+    if (!body) return;
+    if (!doc) { body.innerHTML = '<div class="mns-audit-hint">Hold a document first.</div>'; return; }
+    auditShown = true;
+    let a;
+    try { a = auditLog(doc); }
+    catch (e) { body.innerHTML = `<div class="mns-audit-hint">Audit failed: ${esc(e?.message || e)}</div>`; return; }
+    const f = a.firewall;
+    // the two human-facing dimensions; the track turns warm when THIS is the failing axis.
+    const dim = (label, val, warn) => `
+      <div class="mns-audit-dim">
+        <div class="lab"><span>${label}</span><b>${auditPct(val)}</b></div>
+        <div class="mns-audit-track${warn ? ' warn' : ''}"><div class="fill" style="width:${Math.round(clamp01(val || 0) * 100)}%"></div></div>
+      </div>`;
+    body.innerHTML = `
+      <div class="mns-verdict-row">
+        <span class="mns-verdict-chip ${esc(a.verdict)}">${esc(a.verdict)}</span>
+        <span class="mns-audit-score">${auditPct(a.score)}</span>
+      </div>
+      <div class="mns-audit-reason">${esc(a.reason)}</div>
+      ${dim('distinct — not looping', a.distinctness, a.verdict === 'ruminating')}
+      ${dim('novel — not restating', a.novelty, a.verdict === 'echoing')}
+      ${a.apparatus > 0 ? dim('on content — not citations', 1 - a.apparatus, a.verdict === 'noise') : ''}
+      <div class="mns-audit-fire ${f.intact ? 'ok' : 'bad'}">firewall ${f.intact ? 'INTACT' : 'BREACHED'} · ${f.factsAdded} facts added to the record · ${a.reflected} reflection${a.reflected === 1 ? '' : 's'} audited</div>`;
+    lastAuditCount = reflections.length;
+  };
+  // re-audit only when a fresh reflection actually arrived — renderGraph paints on every idle
+  // tick (and on settle), but re-running the full auditLog on each paint is wasted work and
+  // rebuilds the panel (flicker); the audit only changes when the reflection count does.
+  const refreshAudit = () => { if (auditShown && reflections.length !== lastAuditCount) renderAudit(); };
 
   const sentence = (i) => String((doc.units || doc.sentences || [])[i] ?? '');
 
@@ -413,6 +481,9 @@ export const mountMonologueSurface = (el, opts = {}) => {
     reader = createDeepReader({ doc, surf: surfFold });
     anchor = 0; restedFully = false;
     reflections.length = 0; trail.length = 0;
+    auditShown = false; lastAuditCount = -1;
+    const auditBody = $('.mns-audit-body');
+    if (auditBody) auditBody.innerHTML = '<div class="mns-audit-hint">Let the reading rest, then press <b>Is this helping?</b> — the monologue\'s own output is audited: distinct (not looping), novel (not restating the source), and <b>firewalled</b> (no reflection ever became a fact).</div>';
     streamEl.innerHTML = '<div class="mns-empty">The reading is held, at rest.<br><small>Press <b>Idle tick</b> once, or <b>Let it rest</b> — when nothing else is happening the reading surfs to the place of most interest and reflects there.</small></div>';
     subEl.textContent = `${doc.docId || 'document'} · ${nSent} sentences`;
     restBar.style.display = '';
@@ -517,6 +588,7 @@ export const mountMonologueSurface = (el, opts = {}) => {
 
   tickBtn.addEventListener('click', () => { stopAuto(); if (!restedFully) tick(); });
   autoBtn.addEventListener('click', () => { if (autoTimer) stopAuto(); else startAuto(); });
+  $('.mns-audit-btn')?.addEventListener('click', renderAudit);
   $('.mns-copy').addEventListener('click', copyLog);
   if (opts.onClose) $('.mns-close').addEventListener('click', () => { stopAuto(); opts.onClose(); });
 
