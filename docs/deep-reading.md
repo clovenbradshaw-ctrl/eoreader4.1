@@ -141,6 +141,40 @@ figures), one idle pass surfaced three reflections at the reading's own surprise
 The reading gets richer at exactly the places it found most interesting, and the record it can
 witness is provably untouched.
 
+## Into generation — the reflection handed to the writer, epistemics kept
+
+The other half of the loop: when the walk is about to write from a source, it can *think
+deeply first*. Before each beat, the reading surfs the **source** to its next place of most
+interest (habituated — never the same place twice) and folds a reflection there; the
+reflection rides into the beat prompt as the reader's **own reading**, and the writer composes
+*with* the thought — while the grounder never grounds a claim on it.
+
+The epistemics are enforced structurally, not by trust:
+
+- **In the prompt** — the reflection is placed under `Reading note (your own reflection … — a
+  reading, not a source to cite:)`, deliberately **NOT** under the excerpts header (`What I
+  found reading it:`). The binder keys on the excerpts header to find citable spans, so a
+  reflection below it is never a citable "fact." The prompt marking mirrors the event's own
+  provenance.
+- **In the grounding** — a reflection is an enacted EVA at the **enactor door** (`canWitness ===
+  false`). `ground/provenance.js` separates propositions by door — `door !== 'enactor'` is
+  witnessed existence/structure, `door === 'enactor'` is interpretation, never record. So the
+  grounder *pulls apart what the model did in reading from the witnessed content* by
+  construction.
+
+```js
+// walk with deep reading: surf the source, fold a reflection, hand it to the writer
+walk({ …, deepRead: { source: parsedDoc, surf: surfFold /*, reflect: modelVoice */ } });
+//   source  the parsed reading being written from
+//   surf    injected surfer (surfFold) — kept an accessor so the walk stays decoupled
+//   reflect OPTIONAL model voice (fold,ctx)→{body}; absent → the model-free inner note
+```
+
+`deepRead: null` ⇒ the prompt is byte-identical to the unwired walk (the rev-flag parity
+contract). The place of most interest is habituated across beats, so each beat reflects on a
+fresh surprise peak. Measured churn-detection payoff for the model-voiced form:
+`docs/deep-reading-churn-2026-07.md`.
+
 ## Where it lives
 
 | concern | file |
@@ -153,4 +187,5 @@ witness is provably untouched.
 | the place of most interest | `src/surfer/surf.js` (`surfFold`), `src/surfer/salience.js` |
 | the firewall it rides | `src/core/provenance.js` (§8, `canWitness`) |
 | the operator it is | `src/core/operators.js` (EVA), `src/enact/register.js` |
-| tests | `tests/deep-reading.test.js` |
+| **into generation** | `src/longgen/walk.js` (`deepRead`), `src/longgen/render.js` (`REFLECTION_HEADER`) |
+| tests | `tests/deep-reading.test.js`, `tests/deep-reading-fold.test.js` |
