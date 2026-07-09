@@ -36,7 +36,7 @@ export { auditMonologue, auditLog, firewallAudit, reportAudit } from './audit.js
 // — promoted to the graph as reafferent, void, provenance-carrying CON edges. They MOVE the physics
 // (surf, retrieval, the provenance graph) yet never witness: factsAdded 0, inferredAdded N. Impact
 // without laundering (docs/monologue-significance.md).
-export { weaveSignificance, inferSignificance, buildSignificanceEdge, readSignificance, SIGNIFICANCE } from './significance.js';
+export { weaveSignificance, inferSignificance, inferFoldSignificance, buildSignificanceEdge, readSignificance, SIGNIFICANCE } from './significance.js';
 
 // Weave (fold/weave.js): loops on loops. Metacognition — the reflection ABOUT the reflections
 // (loop 2) — and cross-connections — CON bonds between held interpretations (echo · bears-on ·

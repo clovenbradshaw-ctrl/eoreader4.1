@@ -28,6 +28,8 @@ const SAMPLES = [
     text: 'Dolphins use echolocation. Bats use echolocation. Whales use echolocation. Dolphins live in oceans. Bats live in caves.' },
   { name: 'alliances', expect: 'latent alliances — figures linked through a common adversary',
     text: 'Carthage opposed Rome. Gaul opposed Rome. Egypt supplied Rome. Rome defeated Carthage. Rome did not defeat Egypt.' },
+  { name: 'grete-arc', expect: 'FOLD-FED: the reading\'s recurring concern binds figures the structure never pairs',
+    text: 'Grete brought Gregor food but looked away. The father struck Gregor with a stick. Grete decided Gregor was no longer her brother. The charwoman found Gregor dead. Grete felt relief.' },
 ];
 
 const fieldOf = (doc) => surfFold(doc, 0, {}).field.map((f) => f.bayes);
@@ -41,7 +43,7 @@ for (const s of docs) {
   const doc = parseText(s.text, { docId: s.name, genderCoref: true });
   const g0 = projectGraph(doc.log, {});
   const f0 = fieldOf(doc);
-  const w = weaveSignificance(doc);
+  const w = weaveSignificance(doc, { surf: surfFold });   // BOTH readings — structure-fed + fold-fed
   const g1 = projectGraph(doc.log, {});
   const f1 = fieldOf(doc);
   const fw = firewallAudit(doc);

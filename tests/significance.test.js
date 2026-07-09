@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  inferSignificance, weaveSignificance, readSignificance, firewallAudit, auditLog,
+  inferSignificance, inferFoldSignificance, weaveSignificance, readSignificance, firewallAudit, auditLog,
 } from '../src/fold/index.js';
 import { surfFold } from '../src/surfer/index.js';
 import { projectGraph, canWitness } from '../src/core/index.js';
@@ -108,6 +108,44 @@ test('composes with the audit: a doc carrying significance edges still reads fir
   assert.equal(a.firewall.intact, true);
   assert.equal(a.firewall.factsAdded, 0);
   assert.ok(a.firewall.inferredAdded >= 2, 'the audit surfaces the significance overlay');
+});
+
+// ── FOLD-FED — the significance read off the reader's folds at its surprise peaks, not the raw
+// structure. Grete's care at the open and her relief at the close bind figures the structural
+// reading never pairs, because the connection is drawn where the reading STRAINED, not where the
+// graph converges.
+const ARC = 'Grete brought Gregor food but looked away. The father struck Gregor with a stick. ' +
+  'Grete decided Gregor was no longer her brother. The charwoman found Gregor dead. Grete felt relief.';
+
+test('FOLD-FED: connections are drawn from the folds at surprise peaks, needing an injected surf', () => {
+  const doc = parseText(ARC, { docId: 'arc', genderCoref: true });
+  assert.throws(() => inferFoldSignificance(doc, {}), /surf must be injected/);
+  const conns = inferFoldSignificance(doc, { surf: surfFold });
+  assert.ok(conns.length >= 1, 'the reading strained over figures it binds into a connection');
+  for (const c of conns) {
+    assert.equal(canWitness(c.prov), false, 'a fold-fed connection is reafference — the firewall holds');
+    assert.equal(c.band, 'void');
+    assert.equal(c.inferred, true);
+    assert.match(c.body, /recurring concern/, 'its WHY is read off the fold, not the parse graph');
+  }
+});
+
+test('FOLD-FED finds a link the structure does not: the reading\'s recurring concern', () => {
+  const doc = parseText(ARC, { docId: 'arc', genderCoref: true });
+  const structural = new Set(inferSignificance(doc).map((c) => [c.src, c.tgt].sort().join('|')));
+  const foldFed = inferFoldSignificance(doc, { surf: surfFold }).map((c) => [c.src, c.tgt].sort().join('|'));
+  assert.ok(foldFed.some((p) => !structural.has(p)), 'the fold-fed reading surfaces a pair the structure never linked');
+});
+
+test('FOLD-FED composes under one firewall: weaveSignificance(surf) runs both readings, still intact', () => {
+  const doc = parseText(ARC, { docId: 'arc', genderCoref: true });
+  const structOnly = weaveSignificance(parseText(ARC, { docId: 'arc2', genderCoref: true }));   // no surf
+  const both = weaveSignificance(doc, { surf: surfFold });                                       // structure + fold-fed
+  assert.ok(both.count >= structOnly.count, 'adding the fold-fed reading never drops connections');
+  const f = firewallAudit(doc);
+  assert.equal(f.factsAdded, 0, 'no fold-fed connection became a witnessed fact');
+  assert.equal(f.inferredAdded, both.count, 'every connection rides as the reafferent overlay');
+  assert.equal(f.intact, true, 'both readings, one firewall — impact without laundering');
 });
 
 test('readSignificance reads the connections back; inference is deterministic', () => {
