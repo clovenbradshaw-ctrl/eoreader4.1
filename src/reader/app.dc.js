@@ -1253,6 +1253,19 @@ class Component extends DCLogic {
   }
   // The discoverable "chat with this page": scope a chat to whatever is open.
   askThisPage(){const u=this.state.viewUrl;this.newChat(u||null);}
+  // ── Phone chat launcher (the always-present fast path to chat) ──────────────
+  // A single floating ✦ that lives above the bottom nav in every phone pane, so
+  // the chat is one tap away from Sources, Reading, or Spine — not buried in a
+  // text tab. Tapping it fans up a small disclosure menu (layers): continue the
+  // open chat, start a net-new one, or scope one to the page you're reading.
+  toggleAskMenu(){this.setState(s=>({askMenuOpen:!s.askMenuOpen}));}
+  closeAskMenu(){if(this.state.askMenuOpen)this.setState({askMenuOpen:false});}
+  // Land the user in the chat surface. On phone the chat pane owns the composer,
+  // so switch to it; off phone the chat opens as its own column/overlay already.
+  _gotoChat(){if(this.phone())this.setPane('chat');}
+  askLaunchContinue(){this.closeAskMenu();if(!this.activeChatObj())this.newChat(null);this._gotoChat();}
+  askLaunchNew(){this.closeAskMenu();this.newChat(null);this._gotoChat();}
+  askLaunchPage(){const u=this.state.viewUrl;this.closeAskMenu();this.newChat(u||null);this._gotoChat();}
   openChat(id){this._chatTab(id);this.setState(s=>({activeChat:id,viewUrl:null,selId:null,hoverEnt:null,chatAddOpen:false,rightOpen:true,newTabOpen:false,histRev:(s.histRev||0)+1}));}
   // Closing a chat closes its tab (the chip goes too); the neighbour tab takes over.
   closeChat(){this._ensureTabs();const t=this._liveTab();if(t&&t.kind==='chat')this.closeTab(t.id);else this.setState({activeChat:null,chatAddOpen:false});}
@@ -10461,6 +10474,37 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       base.appRows=isPhone?'auto auto 1fr auto':'auto auto 1fr';
       // padding-bottom keeps the tabs above the iPhone home indicator (viewport-fit=cover).
       base.navStyle='display:'+(isPhone?'flex':'none')+';background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);';
+      // ── The phone chat launcher (fast path to chat, present in every pane) ──
+      // A floating ✦ over the bottom nav that fans up a small disclosure menu.
+      // Desktop/tablet already carry several obvious chat entries (top-bar Chat,
+      // the left panel's New chat, the Research preset), so this is phone-only —
+      // it fills the one tier where chat was buried in a text tab. Hidden on the
+      // chat pane itself (you're already there) and while any modal is open.
+      const vu2=this.state.viewUrl, hasPage=!!vu2&&!/^search:/i.test(vu2);
+      const modalUp=!!(this.state.memOpen||this.state.templatesOpen||this.state.promptFlowOpen||this.state.weaveOpen||this.state.settingsOpen||this.state.newTabOpen);
+      base.askLauncherOn=isPhone && pane!=='chat' && !modalUp;
+      base.askMenuOpen=!!this.state.askMenuOpen && base.askLauncherOn;
+      base.onToggleAskMenu=()=>this.toggleAskMenu();
+      base.onCloseAskMenu=()=>this.closeAskMenu();
+      base.askFabIcon=base.askMenuOpen?'×':'✦';
+      // Accent circle; rotates/darkens into a close affordance when the menu is fanned open.
+      base.askFabStyle='width:54px;height:54px;border-radius:50%;border:none;display:inline-flex;align-items:center;justify-content:center;font-size:'+(base.askMenuOpen?'26px':'22px')+';color:#fff;background:var(--acc);box-shadow:0 8px 22px rgba(20,24,30,.28);cursor:pointer;line-height:1;transition:transform .2s ease,background .2s ease;'+(base.askMenuOpen?'transform:rotate(90deg);':'');
+      // Disclosure options — nearest the thumb (last, bottom of the fanned stack) is the
+      // primary action; the page-scoped ask only appears when a page is open. Each layer
+      // eases in with a staggered delay so the menu reads as fanning open, not popping.
+      const hasChat=!!this.activeChatObj();
+      const _amItem=(icon,label,sub,onPick)=>({icon,label,sub,onPick,
+        style:'display:inline-flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line2);border-radius:13px;padding:9px 14px 9px 11px;box-shadow:0 6px 20px rgba(20,24,30,.16);cursor:pointer;text-align:left;',
+        iconStyle:'width:30px;height:30px;flex:0 0 auto;border-radius:9px;background:var(--accbg);color:var(--acc);display:inline-flex;align-items:center;justify-content:center;font-size:15px;line-height:1;',
+        labelStyle:'font-weight:700;font-size:13px;color:var(--ink);line-height:1.2;',
+        subStyle:'font-size:10.5px;color:var(--ink3);line-height:1.2;margin-top:1px;'});
+      const _am=[];
+      if(hasPage)_am.push(_amItem('✦','Ask about this page','Chat scoped to what you’re reading',()=>this.askLaunchPage()));
+      _am.push(_amItem('✚','New chat','A fresh, net-new space',()=>this.askLaunchNew()));
+      if(hasChat)_am.push(_amItem('→','Continue chat','Back to the open conversation',()=>this.askLaunchContinue()));
+      // Stagger: the item nearest the FAB (last) animates first, so the fan unrolls upward.
+      const _n=_am.length;
+      base.askMenuItems=_am.map((it,i)=>({...it,wrapStyle:'animation:eofan .17s ease both;animation-delay:'+((_n-1-i)*45)+'ms;'}));
     }
     base.activity=this.activityVals();
     this.chatVals(base);
@@ -10483,7 +10527,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
           btnStyle:'flex:0 0 auto;font-size:12px;font-weight:600;color:#fff;background:'+(reading?'#9aa1ab':'var(--acc)')+';border:none;border-radius:9px;padding:8px 14px;cursor:'+(reading?'default':'pointer')+';'};})};
 
     const vu=this.state.viewUrl;
-    base.askPageOn=!!vu&&!/^search:/i.test(vu)&&!base.chatOn;   // the discoverable "Ask about this page" FAB
+    base.askPageOn=!!vu&&!/^search:/i.test(vu)&&!base.chatOn&&!this.phone();   // the discoverable "Ask about this page" FAB (desktop/tablet; phone uses the chat launcher)
     // Reading toolbar. Over a stripped book (isBook) it carries the full e-reader typography
     // controls; over a NATIVE read page it carries just the contents nav, flagged passages,
     // and the Reader/Page mode toggle. Both render the same Contents + ❖ marks.

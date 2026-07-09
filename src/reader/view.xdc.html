@@ -12,6 +12,7 @@
     @keyframes eoslide{from{transform:translateX(18px);opacity:0}to{transform:translateX(0);opacity:1}}
     @keyframes eopop{from{transform:translateY(5px);opacity:0}to{transform:translateY(0);opacity:1}}
     @keyframes eoswap{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+    @keyframes eofan{from{opacity:0;transform:translateY(12px) scale(.94)}to{opacity:1;transform:none}}
     @keyframes eoflow{0%{transform:translateX(-110%)}100%{transform:translateX(420%)}}
     /* "Ask about this page" FAB — collapsed to a small, faded ✦ icon by default; expands to the full pill on hover/focus.
        Collapsed, the box is content-sized: its width tracks the ✦ glyph's advance (< the 15px font-size) while its
@@ -2030,6 +2031,34 @@
       <button onclick="{{ nt.onPick }}" style="{{ nt.style }}">{{ nt.label }}</button>
     </sc-for>
   </nav>
+
+  <!-- Phone chat launcher — the always-present fast path to chat. A floating ✦ that
+       hovers above the bottom nav in every pane and fans up a disclosure menu (continue
+       the open chat · start a net-new one · scope one to the page). See askLauncherOn in
+       app.dc.js; hidden on the chat pane and behind any modal. -->
+  <sc-if value="{{ askLauncherOn }}" hint-placeholder-val="{{ false }}">
+    <sc-if value="{{ askMenuOpen }}" hint-placeholder-val="{{ false }}">
+      <div onclick="{{ onCloseAskMenu }}" style="position:fixed;inset:0;z-index:38;background:rgba(20,24,30,.16);"></div>
+    </sc-if>
+    <div style="position:fixed;right:16px;bottom:calc(66px + env(safe-area-inset-bottom));z-index:39;display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
+      <sc-if value="{{ askMenuOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
+          <sc-for list="{{ askMenuItems }}" as="am" hint-placeholder-count="3">
+            <div style="{{ am.wrapStyle }}">
+              <button onclick="{{ am.onPick }}" style="{{ am.style }}">
+                <span style="{{ am.iconStyle }}">{{ am.icon }}</span>
+                <span style="display:flex;flex-direction:column;align-items:flex-start;">
+                  <span style="{{ am.labelStyle }}">{{ am.label }}</span>
+                  <span style="{{ am.subStyle }}">{{ am.sub }}</span>
+                </span>
+              </button>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+      <button onclick="{{ onToggleAskMenu }}" title="Chat" aria-label="Chat" style="{{ askFabStyle }}">{{ askFabIcon }}</button>
+    </div>
+  </sc-if>
 
   <sc-if value="{{ memOpen }}" hint-placeholder-val="{{ false }}">
     <div onclick="{{ onCloseMem }}" style="position:fixed;inset:0;background:rgba(20,24,30,.34);z-index:60;display:flex;align-items:center;justify-content:center;padding:32px;">
