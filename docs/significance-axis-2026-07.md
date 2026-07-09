@@ -91,6 +91,36 @@ turn-count × descent distribution, and that is the quality instrument the flow 
 deep constant; and the absolute REC count depends on the surprise proxy — a jumpier signal
 reframes more. The robust findings are REC=0-in-text vs dense-in-reading, and DEF≈REC descent.)
 
+## Finding 4 — the reading read DETECTS churn where the flow features don't (partial)
+
+The test of "does this improve things": re-read each flow-shaping A/B output through the
+enacted loop and correlate a reading-derived signal with the independent churn metric
+(maxPair), against the flow features that failed in Finding 2.
+
+| signal | correlation with churn (maxPair, n=16) |
+|---|---|
+| flow Existence/Structure features (Finding 2) | ~0 — no separation |
+| `meanSurprise` (reader's surprise over the piece) | **−0.34** |
+| `recPerSent` (reframes / sentence) | **−0.59** |
+| `descent` (INS+CON rebuild after each reframe) | 0.06 — **did not validate** |
+
+Pointing the instrument at the *reading* recovers a quality signal where the text-structure
+features had none (`recPerSent` −0.59 vs ~0). The mechanism is the churn picture: restatement
+is low-surprise to a re-reader, so it reframes less — the honeybees pure-churn case is cleanly
+isolated (lowest `meanSurprise` 0.69 and lowest `recPerSent` 0.317 of all 16 outputs).
+
+**Two honest edges.** (1) The clean *descent* formalization (rebuild-after-reframe, the DEF:REC
+conjecture operationalized) did NOT track churn (r=0.06) — the working signal is the cruder
+"the reader isn't surprised," which is partly circular with surface repetition. So the
+cycle-turn-*with-descent* conjecture is not yet validated; the simpler reframe-density carries
+the −0.59. (2) It is moderate, not a clean gate — it catches egregious churn but overlaps on
+moderate cases (`aqueducts` shaped churns at maxPair 0.62 with a normal `recPerSent` 0.44).
+
+So: the axis is confirmed right (reading-derived beats text-structure for the quality
+question), the elegant descent metric is not, and this is still DETECTION — the generation
+test is the model-in-the-loop gate: flag a beat whose re-read reframes too little, regenerate
+it, and A/B the shipped prose. That is the next experiment and it needs the CPU model back.
+
 ## Reproduce
 
 Operator density: parse a corpus sample with `src/perceiver/parse/index.js` and count
