@@ -72,6 +72,10 @@ const html = `<!doctype html>
      lens's pins, "widen to memory" grounds it in everything read. Exposed as
      window.EOWorkspaceLens; the app degrades to a single implicit lens until it lands. -->
 <script type="module">import(new URL('src/workspace/lens.js', document.baseURI).href).then(m=>{window.EOWorkspaceLens=m;}).catch(e=>console.warn('lens load failed:', e));</script>
+<!-- Typed-edge databases (src/workspace/relationships.js): two small databases linked
+     by connections that are typed edges carrying their own fields, folded from an append-only
+     log. Exposed as window.EORelationships; the Relationships surface stays empty until it lands. -->
+<script type="module">import(new URL('src/workspace/relationships.js', document.baseURI).href).then(m=>{window.EORelationships=m;}).catch(e=>console.warn('relationships load failed:', e));</script>
 <!-- The EOT ledger + its live terminal surface (src/audit/): every operation the app
      performs — a read, a search, a route, a prompt, a generation, a bind, a veto — read
      out as one EOT line the moment it happens, tailed in a terminal drawer (Ctrl+backtick),

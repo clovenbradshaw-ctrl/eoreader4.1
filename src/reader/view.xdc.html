@@ -270,6 +270,7 @@
         <button onclick="{{ onOpenDoc }}" title="Write a document grounded to the Record — every edit is a tracked change, checked against what you've read; ungrounded edits are flagged, never silently kept" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">✎</span>New document</button>
         <button onclick="{{ onOpenDeepResearch }}" title="Open the deep-research panel — ask a question, watch it read the web and pin every source, each claim grounded in a quote you can open" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">⌕</span>Deep research</button>
         <button onclick="{{ onOpenExplorer }}" title="Open the workspace — a file explorer over everything in the Record. Make folders, nest them, and file any source, chat, or document into as many as you like." style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">▦</span>Open workspace</button>
+        <button onclick="{{ onOpenRelationships }}" title="Relationships — two databases linked by typed edges. A connection carries its own fields, folded from the same event log as everything else." style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">⇄</span>Relationships</button>
         <!-- Corpus search — one box, nothing to configure. Ranked lexical retrieval
              (token overlap + fuzzy spelling) over every source read so far runs
              instantly; a meaning channel and a channel learned from your own past
@@ -1089,6 +1090,129 @@
           </div>
         </div>
       </sc-if>
+      <!-- ═══ RELATIONSHIPS — typed-edge databases, folded from the event log ═══ -->
+      <sc-if value="{{ showRel }}" hint-placeholder-val="{{ false }}">
+      <div style="height:100%;overflow-y:auto;background:var(--app);">
+        <div style="max-width:900px;margin:0 auto;padding:24px 24px 60px;">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink3);margin-bottom:8px;">
+            <span onclick="{{ rel.onClose }}" style="cursor:pointer;" style-hover="color:var(--acc)">Workspace</span>
+            <span>›</span><span style="color:var(--ink2);font-weight:600;">Relationships</span>
+            <sc-if value="{{ rel.hasRelSel }}" hint-placeholder-val="{{ false }}"><span>›</span><span onclick="{{ rel.onRelBack }}" style="color:var(--acc);cursor:pointer;">{{ rel.relCrumbSel }}</span></sc-if>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+            <h1 style="font-size:22px;font-weight:800;letter-spacing:-.02em;margin:0;">Relationships</h1>
+            <div style="margin-left:auto;display:flex;gap:7px;">
+              <button onclick="{{ rel.onNewConnection }}" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:8px;padding:7px 14px;cursor:pointer;">＋ New Connection</button>
+            </div>
+          </div>
+          <div style="font-size:12.5px;color:var(--ink2);line-height:1.6;margin-bottom:20px;max-width:640px;">Two databases, linked. A connection here isn't a foreign key — it's a <b>typed edge</b> that carries its own fields, folded from the same event log as everything else.</div>
+
+          <!-- selected record: its fields + typed Connections (click one to traverse) -->
+          <sc-if value="{{ rel.hasRelSel }}" hint-placeholder-val="{{ false }}">
+            <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:24px;">
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+                <div style="width:34px;height:34px;border-radius:9px;background:var(--accbg);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto;">◧</div>
+                <div style="min-width:0;flex:1;"><div style="font-size:15px;font-weight:800;">{{ rel.relSel.label }}</div><div style="font-size:11px;color:var(--ink3);">{{ rel.relSel.table }}</div></div>
+              </div>
+              <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+                <sc-for list="{{ rel.relSel.fields }}" as="f" hint-placeholder-count="2">
+                  <div style="font-size:11.5px;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:7px;padding:3px 9px;"><span style="color:var(--ink3);">{{ f.name }}</span> <b>{{ f.value }}</b></div>
+                </sc-for>
+              </div>
+              <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);margin-bottom:8px;">Connections</div>
+              <sc-if value="{{ rel.relSel.hasConns }}" hint-placeholder-val="{{ true }}">
+                <sc-for list="{{ rel.relSel.conns }}" as="c" hint-placeholder-count="2">
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:9px;border:1px solid var(--line);margin-bottom:6px;" style-hover="background:#fbfbfc">
+                    <span style="{{ c.badge }}">{{ c.type }}</span>
+                    <span onclick="{{ c.onOpen }}" style="font-size:12.5px;font-weight:600;color:var(--acc);cursor:pointer;flex:0 0 auto;" style-hover="text-decoration:underline">{{ c.label }}</span>
+                    <sc-if value="{{ c.hasData }}" hint-placeholder-val="{{ true }}"><span style="font-size:11.5px;color:var(--ink3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ c.data }}</span></sc-if>
+                    <button onclick="{{ c.onDelete }}" title="Retract this connection" style="margin-left:auto;flex:0 0 auto;width:22px;height:22px;border:1px solid var(--line2);background:var(--card);border-radius:6px;color:var(--ink3);cursor:pointer;font-size:13px;line-height:1;" style-hover="border-color:var(--sig);color:var(--sig)">×</button>
+                  </div>
+                </sc-for>
+              </sc-if>
+              <sc-if value="{{ rel.relSel.noConns }}" hint-placeholder-val="{{ false }}"><div style="font-size:11.5px;color:var(--ink3);font-style:italic;">No connections yet — add one with ＋ New Connection.</div></sc-if>
+            </div>
+          </sc-if>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin-bottom:24px;">
+            <sc-for list="{{ rel.relTables }}" as="t" hint-placeholder-count="2">
+              <div onclick="{{ t.onOpen }}" style="background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;display:flex;align-items:center;gap:12px;" style-hover="border-color:var(--accline);box-shadow:0 4px 16px rgba(20,24,30,.07)">
+                <div style="width:34px;height:34px;border-radius:9px;background:var(--accbg);color:var(--acc);display:flex;align-items:center;justify-content:center;font-size:16px;flex:0 0 auto;">{{ t.glyph }}</div>
+                <div style="min-width:0;flex:1;"><div style="font-size:13px;font-weight:700;">{{ t.name }}</div><div style="font-size:11px;color:var(--ink3);">{{ t.sub }}</div></div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 12px;margin-bottom:24px;overflow-x:auto;">
+            <div style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);margin-bottom:10px;text-align:center;">Metro systems ↔ Operators</div>
+            <div onclick="{{ rel.onRelSvgClick }}"><sc-html value="{{ rel.relSvg }}"></sc-html></div>
+          </div>
+
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);margin:0 0 10px;">Connection types</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:26px;">
+            <sc-for list="{{ rel.relTypes }}" as="t" hint-placeholder-count="2">
+              <div style="background:var(--card);border:1px solid var(--line);border-left:3px solid {{ t.color }};border-radius:10px;padding:13px 14px;">
+                <div style="display:flex;align-items:center;gap:7px;margin-bottom:6px;"><span style="font-size:13px;font-weight:700;color:{{ t.color }};">{{ t.name }}</span><span style="margin-left:auto;font-size:10.5px;color:var(--ink3);">{{ t.count }} links</span></div>
+                <div style="font-size:11px;color:var(--ink3);margin-bottom:10px;">{{ t.from }} → {{ t.to }}</div>
+                <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:5px;">Fields stored on the edge</div>
+                <sc-for list="{{ t.fields }}" as="f" hint-placeholder-count="2">
+                  <div style="display:flex;align-items:center;gap:8px;font-size:11.5px;padding:2px 0;"><span style="font-weight:600;color:var(--ink);">{{ f.name }}</span><span style="margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--ink3);background:#eef0f3;border-radius:4px;padding:1px 6px;">{{ f.type }}</span></div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);margin:0 0 10px;">Connections &amp; their data</div>
+          <sc-for list="{{ rel.relGroups }}" as="grp" hint-placeholder-count="2">
+            <div style="margin-bottom:16px;">
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px;flex-wrap:wrap;"><span style="width:9px;height:9px;border-radius:2px;background:{{ grp.color }};"></span><span style="font-size:12px;font-weight:700;color:{{ grp.color }};">{{ grp.name }}</span><span style="font-size:11px;color:var(--ink3);">{{ grp.from }} → {{ grp.to }}</span></div>
+              <div style="background:var(--card);border:1px solid var(--line);border-radius:11px;overflow-x:auto;">
+                <div style="min-width:420px;">
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px 13px;background:var(--head);font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);">
+                    <span style="flex:1;min-width:0;">From</span><span style="flex:1;min-width:0;">To</span>
+                    <sc-for list="{{ grp.fieldNames }}" as="fn" hint-placeholder-count="2"><span style="flex:1;min-width:0;">{{ fn }}</span></sc-for>
+                    <span style="width:24px;flex:0 0 auto;"></span>
+                  </div>
+                  <sc-for list="{{ grp.rows }}" as="row" hint-placeholder-count="3">
+                    <div style="display:flex;align-items:center;gap:10px;padding:9px 13px;border-top:1px solid var(--line);font-size:12px;" style-hover="background:#fbfbfc">
+                      <span onclick="{{ row.onFrom }}" style="flex:1;min-width:0;font-weight:600;color:var(--acc);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ row.fromLabel }}</span>
+                      <span onclick="{{ row.onTo }}" style="flex:1;min-width:0;font-weight:600;color:var(--acc);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ row.toLabel }}</span>
+                      <sc-for list="{{ row.cells }}" as="c" hint-placeholder-count="2"><span style="flex:1;min-width:0;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.value }}</span></sc-for>
+                      <button onclick="{{ row.onDelete }}" title="Retract this connection" style="width:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="color:var(--sig)">×</button>
+                    </div>
+                  </sc-for>
+                  <sc-if value="{{ grp.noRows }}" hint-placeholder-val="{{ false }}"><div style="padding:12px 13px;font-size:11.5px;color:var(--ink3);border-top:1px solid var(--line);font-style:italic;">No connections of this type yet.</div></sc-if>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <!-- + New Connection form -->
+        <sc-if value="{{ rel.relNewOpen }}" hint-placeholder-val="{{ false }}">
+          <div onclick="{{ rel.relNew.onClose }}" style="position:fixed;inset:0;z-index:60;background:rgba(20,24,30,.34);display:flex;align-items:center;justify-content:center;">
+            <div onclick="{{ templatesStop }}" style="width:420px;max-width:calc(100vw - 32px);background:var(--card);border:1px solid var(--line2);border-radius:14px;box-shadow:0 20px 50px rgba(20,24,30,.25);padding:18px;animation:eopop .12s ease-out;">
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;"><span style="font-size:15px;">⇄</span><span style="font-size:14px;font-weight:800;">New Connection</span><button onclick="{{ rel.relNew.onClose }}" style="margin-left:auto;width:24px;height:24px;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;" style-hover="background:#eef0f3;color:var(--ink)">✕</button></div>
+              <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:6px;">Type</div>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;">
+                <sc-for list="{{ rel.relNew.types }}" as="ty" hint-placeholder-count="2"><span onclick="{{ ty.onPick }}" style="{{ ty.style }}">{{ ty.name }}</span></sc-for>
+              </div>
+              <div style="display:flex;gap:10px;margin-bottom:14px;">
+                <div style="flex:1;min-width:0;"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:5px;">From</div>
+                  <select onchange="{{ rel.relNew.onFrom }}" value="{{ rel.relNew.from }}" style="width:100%;font-size:12px;color:var(--ink);background:var(--app);border:1px solid var(--line2);border-radius:8px;padding:7px 9px;outline:none;"><option value="">Pick a record…</option><sc-for list="{{ rel.relNew.records }}" as="r" hint-placeholder-count="3"><option value="{{ r.id }}">{{ r.label }}</option></sc-for></select></div>
+                <div style="flex:1;min-width:0;"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:5px;">To</div>
+                  <select onchange="{{ rel.relNew.onTo }}" value="{{ rel.relNew.to }}" style="width:100%;font-size:12px;color:var(--ink);background:var(--app);border:1px solid var(--line2);border-radius:8px;padding:7px 9px;outline:none;"><option value="">Pick a record…</option><sc-for list="{{ rel.relNew.records }}" as="r" hint-placeholder-count="3"><option value="{{ r.id }}">{{ r.label }}</option></sc-for></select></div>
+              </div>
+              <sc-for list="{{ rel.relNew.fields }}" as="f" hint-placeholder-count="2">
+                <div style="margin-bottom:10px;"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin-bottom:5px;">{{ f.name }} <span style="color:var(--ink3);font-weight:500;">· {{ f.type }}</span></div>
+                  <input value="{{ f.value }}" oninput="{{ f.onInput }}" placeholder="{{ f.name }}" style="width:100%;box-sizing:border-box;font-size:12px;color:var(--ink);background:var(--app);border:1px solid var(--line2);border-radius:8px;padding:7px 9px;outline:none;"></div>
+              </sc-for>
+              <button onclick="{{ rel.relNew.onCommit }}" style="width:100%;margin-top:6px;font-size:12.5px;font-weight:700;color:#fff;background:var(--acc);border:none;border-radius:9px;padding:9px;cursor:pointer;">Add connection — emits an edge event</button>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+      </sc-if>
+
       <!-- THE WORKSPACE — a file explorer over everything in the Record. A folder tree
            + smart views on the left; the selected view's items (sources, chats, docs) on
            the right. An item can be filed into many folders at once via its "File…" menu. -->

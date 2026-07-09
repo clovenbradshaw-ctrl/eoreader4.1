@@ -1160,7 +1160,7 @@ class Component extends DCLogic {
       :dg==='workspace'?{scopeAll:false,scopeWs:true}
       :{scopeAll:false,scopeWs:false};
     this._chatTab(id);
-    this.setState(s=>({chats:[{id,title,sources,...seed,messages:[],ts:Date.now()},...s.chats],activeChat:id,viewUrl:null,selId:null,siteView:null,sitesDir:false,explorerView:null,chatInput:'',chatAddOpen:false,rightOpen:true,newTabOpen:false,histRev:(s.histRev||0)+1}));
+    this.setState(s=>({chats:[{id,title,sources,...seed,messages:[],ts:Date.now()},...s.chats],activeChat:id,viewUrl:null,selId:null,relView:false,siteView:null,sitesDir:false,explorerView:null,chatInput:'',chatAddOpen:false,rightOpen:true,newTabOpen:false,histRev:(s.histRev||0)+1}));
     return id;
   }
   // The sources a chat is ABOUT, as a URL list. Tolerates the older single-`scope` shape
@@ -2754,7 +2754,7 @@ class Component extends DCLogic {
     this._tabs.push({id:tid,kind:'new',hist:[],hpos:-1,viewMode:this.state.viewMode||'native',chatId:null});
     this._activeTab=tid;this._hist=[];this._hpos=-1;this._pageUrl=null;
     this._pushLoc({t:'doc',id});
-    const patch={docView:id,siteView:null,sitesDir:false,explorerView:null,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
+    const patch={docView:id,relView:false,siteView:null,sitesDir:false,explorerView:null,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
     if(this.phone())patch.pane='doc';
     this.setState(s=>({...patch,histRev:(s.histRev||0)+1}),()=>this._syncDocDock());
     this._scrollMainTop();
@@ -2863,7 +2863,7 @@ class Component extends DCLogic {
     this._tabs.push({id:tid,kind:'new',hist:[],hpos:-1,viewMode:this.state.viewMode||'native',chatId:null});
     this._activeTab=tid;this._hist=[];this._hpos=-1;this._pageUrl=null;
     this._pushLoc({t:'data',id:url});
-    const patch={dataView:url,docView:null,siteView:null,sitesDir:false,explorerView:null,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
+    const patch={dataView:url,docView:null,relView:false,siteView:null,sitesDir:false,explorerView:null,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
     if(this.phone())patch.pane='doc';
     this.setState(s=>({...patch,histRev:(s.histRev||0)+1}),()=>this._syncDataDock());
     this._scrollMainTop();
@@ -8148,11 +8148,11 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
   _locEq(a,b){return a&&b&&a.t===b.t&&((a.t==='web'||a.t==='site')?a.url===b.url:(a.t==='sites'?true:a.id===b.id));}
   _pushLoc(loc){this._ensureTabs();let h=(this._hist||[]);let p=(this._hpos==null?-1:this._hpos);if(this._locEq(h[p],loc)){this._syncActiveBrowse();return;}h=h.slice(0,p+1);h.push(loc);this._hist=h;this._hpos=h.length-1;this._syncActiveBrowse();}
   _applyLoc(loc){if(!loc)return;
-    if(loc.t==='web'){this.setState(s=>({selId:null,viewUrl:loc.url,siteView:null,sitesDir:false,explorerView:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(loc.url);}
+    if(loc.t==='web'){this.setState(s=>({selId:null,viewUrl:loc.url,relView:false,siteView:null,sitesDir:false,explorerView:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(loc.url);}
     else if(loc.t==='site'){this.setState(s=>({selId:null,viewUrl:null,siteView:loc.url,sitesDir:false,explorerView:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
     else if(loc.t==='sites'){this.setState(s=>({selId:null,viewUrl:null,siteView:null,sitesDir:true,explorerView:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
     else if(loc.t==='explorer'){this.setState(s=>({selId:null,viewUrl:null,siteView:null,sitesDir:false,explorerView:loc.view||'@all',panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
-    else{this.setState(s=>({selId:loc.id,viewUrl:null,siteView:null,sitesDir:false,explorerView:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
+    else{this.setState(s=>({selId:loc.id,viewUrl:null,relView:false,siteView:null,sitesDir:false,explorerView:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,newTabOpen:false,histRev:(s.histRev||0)+1}));}
     this._syncPos();}
   // ---- Independent, browser-like tabs. Every open tab is one of three kinds:
   //   'browse' — a website / entity, with its OWN back-forward history (hist/hpos) and its
@@ -8188,7 +8188,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     const t=this._tabs.find(x=>x.id===id);if(!t)return;
     this._activeTab=id;this._pageUrl=null;
     this._hist=t.hist||[];this._hpos=(t.hpos==null?this._hist.length-1:t.hpos);
-    const patch={viewMode:t.viewMode||'native',panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,previewWiki:null,siteView:null,sitesDir:false,explorerView:null,docView:null,dataView:null,histRev:(this.state.histRev||0)+1};
+    const patch={viewMode:t.viewMode||'native',panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,previewWiki:null,relView:false,siteView:null,sitesDir:false,explorerView:null,docView:null,dataView:null,histRev:(this.state.histRev||0)+1};
     if(t.kind==='chat'){this.setState({...patch,activeChat:t.chatId,viewUrl:null,selId:null,newTabOpen:false});return;}
     if(t.kind==='new'){this.setState({...patch,activeChat:null,viewUrl:null,selId:null,newTabOpen:true});return;}
     const loc=(this._hpos>=0&&this._hist)?this._hist[this._hpos]:null;
@@ -8215,7 +8215,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
   // Opening an entity full takes over the centre column, so it closes any active chat the
   // same way navigating to a page does (see goWeb / doReadUrl). Otherwise the chat would keep
   // filling <main> and the centre-fill guard in the view-model would suppress the explorer.
-  selectEntity(id){if(this.state.viewUrl)this._srcUrl=this.state.viewUrl;this._panelStack=[];this._pushLoc({t:'ent',id});this.setState(s=>({selId:id,viewUrl:null,siteView:null,sitesDir:false,explorerView:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,gz:{k:1,x:0,y:0},histRev:(s.histRev||0)+1}));}
+  selectEntity(id){if(this.state.viewUrl)this._srcUrl=this.state.viewUrl;this._panelStack=[];this._pushLoc({t:'ent',id});this.setState(s=>({selId:id,viewUrl:null,relView:false,siteView:null,sitesDir:false,explorerView:null,panelSel:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,gz:{k:1,x:0,y:0},histRev:(s.histRev||0)+1}));}
   // ---- site profiles: every read source rendered as its own navigable page, and a
   // directory of them all — the way a site that lists sites gives each one a profile. Both
   // are first-class browse LOCATIONS ({t:'site'}/{t:'sites'}), so they ride the same tabs
@@ -8226,7 +8226,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     if(this.phone())patch.pane='doc';
     this.setState(s=>({...patch,histRev:(s.histRev||0)+1}));this._scrollMainTop();}
   openSitesDir(){this._pushLoc({t:'sites'});
-    const patch={sitesDir:true,siteView:null,explorerView:null,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
+    const patch={sitesDir:true,relView:false,siteView:null,explorerView:null,viewUrl:null,selId:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false};
     if(this.phone())patch.pane='doc';
     this.setState(s=>({...patch,histRev:(s.histRev||0)+1}));this._scrollMainTop();}
 
@@ -8319,6 +8319,106 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
         renameStyle:'flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--ink);background:var(--app);border:1px solid var(--accline);border-radius:6px;padding:3px 7px;outline:none;',
         rowStyle:'display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;cursor:pointer;'+(active?'background:var(--accbg);':'')};});
   }
+
+  // ── RELATIONSHIPS — typed-edge databases folded from an event log ─────────
+  // Two small databases linked by connections that are typed edges carrying
+  // their own fields. The pure fold lives in src/workspace/relationships.js
+  // (window.EORelationships); this half holds the live event log on this._rel,
+  // persists it, and builds the surface view-model. Seeded on first open so the
+  // page is never empty; every "+ New Connection" appends to the same log.
+  _relMod(){return (typeof window!=='undefined'&&window.EORelationships)||null;}
+  relGet(){const M=this._relMod();
+    if(!this._relLoaded&&M){const raw=(()=>{try{return localStorage.getItem('eo_rel_v1');}catch(e){return null;}})();
+      this._rel=M.deserialize(raw);this._relLoaded=true;}
+    if(!this._rel)this._rel=M?M.seedEvents():[];
+    return this._rel;}
+  relSave(){const M=this._relMod();if(M&&this._rel){try{localStorage.setItem('eo_rel_v1',M.serialize(this._rel));}catch(e){}}}
+  relFold(){const M=this._relMod();return M?M.foldGraph(this.relGet()):{tableList:[],nodeList:[],etypeList:[],edges:[],tables:{},nodes:{},etypes:{}};}
+  openRelationships(){this._pushLoc&&this._pushLoc({t:'rel'});
+    const patch={relView:true,relSel:null,relNewOpen:false,sitesDir:false,siteView:null,viewUrl:null,selId:null,docView:null,dataView:null,explorerView:null,panelSel:null,panelLens:null,activeChat:null,newTabOpen:false};
+    if(this.phone())patch.pane='doc';
+    this.setState(s=>({...patch,histRev:(s.histRev||0)+1}));this._scrollMainTop&&this._scrollMainTop();}
+  closeRelationships(){this.setState({relView:false,relSel:null,relNewOpen:false});}
+  relOpenNode(id){this.setState({relSel:id,relNewOpen:false});this._scrollMainTop&&this._scrollMainTop();}
+  relBack(){this.setState({relSel:null});}
+  // + New Connection form: pick a type, a from-record and a to-record, and fill
+  // the type's fields; committing appends the edge (INS + DEFs) to the log.
+  relNewOpen(){const M=this._relMod();if(!M)return;const g=this.relFold();const et=g.etypeList[0];
+    this.setState({relNewOpen:true,relNewType:et?et.id:null,relNewFrom:null,relNewTo:null,relNewFields:{}});}
+  relNewClose(){this.setState({relNewOpen:false});}
+  relNewSet(patch){this.setState(patch);}
+  relNewField(field,val){this.setState(s=>({relNewFields:{...(s.relNewFields||{}),[field]:val}}));}
+  relNewCommit(){const M=this._relMod();if(!M)return;const {relNewType,relNewFrom,relNewTo,relNewFields}=this.state;
+    if(!relNewType||!relNewFrom||!relNewTo)return;
+    const id='edge/u'+((Date.now?Date.now():0).toString(36))+Math.floor((this.relGet().length||0)).toString(36);
+    const evs=M.edgeEvents(id,relNewType,relNewFrom,relNewTo,relNewFields||{});
+    this._rel=this.relGet().concat(evs);this.relSave();
+    this.setState(s=>({relRev:(s.relRev||0)+1,relNewOpen:false,relSel:relNewFrom}));}
+  relDeleteEdge(edgeId){const M=this._relMod();if(!M)return;
+    if(typeof confirm==='function'&&!confirm('Remove this connection? It is retracted from the log (a SEG event), not erased.'))return;
+    this._rel=this.relGet().concat([M.edgeDeleteEvent(edgeId)]);this.relSave();
+    this.setState(s=>({relRev:(s.relRev||0)+1}));}
+  // The whole Relationships surface as a view-model: the two databases, the
+  // node-link diagram, the edge-type schemas, the connection tables, a selected
+  // record's typed Connections, and the + New Connection form.
+  relVals(){const M=this._relMod();if(!M)return {relTables:[],relTypes:[],relGroups:[],relNodes:[],relLinks:[],relH:120,onClose:()=>this.closeRelationships()};
+    const G=this.relFold();const acc=this.curAccent();
+    const tName=id=>(G.tables[id]?G.tables[id].name:id);
+    const relTables=G.tableList.map(t=>({name:t.name,glyph:t.id==='operators'?'⚙':'◧',sub:M.recordsOf(G,t.id).length+' records',
+      onOpen:()=>{const first=M.recordsOf(G,t.id)[0];if(first)this.relOpenNode(first.id);}}));
+    const relTypes=G.etypeList.map(t=>({name:t.name,color:t.color,from:tName(t.from),to:tName(t.to),
+      count:G.edges.filter(x=>x.etype===t.id).length,fields:(t.fields||[]).map(f=>({name:f.name,type:f.type}))}));
+    const relGroups=G.etypeList.map(t=>{const rows=G.edges.filter(x=>x.etype===t.id).map(ed=>({
+        fromLabel:M.nodeLabel(G,ed.from),toLabel:M.nodeLabel(G,ed.to),
+        onFrom:()=>this.relOpenNode(ed.from),onTo:()=>this.relOpenNode(ed.to),onDelete:()=>this.relDeleteEdge(ed.id),
+        cells:(t.fields||[]).map(f=>({value:ed.v[f.field]!=null?String(ed.v[f.field]):'—'}))}));
+      return {name:t.name,color:t.color,from:tName(t.from),to:tName(t.to),fieldNames:(t.fields||[]).map(f=>f.name),rows,hasRows:rows.length>0,noRows:rows.length===0};});
+    // node-link: metros left column, operators right column, edges as bezier links.
+    // Built as an SVG STRING (injected via sc-html), not template-bound numeric SVG
+    // attributes — the latter make the browser's SVG parser log validation errors on
+    // the unbound '{{…}}' template. Node clicks ride a delegated handler reading
+    // data-node off the target (onRelSvgClick).
+    const metros=M.recordsOf(G,'metros'),ops=M.recordsOf(G,'operators');
+    const gap=34,top=24,lx=150,rx=370;const pos={};const relNodes=[];
+    metros.forEach((n,i)=>{const y=top+i*gap;pos[n.id]={x:lx,y};relNodes.push({id:n.id,x:lx,y,r:6,label:M.nodeLabel(G,n.id),tx:lx-13,anchor:'end',color:'#5b34d6'});});
+    ops.forEach((n,i)=>{const y=top+i*gap;pos[n.id]={x:rx,y};const nm=M.nodeLabel(G,n.id);relNodes.push({id:n.id,x:rx,y,r:6,label:nm.length>17?nm.slice(0,16)+'…':nm,tx:rx+13,anchor:'start',color:'#0d7d74'});});
+    const relLinks=G.edges.map(ed=>{const a=pos[ed.from],b=pos[ed.to];if(!a||!b)return null;const et=G.etypes[ed.etype]||{};const mx=(a.x+b.x)/2;
+      return {d:'M'+a.x+' '+a.y+' C '+mx+' '+a.y+' '+mx+' '+b.y+' '+b.x+' '+b.y,color:et.color||acc};}).filter(Boolean);
+    const relH=Math.max(top*2+Math.max(metros.length,ops.length)*gap,120);
+    const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    let relSvg='<svg viewBox="0 0 520 '+relH+'" width="100%" style="display:block;margin:0 auto;max-width:540px;overflow:visible;">';
+    relLinks.forEach(l=>{relSvg+='<path d="'+l.d+'" fill="none" stroke="'+l.color+'" stroke-width="2" stroke-opacity="0.45"></path>';});
+    relNodes.forEach(n=>{relSvg+='<circle cx="'+n.x+'" cy="'+n.y+'" r="'+n.r+'" fill="'+n.color+'" data-node="'+esc(n.id)+'" style="cursor:pointer"></circle>'
+      +'<text x="'+n.tx+'" y="'+n.y+'" text-anchor="'+n.anchor+'" dominant-baseline="middle" data-node="'+esc(n.id)+'" style="font-size:11px;fill:var(--ink2);font-weight:600;cursor:pointer">'+esc(n.label)+'</text>';});
+    relSvg+='</svg>';
+    // selected record → its fields + typed Connections (traverse by clicking one)
+    let relSel=null;
+    if(this.state.relSel&&G.nodes[this.state.relSel]){const n=G.nodes[this.state.relSel];
+      relSel={id:n.id,label:M.nodeLabel(G,n.id),table:tName(n.table),
+        fields:Object.entries(n.v).map(([k,v])=>({name:k,value:String(v)})),
+        conns:M.connectionsOf(G,n.id).map(c=>({label:c.otherLabel,type:c.typeName,data:c.data,hasData:!!c.data,color:c.color,
+          badge:'display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:700;color:'+c.color+';background:'+this.mixWhite(c.color,.88)+';border:1px solid '+this.mixWhite(c.color,.6)+';border-radius:6px;padding:1px 7px;',
+          onOpen:()=>this.relOpenNode(c.otherId),onDelete:()=>this.relDeleteEdge(c.edgeId)})),
+        hasConns:M.connectionsOf(G,n.id).length>0,noConns:M.connectionsOf(G,n.id).length===0};}
+    // + New Connection form
+    let relNew=null;
+    if(this.state.relNewOpen){const et=G.etypes[this.state.relNewType]||G.etypeList[0]||{fields:[]};
+      const recOpt=n=>({id:n.id,label:M.nodeLabel(G,n.id)+' · '+tName(n.table)});
+      relNew={types:G.etypeList.map(t=>({id:t.id,name:t.name,on:t.id===this.state.relNewType,
+          style:'font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:7px;cursor:pointer;border:1px solid '+(t.id===this.state.relNewType?'var(--accline)':'var(--line2)')+';background:'+(t.id===this.state.relNewType?'var(--accbg)':'var(--card)')+';color:'+(t.id===this.state.relNewType?'var(--acc)':'var(--ink2)')+';',
+          onPick:()=>this.setState({relNewType:t.id,relNewFields:{}})})),
+        records:G.nodeList.map(recOpt),from:this.state.relNewFrom||'',to:this.state.relNewTo||'',
+        onFrom:e=>this.setState({relNewFrom:e&&e.target?e.target.value:null}),
+        onTo:e=>this.setState({relNewTo:e&&e.target?e.target.value:null}),
+        fields:(et.fields||[]).map(f=>({field:f.field,name:f.name,type:f.type,value:(this.state.relNewFields||{})[f.field]||'',
+          onInput:e=>this.relNewField(f.field,e&&e.target?e.target.value:'')})),
+        canCommit:!!(this.state.relNewType&&this.state.relNewFrom&&this.state.relNewTo),
+        onCommit:()=>this.relNewCommit(),onClose:()=>this.relNewClose()};}
+    return {relTables,relTypes,relGroups,relNodes,relLinks,relH,relSvg,
+      onRelSvgClick:ev=>{const t=ev&&ev.target;const id=t&&(t.getAttribute&&t.getAttribute('data-node'));if(id)this.relOpenNode(id);},
+      relSel,hasRelSel:!!relSel,relNew,relNewOpen:!!this.state.relNewOpen,
+      relCrumbSel:relSel?relSel.label:'',
+      onNewConnection:()=>this.relNewOpen(),onRelBack:()=>this.relBack(),onClose:()=>this.closeRelationships()};}
   _parseRef(key){const s=String(key||'');const i=s.indexOf(':');return i<0?{kind:s,id:''}:{kind:s.slice(0,i),id:s.slice(i+1)};}
   // Every live item, as {key, ts} — the universe the smart views and "Unfiled"
   // draw from. Sources carry a read timestamp; chats a creation ts; documents none.
@@ -8342,7 +8442,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     return null;}
   // ── open / select ──
   openExplorer(view){view=view||this.state.explorerView||'@all';this._pushLoc({t:'explorer',view});
-    const patch={explorerView:view,sitesDir:false,siteView:null,viewUrl:null,selId:null,docView:null,dataView:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,wsFileMenu:null};
+    const patch={explorerView:view,relView:false,sitesDir:false,siteView:null,viewUrl:null,selId:null,docView:null,dataView:null,panelSel:null,panelLens:null,hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,wsFileMenu:null};
     if(this.phone())patch.pane='doc';
     this.setState(s=>({...patch,histRev:(s.histRev||0)+1}));this._scrollMainTop();}
   wsSelectView(view){this.setState({explorerView:view,wsFileMenu:null,wsRenaming:null});this._scrollMainTop();}
@@ -8831,7 +8931,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       onAskDepth:()=>{this.setState({mode:'depth'});this.research(id,'depth');},
       onAskResearch:()=>{this.research(id,this.state.mode||'breadth');}};
   }
-  goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,siteView:null,sitesDir:false,explorerView:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
+  goWeb(url){url=this.norm(url);if(!/^[a-z]+:/i.test(url))url='https://'+url;this._srcUrl=null;this._pushLoc({t:'web',url});this.setState(s=>({viewUrl:url,selId:null,relView:false,siteView:null,sitesDir:false,explorerView:null,panelSel:null,panelLens:null,panelMode:'overview',hoverSrc:null,pinSrc:null,hoverEnt:null,activeChat:null,newTabOpen:false,histRev:(s.histRev||0)+1}));this.loadCenter(url);if(this.state.detect)this.processPage(url);}
   processPage(url){if(this._busy)return;if(this.state.pages.find(p=>p.url===url||p.url==='https://'+url))return;this._busy=true;this._feedEnt=null;this.setState({busy:true});this.feedSep('reading a URL');this.readURL(url,'read').then(res=>{if(res)this.feedLine('read','Read “'+res.title+'” · '+(res.propCount!=null?res.propCount:res.sentenceCount)+' propositions');this._busy=false;this.setState({busy:false});
     // Now that the page is read it has propositions — re-render the open view in the
     // chosen mode (reader book, or the native page with its contents + flagged passages),
@@ -10068,6 +10168,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       liveColor:this.state.busy?'#b45309':'#22a06b',liveLabel:this.state.busy?'Working…':(ready?'Engine ready':'Loading…'),
       hasSel:false,hasSite:false,site:null,sitesDirOn:false,sitesDir:null,onOpenSites:()=>this.openSitesDir(),showPrompt:false,promptTitle:'',promptBody:'',suggestions:[],
       explorerOn:false,explorer:null,onOpenExplorer:()=>this.openExplorer(),wsFolders:[],hasWsFolders:false,
+      showRel:false,rel:null,onOpenRelationships:()=>this.openRelationships(),
       newTabLanding:false,simplePrompt:false,landingModeNative:false,landingModeReader:false,landingModePageStyle:'',landingModeReaderStyle:'',onLandingPage:()=>{},onLandingReader:()=>{},
       ledger:[],ledgerCount:0,ledgerEmpty:true,hoverCardOn:false,srcOpen:false,
       direction:this.state.direction,onDirInput:e=>this.onDirInput(e),mode:this.state.mode,
@@ -10253,6 +10354,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       // and, when the explorer is open, take the centre before falling back to the landing.
       base.wsFolders=this._wsSidebarRows();base.hasWsFolders=base.wsFolders.length>0;
       this._lensVals(base);   // the switcher renders even with an empty Record
+      if(this.state.relView){base.showRel=true;base.rel=this.relVals();return base;}
       if(this.state.explorerView){base.explorerOn=true;base.explorer=this.explorerVals();return base;}
       if(!vu&&!base.chatOn&&!base.gutenOn){
         this.landingVals(base);
@@ -10374,6 +10476,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       base.docOn=true;return base;
     }
     if(this.state.dataView){ base.dataOn=true;return base; }
+    if(this.state.relView){ base.showRel=true;base.rel=this.relVals();return base; }
     if(this.state.explorerView){ base.explorerOn=true;base.explorer=this.explorerVals();return base; }
     if(this.state.sitesDir){
       base.sitesDirOn=true;base.sitesDir=this.sitesDirectory(entInSrc);
