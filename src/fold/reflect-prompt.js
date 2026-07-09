@@ -24,9 +24,12 @@ export const SIGNIFICANCE_REFLECT_SYSTEM =
   'lead-in, no list, no quotation, and no "the passage".';
 
 // The chat messages for one reflection over the folded region (verbatim prose at the peak).
+// The tail nudges the answer toward the observation ITSELF, not the meta-frame a small model
+// parrots back ("The most surprising and interesting aspect of X is …"); cleanReflection
+// strips that frame anyway when the model reaches for it, so the two work together.
 export const significanceReflectMessages = (region) => [
   { role: 'system', content: SIGNIFICANCE_REFLECT_SYSTEM },
-  { role: 'user', content: `Background information:\n${String(region || '').trim()}\n\nGiven this background information, what is most surprising and/or interesting about this to you?` },
+  { role: 'user', content: `Background information:\n${String(region || '').trim()}\n\nGiven this background information, what is most surprising and/or interesting about this to you? Answer in one plain sentence — the observation itself, not "the most surprising thing is…".` },
 ];
 
 // Decode hint for the caller — one short sentence, greedy, stop at a line break so the model
@@ -38,6 +41,11 @@ export const REFLECT_DECODE = Object.freeze({ maxTokens: 30, greedy: true, stop:
 const INTERJECTION = /^(?:certainly|sure|of course|absolutely|indeed|well|okay|ok|right)\b[\s!,.:;—-]*/i;
 // A "here's … :" / "the point is :" / "what's striking is :" scaffold lead.
 const PREAMBLE = /^(?:here(?:'s| is)\b[^:.]*[:.]?|the (?:key |main |central )?(?:point|insight|significance|takeaway)\b[^:.]*[:.]?|this (?:passage|paragraph|text|excerpt)\b[^,.]*[,.]?|in (?:summary|short)[,.]?|to summarize[,.]?|what(?:'s| is)\b[^:.]*[:.]?)\s*/i;
+// The parroted evaluation FRAME — "The most surprising and interesting aspect of X is [that]"
+// and kin — that a small model echoes back from a "what is most surprising/interesting"
+// prompt. Stripping it leaves the actual observation (the tail), which de-boilerplates the
+// reflections so they stop colliding into churn. The subject X is recoverable from context.
+const FRAME = /^the most\s+\w+(?:\s+(?:and|or|,)\s+\w+)*\s+(?:aspect|thing|part|feature|point|fact|idea)\s+(?:of|about)\s+.+?\s+(?:is|was)\s+(?:that\s+)?/i;
 const LIST_LEAD = /^\s*(?:[-*•]|\d+[.)])\s+/;
 
 // cleanReflection — enforce the one-sentence, no-scaffolding form the prompt asks for.
@@ -50,13 +58,16 @@ export const cleanReflection = (raw, { maxLen = 220 } = {}) => {
   // take the first non-empty line (the decode stop is '\n', but be robust if it leaked more)
   t = t.split('\n').map((s) => s.trim()).find(Boolean) || '';
   t = t.replace(LIST_LEAD, '');
-  // strip up to two stacked scaffolds ("Certainly! Here's the point:")
-  for (let i = 0; i < 2; i++) { const s = t.replace(INTERJECTION, '').replace(PREAMBLE, ''); if (s === t) break; t = s.trim(); }
+  // strip up to two stacked scaffolds ("Certainly! Here's the point:") and the parroted frame
+  for (let i = 0; i < 2; i++) { const s = t.replace(INTERJECTION, '').replace(PREAMBLE, '').replace(FRAME, ''); if (s === t) break; t = s.trim(); }
   // unwrap a fully-quoted sentence
   const q = t.match(/^["“'](.+?)["”']\.?$/); if (q) t = q[1].trim();
   // keep the first sentence
   const m = t.match(/^.*?[.!?](?=\s|$)/); if (m) t = m[0].trim();
   if (t.length > maxLen) t = t.slice(0, maxLen).replace(/\s+\S*$/, '') + '…';
+  // a stripped frame leaves a lowercase tail ("their ability to …") — capitalize so it reads
+  // as a statement the writer can drop in.
+  if (t) t = t.charAt(0).toUpperCase() + t.slice(1);
   // reject a degenerate residue (too short, or still just a scaffold word)
   if (t.replace(/[^a-z]/gi, '').length < 8) return '';
   return t;

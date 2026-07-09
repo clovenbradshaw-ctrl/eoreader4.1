@@ -21,7 +21,7 @@ test('cleanReflection strips a leaked preamble and keeps one plain sentence', ()
   );
   assert.equal(
     cleanReflection("Here's the point: dolphins name each other with signature whistles."),
-    'dolphins name each other with signature whistles.',
+    'Dolphins name each other with signature whistles.',   // stripped lead ⇒ capitalized tail
   );
 });
 
@@ -39,4 +39,25 @@ test('cleanReflection rejects a pure-scaffold or empty residue', () => {
 test('cleanReflection passes a clean single sentence through unchanged', () => {
   const s = 'The press did not just copy books faster; it made a fixed, shareable text possible.';
   assert.equal(cleanReflection(s), s);
+});
+
+test('cleanReflection strips the parroted evaluation frame, leaving the observation', () => {
+  // the exact frames the 0.5B model echoed from a "most surprising/interesting" prompt
+  assert.equal(
+    cleanReflection('The most surprising and interesting aspect of stratovolcanoes is their ability to create long-lasting eruptions.'),
+    'Their ability to create long-lasting eruptions.',
+  );
+  assert.equal(
+    cleanReflection("The most surprising and interesting aspect of dolphin behavior I've observed is how they utilize echolocation to navigate and hunt."),
+    'How they utilize echolocation to navigate and hunt.',
+  );
+  assert.equal(
+    cleanReflection('The most surprising thing about the reef is that it is built by living animals.'),
+    'It is built by living animals.',
+  );
+  // two pieces that parroted the SAME frame now differ in their surviving tails (de-churned)
+  const a = cleanReflection('The most surprising and interesting aspect of dolphins is how they name each other.');
+  const b = cleanReflection('The most surprising and interesting aspect of dolphins is how they sleep with half a brain.');
+  assert.notEqual(a, b);
+  assert.ok(!/most surprising/i.test(a) && !/most surprising/i.test(b));
 });
