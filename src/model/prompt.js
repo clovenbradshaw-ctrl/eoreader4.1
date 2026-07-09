@@ -158,25 +158,17 @@ export const metadataBlock = (metadata = {}, header = 'About this document (its 
   return lines.length ? `${header}\n${lines.join('\n')}` : '';
 };
 
-// THE SHAPE CUE — answer-first, then sectioned. A broad question ("how did he see", "compare
-// A and B", "what are the exceptions") wants the shape of a good reference answer: a direct
-// lead, then the parts laid out under their own headings, the load-bearing terms in bold, and
-// the threads left unexplored offered as next steps. A pointed lookup wants none of that — it
-// answers straight (the "quick lookups answer straight" posture). So this rides only when the
-// question reads as broad, and it is a SOFT cue ("no headings for a one-idea answer") so the
-// talker keeps discretion. The marks it asks for (## / **) are exactly what the chat body's
-// markdown-lite render turns into headings and bold; off the chat path they degrade to plain
-// punctuation, harmlessly. Opt-in: empty `shape` → no block → byte-identical prompt.
-export const STRUCTURE_CUE =
-  'Shape your answer like this: open with a direct two- or three-sentence answer to their ' +
-  'question. Then lay out the distinct parts of the answer — when there are several, give each its ' +
-  'own short heading written as "## Heading"; when they are a set of short points, write them as a ' +
-  'bulleted list with a **bold lead-in label** on each — a couple of words naming what that point ' +
-  'is about, then a colon and the point. Put the few ' +
-  'load-bearing terms in **bold**. Be substantive: cover each distinct angle that bears on the ' +
-  'question rather than stopping at the first one. If worthwhile threads remain that you did not ' +
-  'cover, close with a short list under "Want me to go deeper on:". Keep it tight — no padding, and ' +
-  'no headings for a one-idea answer.';
+// THE SHAPE CUE WAS RETIRED HERE. A broad question no longer trips a keyword regex
+// (shapeForScope) that stamps a visible answer-first/sectioned TEMPLATE onto the talker's
+// prompt ("Shape your answer like this: ## Heading, **bold**, close with 'Want me to go
+// deeper on:'"). That template fought the discourse metacognition, which already owns how a
+// reply is shaped — its brief (app.dc.js _steerLine) says "let it decide what you foreground
+// AND how you shape the reply". Shape is now emergent from that invisible read, not forced by
+// a template the talker parrots: the metacognition does the steering. See _steerLine for the
+// (invisible, "don't quote it") shaping guidance that replaced this, and the answer-first
+// layout is now something the read may reach for when the material genuinely sections — not a
+// mandated form. `shape` (the buildGroundedMessages param) still carries the LIBRARIAN and
+// CAPABILITY registers; it no longer carries a layout template.
 
 // THE LIBRARIAN REGISTER. The reader is a research librarian surfacing what the sources hold,
 // not an expert holding forth — so the answer keeps the sources in the foreground, attributes
@@ -244,25 +236,12 @@ export const GROUNDING_CUE =
   'universal. Do not retell or paraphrase any one source end to end; weave the threads together in ' +
   'your own words. Ignore boilerplate (cookie notices, navigation, sign-up prompts) — it is not evidence.';
 
-// A keyword read of the question's scope, in the same spirit as the turn's register pass: a
-// comparison, a survey, an enumeration, or an open "how/why" wants the sectioned shape; anything
-// else (a pointed lookup) answers straight. A tight length budget also forces straight — a capped
-// reply is by definition a quick lookup. Returns the cue string or '' (→ no shape block).
-//
-// The trigger words also cover the EXPLANATORY register — "explain", "describe", "tell me about",
-// "break it down", "walk me through" — the asks that most want a Google-AI-Overview-shaped answer
-// (a lead, then the parts under their own headings) rather than a one-line lookup.
-const BROAD_SCOPE = /\b(compare|comparison|contrast|differ(?:s|ence|ences)?|versus|vs\.?|summar(?:y|ise|ize)|overview|synthes(?:is|ise|ize)|outline|walk\s+me\s+through|explain|describe|elaborate|break\s+(?:it|this|that|them)\s+down|tell\s+me\s+(?:about|more)|list|enumerate|examples?|exceptions?|what\s+are\s+the|which\s+are\s+the|how\s+(?:does|do|did|can|could|is|are|was|were)|why\s+(?:does|do|did|is|are|was|were)|overall|in\s+general)\b/i;
-// The "how … <verb>" process question, where the verb does not sit right after "how" —
-// "how did lindbergh see", "how could he see", "how the plane worked". The default BROAD_SCOPE
-// only catches the adjacent form ("how did"); this catches the same intent with the subject in
-// between ("how lindbergh could …"), the phrasing real questions take most often.
-const HOW_PROCESS = /\bhow\b[\w\s,'’-]*?\b(?:could|can|did|does|do|work|works|worked|manage|managed|happen|happened|able)\b/i;
-export const shapeForScope = (question, budget = null) => {
-  if (budget && typeof budget === 'object' && budget.sentences && budget.sentences <= 3) return '';
-  const q = String(question || '');
-  return (BROAD_SCOPE.test(q) || HOW_PROCESS.test(q)) ? STRUCTURE_CUE : '';
-};
+// shapeForScope WAS RETIRED. It was a keyword regex over the question ("compare", "explain",
+// "how did…") that returned the STRUCTURE_CUE layout template — a keyword cliff deciding the
+// answer's shape. Shape is no longer read off surface words; the discourse metacognition reads
+// what the turn is FOR and its brief (_steerLine) does the shaping, invisibly. A pointed lookup
+// and a broad survey diverge because the metacognition read them differently, not because a word
+// matched. Deleting the export is intentional — no caller should key layout off the raw question.
 
 const budgetLine = (b) => {
   if (!b) return '';
@@ -321,7 +300,7 @@ export const buildGroundedMessages = ({
   arc = '',                // the reading's own arc (write/gravity.js arcLines); '' → no block, byte-identical
   reasoning = '',          // the reasoning walk's marked reaches (turn/stages.js `prompt`, src/reason);
                            // '' → no block, byte-identical. Pre-rendered lines, each carrying its grade mark.
-  shape = '',              // the answer-first/sectioned shape cue (shapeForScope); '' → no block, byte-identical
+  shape = '',              // the register bundle — LIBRARIAN (+ CAPABILITY on longform); no layout template. '' → no block, byte-identical
   steer = '',              // the discourse read's BRIEF — what THIS user actually wants (app.dc.js _steerLine);
                            // folded in just before the answer clause and echoed in it. '' → no block, byte-identical.
   tail = '',              // the planner's read-window — the prose written so far this turn (spec-planner.md §5/§6)
@@ -435,9 +414,9 @@ export const buildGroundedMessages = ({
   const budgetStr = budgetLine(budget);
   if (budgetStr) blocks.push(budgetStr);
 
-  // The shape cue, just before the answer clause — a broad question gets the answer-first,
-  // sectioned layout; a pointed one (empty `shape`) answers straight. Soft, so the talker keeps
-  // discretion, and never on a budgeted (capped, quick-lookup) reply.
+  // The register bundle (LIBRARIAN, + CAPABILITY on a longform ask), just before the answer
+  // clause. No layout template rides here any more — how the reply is shaped is the discourse
+  // metacognition's call, carried by the steer below. Never on a budgeted (capped) reply.
   if (shape && !budgetStr) blocks.push(shape);
 
   // Strict mode with nothing to read: the reader had no lines on this at all. Name that

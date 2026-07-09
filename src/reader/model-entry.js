@@ -7,7 +7,7 @@
 // actually chat, and chat falls back to a structural answer if none is available.
 export { createModel } from '../model/interface.js';
 export { streamPhrase } from '../model/stream.js';
-export { buildChatMessages, buildGroundedMessages, shapeForScope, LIBRARIAN_CUE, GROUNDING_CUE, CAPABILITY_CUE } from '../model/prompt.js';
+export { buildChatMessages, buildGroundedMessages, LIBRARIAN_CUE, GROUNDING_CUE, CAPABILITY_CUE } from '../model/prompt.js';
 // The multi-paragraph walk (docs/paragraph-at-a-time.md, the multi-paragraph-walk
 // spec): one paragraph per model call, each a CONTINUATION over a shifting fold,
 // bound and vetoed at claim grain. The reader drives it with a `refold` hook (the

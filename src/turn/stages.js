@@ -21,7 +21,7 @@ import { taskOf, TASK_MAX_TOKENS, isMetaConversational } from './intent.js';
 import { expectAnswer, answerConstraintErrors, answerPredictionError, needsReferent } from './expect.js';
 import { answerFormError } from './shape.js';
 import { rereadOnUnsettled } from './reread.js';
-import { buildGroundedMessages, buildChatMessages, orientationLine, shapeForScope } from '../model/index.js';
+import { buildGroundedMessages, buildChatMessages, orientationLine } from '../model/index.js';
 import { bindCitations, renderBound } from '../ground/index.js';
 import { runVetoes, isUnbound, classifyProvenance } from '../ground/index.js';
 import { canGroundedSpeak, groundedSpeak, RULES_REV } from '../organs/out/speech/index.js';
@@ -637,10 +637,9 @@ export const stages = {
           graph:        fedGraph,         // the meaning graph (web path); empty → §2 subjective frame
           arc:          arcBlock,         // the reading's own arc (broadcastArc); empty → no block
           reasoning:    reasoningBlock,   // the walk's marked reaches (reason stage); empty → no block
-          // ANSWER-FIRST, SECTIONED SHAPE: a broad question (compare / survey / list / open how-why)
-          // gets the lead-then-sections layout the chat body renders as headings + bold; a pointed
-          // lookup answers straight (empty cue). Off on a budgeted reply (a quick, capped lookup).
-          shape:        shapeForScope(ctx.question, ctx.budget),
+          // No layout template: the answer-first/sectioned shape is no longer keyed off the raw
+          // question. How the reply is shaped is the discourse metacognition's call (the steer),
+          // not a keyword regex over the scope — so nothing rides the `shape` slot here.
         })
       : buildChatMessages({
           question: ctx.question,

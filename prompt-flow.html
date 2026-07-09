@@ -352,14 +352,13 @@
       SYSTEM_WRITER:        { kind: 'reg', role: 'Render exactly one handed statement', when: 'the long-generation atom loop (atomPrompt).' },
       EXCERPTS_HEADER:      { kind: 'cue', role: 'Header over the verbatim lines — the one channel', when: 'always, when the reading turned up spans.' },
       SUMMARY_GUARD:        { kind: 'cue', role: 'Faithfulness guard for summaries', when: 'the task register reads "summary".' },
-      STRUCTURE_CUE:        { kind: 'cue', role: 'Answer-first, then sectioned layout', when: 'the question reads broad (compare / survey / how-why).' },
       LIBRARIAN_CUE:        { kind: 'cue', role: 'The research-librarian posture', when: 'the reader chat path (every grounded app answer).' },
       CAPABILITY_CUE:       { kind: 'cue', role: 'Honest about being a small in-browser model', when: 'the ask is for a long, polished piece.' },
       GROUNDING_CUE:        { kind: 'cue', role: 'Synthesis across several sources', when: 'the longform / essay research folds.' },
       ARC_CUE:              { kind: 'cue', role: 'Teach the talker to read the arc block', when: 'the arc is broadcast into the window (opt-in).' },
     };
     const REGISTER_ORDER = ['SYSTEM_GROUND', 'SYSTEM_GROUND_STRICT', 'SYSTEM_CHAT', 'SYSTEM_FREE', 'SYSTEM_CURSOR', 'SYSTEM_WRITER'];
-    const CUE_ORDER = ['EXCERPTS_HEADER', 'STRUCTURE_CUE', 'LIBRARIAN_CUE', 'CAPABILITY_CUE', 'GROUNDING_CUE', 'SUMMARY_GUARD', 'ARC_CUE'];
+    const CUE_ORDER = ['EXCERPTS_HEADER', 'LIBRARIAN_CUE', 'CAPABILITY_CUE', 'GROUNDING_CUE', 'SUMMARY_GUARD', 'ARC_CUE'];
 
     // The modules whose exported prompt constants we surface as registers/cues.
     const CONST_MODULES = ['src/model/prompt.js', 'src/longgen/prompt.js', 'src/write/gravity.js'];
@@ -601,11 +600,12 @@
         });
       }
       const q = T.broad ? EX.broad : EX.question;
-      // Mirror the reader chat's own composition (app.dc.js): librarian cue + either the
-      // capability cue (longform) or the scope shape, joined as the `shape` argument.
+      // Mirror the reader chat's own composition (app.dc.js): the `shape` argument is the register
+      // bundle only — the librarian cue, plus the capability cue on a longform ask. There is no
+      // layout template any more; how a broad answer is shaped rides the discourse steer (below),
+      // the metacognition's invisible brief — toggle "Discourse steer" to see it.
       let shape = '';
-      if (T.readerCues) shape = [P.LIBRARIAN_CUE, T.longform ? P.CAPABILITY_CUE : P.shapeForScope(q)].filter(Boolean).join('\n\n');
-      else shape = P.shapeForScope(q);
+      if (T.readerCues) shape = [P.LIBRARIAN_CUE, T.longform ? P.CAPABILITY_CUE : ''].filter(Boolean).join('\n\n');
       const conversation = T.conversation
         ? { notes: EX.conversation.notes, pastTurns: EX.conversation.pastTurns, settled: EX.conversation.settled }
         : {};
