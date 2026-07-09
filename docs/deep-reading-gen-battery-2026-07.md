@@ -61,3 +61,32 @@ read in the walk, then this same battery re-run with the gate.
   would separate them and is the fairer grounding metric for a reflection-wired walk.
 - One clean win (volcanoes) is a single case; the gated design needs its own battery to
   confirm the conditional gain holds.
+
+## Update — the fixes flip the sign (2026-07-09)
+
+Two changes turned this net-negative net-**positive**: (1) the reflect prompt was rebuilt to
+hand the model the surprise DECOMPOSITION it was starved of — the frame the reading held vs the
+arrival it hit, branched on the confirm|strain verdict (`src/fold/reflect-prompt.js`,
+`reflectionInput`); (2) `cleanReflection` gained a restatement guard, so the walk injects a
+reflection ONLY when it is a genuine reaction, not an echo of the source. Re-run with a capable
+reflect voice (`REFLECT_MODEL=onnx-community/Qwen2.5-1.5B-Instruct`) driving the 0.5B writer:
+
+| arm | mean Δ maxPair ↓ | mean Δ distinctTri ↑ |
+|---|---|---|
+| free (model-free reflection) | +0.272 (worse) | −0.131 (worse) |
+| **voiced (1.5B reactions + guards)** | **−0.129 (better)** | **+0.073 (better)** |
+
+Per topic, the behaviour is self-gating without an explicit gate:
+- **clean baseline (dolphins, maxPair 0):** voiced output is BYTE-IDENTICAL to baseline — the
+  1.5B's reactions were all caught by the restatement/non-answer guards, nothing injected, no
+  harm.
+- **churning baseline (volcanoes, maxPair 0.349):** voiced pulls it to **0.092**, distinctness
+  0.79 → 0.936 — a real reaction breaks the loop.
+
+So a reflection that (a) is a genuine reaction, produced by a capable voice from the surprise
+decomposition, and (b) is injected only when it survives the guards, **helps a churning draft
+and no-ops a clean one** — the conditional behaviour every prior finding said it needed, arrived
+at through the guards rather than an explicit churn gate. The model-free arm stays net-negative,
+so it is the combination (real reaction + reject-unless-genuine) that flips the sign, not the
+wiring alone. Caveat: n=2, and the gain is carried by the one churning topic — more churning
+sources are needed to size it.
