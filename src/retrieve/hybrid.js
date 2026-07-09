@@ -112,7 +112,29 @@ export const reserveBySource = (spans = [], originOf, isSalient, { k = 6, activa
   return result;
 };
 
-export const retrieveHybrid = async (doc, query, embedder, k = 8) => {
+// A soft TOPIC PRIOR over the referent field — topic-weighted retrieval. When the turn resolves a
+// SUBJECT (the entity the question/conversation is about, plus its graph neighbourhood), a span
+// whose NAMED referents lie entirely OUTSIDE that field is a homonym slipping in by surface form —
+// the "essay about dolphins" whose reservation seated a Miami-Dolphins football span because
+// "dolphin(s)" matched by spelling, not sense. Damp such a span — a MULTIPLIER (default ×0.25),
+// never a gate, matching this file's degrade-never-fail discipline — so it sinks toward/below the
+// activation floor and reserveBySource stops reserving it, rather than dropping it outright.
+//   Two spans are always left untouched: one whose referents intersect the topic (on-topic), and
+// one that names NO referent at all — a framing/definitional line ("they are marine mammals") that
+// belongs to no sense and must not be penalised for it. `namedRefsOf(span)` yields the referent ids
+// a span names; `topicIds` is the subject's neighbourhood — both in the projection's id-space, so
+// the intersection is exact. A pure no-op — byte-identical — when no topic frame is supplied (no
+// topicIds, or no namedRefsOf), so single-source and default retrieval are untouched.
+export const applyTopicPrior = (spans = [], namedRefsOf, topicIds = null, { floor = 0.25 } = {}) => {
+  if (!topicIds || !topicIds.size || typeof namedRefsOf !== 'function') return spans;
+  return spans.map((s) => {
+    const refs = namedRefsOf(s) || [];
+    if (!refs.length) return s;                              // no named referent → framing, neutral
+    return refs.some((id) => topicIds.has(id)) ? s : { ...s, score: (s.score || 0) * floor };
+  });
+};
+
+export const retrieveHybrid = async (doc, query, embedder, k = 8, topic = null) => {
   const lex = retrieveLexical(doc, query, k);
   const sem = await retrieveSemantic(doc, query, embedder, k);
   // Skip units the document has DEF'd as sites (furniture) by their semantic
@@ -141,6 +163,12 @@ export const retrieveHybrid = async (doc, query, embedder, k = 8) => {
     const kind  = c.lex > 0 && c.sem > 0 ? 'lex+sem' : (c.lex > 0 ? 'lex' : 'sem');
     out.push({ idx, score, text: c.text, kind, lex: c.lex, sem: c.sem });
   }
-  out.sort((a, b) => b.score - a.score);
-  return out.slice(0, k);
+  // Topic-weighted retrieval (opt-in via the caller's `topic` frame): damp off-topic homonym spans
+  // BEFORE ranking, so both the top-k here and any downstream source reservation (reserveBySource)
+  // see a field already biased toward the resolved subject. Null topic → byte-identical.
+  const ranked = topic
+    ? applyTopicPrior(out, topic.namedRefsOf, topic.topicIds, { floor: topic.floor ?? 0.25 })
+    : out;
+  ranked.sort((a, b) => b.score - a.score);
+  return ranked.slice(0, k);
 };

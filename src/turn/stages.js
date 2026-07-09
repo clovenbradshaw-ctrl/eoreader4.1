@@ -15,7 +15,7 @@ import { think, worthSayingAloud, inferGenders } from '../write/index.js';
 import { foldNote }         from '../fold/index.js';
 import { surfFold, centroidBasis, projectUnits, structuralActivations, siteTerrainAt, trajectory, threadBasis } from '../surfer/index.js';
 import { arcGravity, arcLines } from '../write/gravity.js';
-import { namedReferents, referentialConfidence, siteIndices, serializeEOT } from '../perceiver/index.js';
+import { namedReferents, referentialConfidence, siteIndices, serializeEOT, figureSurface } from '../perceiver/index.js';
 import { foldConversation, resolveQuery, groundedThread, referenceTarget } from '../converse/index.js';
 import { taskOf, TASK_MAX_TOKENS, isMetaConversational } from './intent.js';
 import { expectAnswer, answerConstraintErrors, answerPredictionError, needsReferent } from './expect.js';
@@ -224,7 +224,29 @@ export const stages = {
     // brought back actually reach the talker instead of being buried under a long local doc.
     // Gated to web-bearing composites; a single doc (or a doc-only composite) takes the plain
     // top-6, byte-identical to before.
-    const pool = await retrieveHybrid(ctx.doc, query, re, 18);
+    //
+    // TOPIC-WEIGHTED RETRIEVAL (opt-in via ctx.topicPrior). Resolve the turn's SUBJECT — the doc
+    // referents the (conversation-resolved) query names, widened by their graph neighbourhood — and
+    // hand retrieveHybrid a prior that damps spans naming an OFF-topic referent by surface form only.
+    // This is what keeps an "essay about dolphins" over a homonym composite (the animal page beside
+    // a Miami-Dolphins page) from reserving the football span: its best "dolphin" match is damped
+    // below the activation floor before reserveBySource runs, so the reservation never seats it. The
+    // subject is the SAME signal the fold's `focus` falls back to (namedReferents of the question),
+    // read in the projection's id-space so it aligns with each span's named referents. Fully guarded
+    // and inert by default: no flag, or no subject resolved → topic stays null, retrieve byte-identical.
+    let topic = null;
+    if (ctx.topicPrior && ctx.doc) {
+      try {
+        const subjectIds = namedReferents(ctx.doc, query);
+        if (subjectIds.length) {
+          const neighbourhood = figureSurface(ctx.doc, subjectIds).figures.map((f) => f.id);
+          const topicIds = new Set([...subjectIds, ...neighbourhood]);
+          const namedRefsOf = (s) => { try { return namedReferents(ctx.doc, s.text || ''); } catch { return []; } };
+          topic = { topicIds, namedRefsOf, floor: ctx.topicFloor ?? 0.25 };
+        }
+      } catch { topic = null; }   // a topic-frame fault must never break retrieval
+    }
+    const pool = await retrieveHybrid(ctx.doc, query, re, 18, topic);
     const isWebSource = (d) => !!(d && (d.web || d.sourceKind === 'web-source'));
     const hasWebSource = ctx.doc?.isComposite && typeof ctx.doc.origin === 'function' &&
       pool.some(s => isWebSource(ctx.doc.origin(s.idx)?.doc));
