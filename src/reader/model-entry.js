@@ -13,6 +13,12 @@ export { buildChatMessages, buildGroundedMessages, shapeForScope, LIBRARIAN_CUE,
 // bound and vetoed at claim grain. The reader drives it with a `refold` hook (the
 // self-read weld — generation drives retrieval) and streams via `onParagraph`.
 export { walk, frameLeak, progressAgainst, buildSkeleton, loadInstalledPrior } from '../longgen/index.js';
+// The essay organ (docs/longform-generation.md): commitments before prose. A planned
+// spine of section intents is explored → bound → vetoed → rendered one section at a
+// time, so a NAMED essay/report comes out a developed, grounded, multi-section piece
+// instead of a single padded call. The reader plans the spine (from the research
+// facets) and drives it (`retrieve` per section, a wrapped model, `onEvent` to stream).
+export { runEssay, projectEssay, EKIND } from '../essay/index.js';
 export { CODER_MODELS, browserCoders } from '../model/coders.js';
 import '../model/echo.js';
 import '../model/webllm.js';
