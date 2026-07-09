@@ -123,6 +123,18 @@ const SURFACE_CSS = `
 .mns-node .nat{color:#7aa2f7}
 .mns-node .nread{color:#c3cbdb;font-family:inherit;font-size:11.5px;font-style:italic}
 
+/* SIMPLE (driven/docked) — just the thoughts. No graph rail, no bars, no tags: what is it thinking. */
+.mns-simple .mns-graph{display:none}
+.mns-simple .mns-copy{display:none}
+.mns-simple .mns-tally{display:none}
+.mns-simple .mns-stream{padding:14px 16px 18px}
+.mns-simple .mns-rest{background:transparent;border-bottom:1px solid #1b2130}
+.mns-thought{padding:12px 0;border-bottom:1px solid #191d28;animation:mns-in .5s ease both}
+.mns-thought:last-child{border-bottom:none}
+.mns-th-note{font-size:15px;line-height:1.55;color:#e6e9ef}
+.mns-th-at{margin-top:6px;font-size:12px;line-height:1.45;color:#6b7488;font-style:italic}
+.mns-th-at .p{color:#8791a3;font-style:normal}
+
 /* the trail spine — every place the surf considered, worth or below-band. */
 .mns-spine{display:flex;align-items:flex-end;gap:3px;height:52px;margin:6px 0 4px;padding:0 1px}
 .mns-tick{flex:1 1 0;min-width:2px;border-radius:2px 2px 0 0;background:#2d3444;position:relative}
@@ -162,7 +174,7 @@ const stripLead = (body, focus) => {
 export const mountMonologueSurface = (el, opts = {}) => {
   const driven = !!opts.driven;
   const root = document.createElement('div');
-  root.className = 'mns' + (driven ? ' mns-driven' : '');
+  root.className = 'mns' + (driven ? ' mns-driven mns-simple' : '');
   const style = document.createElement('style');
   style.textContent = SURFACE_CSS;
   root.appendChild(style);
@@ -194,7 +206,7 @@ export const mountMonologueSurface = (el, opts = {}) => {
     </div>
     <div class="mns-cols" style="display:${driven ? '' : 'none'}">
       <div class="mns-stream"><div class="mns-empty">${driven
-        ? 'At rest.<br><small>When you are not chatting, the reading turns back on what it holds — it surfs to the place of most interest and reflects there. The thoughts appear here.</small>'
+        ? 'Nothing on its mind yet.<br><small>When you\'re not chatting, it thinks about what it has read — its thoughts appear here.</small>'
         : 'The reading is held, at rest.<br><small>Press <b>Idle tick</b> once, or <b>Let it rest</b> — when nothing else is happening the reading surfs to the place of most interest and reflects there.</small>'}</div></div>
       <div class="mns-graph">
         <p class="mns-g-h">Deposited into the graph</p>
@@ -240,7 +252,10 @@ export const mountMonologueSurface = (el, opts = {}) => {
 
   const setPosture = (mode) => {
     postureEl.className = 'mns-posture ' + mode;
-    stateEl.textContent = mode === 'reading' ? 'reading…' : mode === 'settled' ? 'at rest — settled' : 'idle · resting';
+    const simple = driven;
+    stateEl.textContent = mode === 'reading' ? (simple ? 'thinking…' : 'reading…')
+      : mode === 'settled' ? (simple ? 'at rest' : 'at rest — settled')
+      : (simple ? 'resting' : 'idle · resting');
   };
 
   // Fold the reflections off the log into eo:Reflection substrate nodes — the graph-side view.
@@ -319,6 +334,19 @@ export const mountMonologueSurface = (el, opts = {}) => {
     card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   };
 
+  // SIMPLE — one thought, plainly. The reflection voiced, and the line it was dwelling on. No
+  // bars, no verdict, no tags: just what the model is thinking, and where.
+  const simpleThought = (r) => {
+    const empty = streamEl.querySelector('.mns-empty'); if (empty) empty.remove();
+    const note = esc(clean(stripLead(r.body, r.focus))).replace(/^\s*surprise\s*[—–-]\s*/i, '') || '…';
+    const at = String(sentence(r.peak) || '').trim();
+    const div = document.createElement('div');
+    div.className = 'mns-thought';
+    div.innerHTML = `<div class="mns-th-note">${note}</div>${at ? `<div class="mns-th-at"><span class="p">on</span> “${esc(at)}”</div>` : ''}`;
+    streamEl.appendChild(div);
+    div.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  };
+
   const refreshTally = () => {
     tallyEl.innerHTML = `<b>${reflections.length}</b> reflection${reflections.length === 1 ? '' : 's'} · <b>${trail.length}</b> place${trail.length === 1 ? '' : 's'} considered`;
   };
@@ -363,7 +391,7 @@ export const mountMonologueSurface = (el, opts = {}) => {
     return { fresh: fresh.length, quiesced: reachedEnd && fresh.length === 0 };
   };
 
-  const DRIVEN_EMPTY = '<div class="mns-empty">At rest.<br><small>When you\'re not chatting, the reading turns back on what it holds — it surfs to the place of most interest and reflects there. The thoughts appear here.</small></div>';
+  const DRIVEN_EMPTY = '<div class="mns-empty">Nothing on its mind yet.<br><small>When you\'re not chatting, it thinks about what it has read — its thoughts appear here.</small></div>';
 
   const stopAuto = () => {
     if (autoTimer) { clearInterval(autoTimer); autoTimer = null; }
@@ -409,15 +437,9 @@ export const mountMonologueSurface = (el, opts = {}) => {
       const k = keyOf(r);
       if (seenKey.has(k)) continue;
       seenKey.add(k);
-      const empty = streamEl.querySelector('.mns-empty'); if (empty) empty.remove();
       reflections.push(r);
-      renderReflection(r);
+      simpleThought(r);           // driven mode is the simple thought stream — just what it's thinking
     }
-    trail.length = 0;
-    trail.push(...((opts.getTrail ? opts.getTrail() : []) || []));
-    if (reflections.length && $('.mns-copy')) $('.mns-copy').disabled = false;
-    renderGraph();
-    refreshTally();
   };
 
   const copyLog = async () => {
