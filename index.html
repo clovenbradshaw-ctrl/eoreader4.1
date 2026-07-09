@@ -6066,6 +6066,28 @@ class Component extends DCLogic {
   // that shapes the reply decides the room — no keyword cliff. (Longform stays tight by choice, at
   // the call site.) A null/abstained read falls through to the tighter budget.
   _wantsRoom(meta){ return !!(meta && (meta.route==='research' || meta.lengthDemand==='develop')); }
+  // MECHANICAL SECTIONING (src/reader/section-answer.js) — the shape the talker no longer formats.
+  // The metacognition-steers-the-shape change stopped instructing the model to emit "##"; a small
+  // model won't anyway. Instead, when the discourse read COHERED on this turn (the same condition
+  // the steer rides), re-read the flat answer and impose section headings from the entity-field
+  // shift, labelled from the read's own leads — the machine that re-reads the answer gives it its
+  // shape, so headings are an OUTPUT of the reading, not an instruction to the writer. Skipped when
+  // the answer is short or already carries structure (headings/lists/paragraphs); fail-soft — any
+  // trouble returns the answer untouched. Parse is the engine's own (this.E.parseText), so no heavy
+  // module graph loads.
+  async _shapeAnswer(id,text,meta){
+    try{
+      if(!meta||!meta.speech||meta.abstained)return text;
+      const s=String(text||'');
+      if(s.length<240||/(^|\n)\s*#{1,6}\s|\n\s*[-*•]\s|\n\s*\d+[.)]\s|\n\n/.test(s))return text;
+      const SEC=this._MSEC||(this._MSEC=await import(new URL('src/reader/section-answer.js',document.baseURI).href));
+      const parse=(this.E&&typeof this.E.parseText==='function')?((t)=>this.E.parseText(String(t||''),{coordSubjects:true})):null;
+      const r=await SEC.sectionText(s,{leads:meta.leads||[],parse});
+      if(!r||!r.sectioned)return text;
+      this._auditRec(id,'answer-shaped',{note:'sections='+r.sections.length+' · headings='+JSON.stringify(r.sections.map(x=>x.heading).filter(Boolean))});
+      return SEC.renderSectioned(r)||text;
+    }catch(e){return text;}
+  }
   // ── THE TURN AUDIT — every internal prompt and raw output, recorded on the turn ──────────────
   // Each model touch appends {t,stage,prompt?,output?,note?} to the pending turn's `audit` array,
   // and exportChatAudit ships the whole chat — questions, prompts VERBATIM, raw outputs, the
@@ -6855,9 +6877,13 @@ class Component extends DCLogic {
         const seedParas=this._seedParasFrom(text);
         if(seedParas.length){ return await this._walkReply(id,q,sources,{model,guard:this._stallGuard(),finish,ground,meta,read,prev,seed:seedParas,shown:true}); }
       }
+      // The talker wrote flat prose; the machine now gives it its shape — section headings imposed
+      // from the reading when the metacognition cohered (empty/short/pre-structured → untouched).
+      const shaped=(grounded&&!isolated)?await this._shapeAnswer(id,text,meta):text;
       // The turn wears the register it ACTUALLY used, and a grounded answer is read back
-      // through the EOT reflection — every proposition judged against the graph (_reflect).
-      finish({text:isolated?text:this._withOfficeNote(text,sources),entities:ground.entities,sources:gr.sources,passages:gr.passages,
+      // through the EOT reflection — every proposition judged against the graph (_reflect, on the
+      // original prose — headings are display, not claims to fact-check).
+      finish({text:isolated?text:this._withOfficeNote(shaped,sources),entities:ground.entities,sources:gr.sources,passages:gr.passages,
         groundKind:gr.groundKind,disclosure:gr.disclosure,related:(isolated||amode==='creative')?[]:this.relatedDocs(q,sources),
         register:grounded?'grounded':'creative',reflection:grounded?this._reflect(text):null});
       if(!isolated)this._pivotChatPanel(q+' '+text);
@@ -7669,8 +7695,11 @@ class Component extends DCLogic {
       // normMd (not norm): keep the reply's line structure so lists/headings survive into _md.
       const text=this.normMd(raw)||(isolated?'':this.answerQuestion(q,sources).text)||'(no answer)';
       const gr=this._gateGround(this._groundReport(ground,grounded),text);
+      // The talker wrote flat prose; the machine imposes section headings from the reading when the
+      // metacognition cohered (short/pre-structured → untouched). Reflection stays on the prose.
+      const shaped=(grounded&&!isolated)?await this._shapeAnswer(id,text,meta):text;
       // Badge the register the turn ACTUALLY used, and reflect a grounded answer against the graph.
-      finish({text:isolated?text:this._withOfficeNote(text,sources),entities:ground.entities,sources:gr.sources,passages:gr.passages,
+      finish({text:isolated?text:this._withOfficeNote(shaped,sources),entities:ground.entities,sources:gr.sources,passages:gr.passages,
         groundKind:gr.groundKind,disclosure:gr.disclosure,related:isolated?[]:this.relatedDocs(q,sources),
         register:grounded?'grounded':'creative',reflection:grounded?this._reflect(text):null});
     }catch(e){
