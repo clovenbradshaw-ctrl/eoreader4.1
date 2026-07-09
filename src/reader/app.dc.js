@@ -4591,6 +4591,19 @@ class Component extends DCLogic {
   //           from them, refolding for more, handing their LAST as the left-context.
   //   ask   — the ORIGINAL ask when q was reformulated (the research path strips "write me an
   //           essay about batman" to "batman"); the demand is read off the ask, retrieval off q.
+  // _flowBundle — resolve the installed build-arc prior once and pair it with the
+  // perceiver's `parseText` as the injected in-organ accessor, so the walk can witness its
+  // own build in operator space. Memoized on the instance (a null result is cached too, so
+  // a missing registry is a one-time check, never a per-turn refetch). Query {lang:'en'} →
+  // the pooled English prior; degrades to null (no shaping, no witness) on any failure.
+  async _flowBundle(){
+    if(this.__flowBundle!==undefined) return this.__flowBundle;
+    let prior=null;
+    try{ if(this._ME&&this._ME.loadInstalledPrior){ const r=await this._ME.loadInstalledPrior({lang:'en'}); prior=(r&&r.prior)||null; } }catch(e){ prior=null; }
+    const parse=(this.E&&typeof this.E.parseText==='function')?(t=>this.E.parseText(String(t||''),{coordSubjects:true})):null;
+    this.__flowBundle=(prior&&parse)?{prior,parse,perSentences:8}:null;
+    return this.__flowBundle;
+  }
   async _walkReply(id,q,sources,o){
     if(!this._ME)this._ME=await import((typeof window!=='undefined'&&window.__resources&&window.__resources.eoModel)||'./model-entry.js');
     const seed=(o.seed||[]).filter(p=>p&&p.text);
@@ -4676,12 +4689,19 @@ class Component extends DCLogic {
       done:seed.map((_,i)=>'b'+i),
     }:null;
     this._auditRec(id,'answer-prompt',{prompt:'[walk] '+(seed.length?'discovered continuation':'developed piece')+' — up to '+demand+' paragraphs, one model call each, refolding per paragraph.'});
+    // FLOW WITNESS — load the installed build-arc prior (mixed-en-pooled for a general
+    // English essay) and hand the walk an amodal flow bundle: the prior plus `parse` as
+    // the injected in-organ accessor (text→doc), so the flow engine reads the build in
+    // operator space, never text. OBSERVE only — the flow verdict rides the trace/audit
+    // and changes NO tokens (flowShape stays off). A missing registry ⇒ flow null ⇒ the
+    // walk is byte-identical to before, so this is safe to run unconditionally.
+    const flow=await this._flowBundle();
     let res;
     try{
       // WRITE FIRST, GROUND LATER — keep each drafted paragraph whole; the finish()
       // below grounds it as a per-span provenance label (cite what a source witnesses,
       // mark the rest as the model's own) rather than salvaging the draft at birth.
-      res=await this._ME.walk({fold:[],design:{demand},question:q,model:streamModel,refold,groundLater:true,onParagraph:(rec)=>{accParas.push(untag(rec.text));partial='';schedule();},state,signal:o.guard.signal});
+      res=await this._ME.walk({fold:[],design:{demand},question:q,model:streamModel,refold,groundLater:true,flow,onParagraph:(rec)=>{accParas.push(untag(rec.text));partial='';schedule();},state,signal:o.guard.signal});
     }catch(e){ o.guard.clear(); if((e&&e.stopped)||this._stopGen)return; res=null; }
     o.guard.clear();
     // The walk failed (model stalled, import error, …) — the bubble must still settle,
@@ -4699,6 +4719,16 @@ class Component extends DCLogic {
     // paragraph) reads plainly against the walk-beat-raw records above it.
     const beatLedger=res.trace.map(t=>t.beat+':'+t.kind+(t.boundFraction!=null?(' bound='+t.boundFraction):'')+(t.weldStruck?(' weld-struck='+t.weldStruck):'')).join(' · ');
     this._auditRec(id,'answer-raw',{output:res.answer,note:'walk · '+res.paragraphs.length+'/'+demand+' paragraphs · '+beatLedger});
+    // FLOW — the build-arc witness, when a prior was wired. Surfaces, per beat, how far
+    // the section sat off the corpus manifold and the MOVE the arc demanded there (a wall
+    // of `introduce` is the flat-refrain signature); a whole-piece roll-up rides the note.
+    // The reader now SEES its own build instead of shipping a flat one silently.
+    if(res.flow){
+      const f=res.flow, fac=f.prior?(Object.values(f.prior).filter(Boolean).join('/')):'—';
+      const perBeat=f.beats.map(b=>b.beat+':want-'+(b.wantVerb||b.want)+(b.residualPct!=null?(' r'+b.residualPct):'')+(b.ok===false?' ⚑':'')).join(' · ');
+      this._auditRec(id,'flow',{output:perBeat,
+        note:'prior='+fac+' · off-manifold '+f.offManifold+'/'+f.beats.length+' · lurches '+f.lurches+' · arc-wants '+f.wantSeq.join(',')});
+    }
     const paras=res.paragraphs;
     if(!paras.length){
       // Nothing grounded a developed piece — hold honestly rather than pad from priors.

@@ -35,6 +35,57 @@ import { selfRead } from './weld.js';
 import { bindAndVeto } from '../ground/index.js';
 import { REBIND_THRESHOLD, FLOOR_TOKENS, ceilingFor, EPSILON } from '../arc/index.js';
 import { groundSaturation } from '../arc/index.js';
+import { flowVerdict } from '../flow/index.js';
+import { arcGapMove, OP_DIRECTIVES } from './fold.js';
+
+// FLOW — the amodal build-arc witness/shaper (docs/flow-prior.md). The walk owns the
+// grounded-paragraph floor; the flow prior owns the SHAPE floor: is the build going
+// where competent prose of this register goes, or re-opening in place? The prior is a
+// manifold over the operator basis (flow/index.js) — it never reads text, only the
+// section trajectory a `parse` accessor produces, so this is the amodal middle with the
+// parser as the thin in-organ shell. `flow = { prior, parse, perSentences }`:
+//   observe  each accepted paragraph re-parses the running draft and scores the last
+//            section — residual/delta vs the prior, plus the MOVE the arc would demand
+//            here (arcGapMove: still-introducing late ⇒ it wants CON/SYN). Rides the
+//            trace; changes NO tokens. Off (no prior/parse) ⇒ identical behavior.
+//   shape    (flowShape) feed that demanded move into the beat prompt as a soft
+//            directive — the one place tokens change. Default OFF; a rev-flag opt-in.
+// flowStep — read a compact per-beat flow record off the running draft, and the section
+// vector to carry forward as the next beat's `prevStep`. Null-safe: no prior/parse ⇒
+// { record:null, step:prevStep } and the walk is untouched.
+const flowStep = (flow, prevStep, draftText, idx, total) => {
+  if (!flow || !flow.prior || typeof flow.parse !== 'function' || !draftText) {
+    return { record: null, step: prevStep };
+  }
+  let doc; try { doc = flow.parse(draftText); } catch { return { record: null, step: prevStep }; }
+  const v = flowVerdict(flow.prior, prevStep, doc, { perSentences: flow.perSentences || 8 });
+  if (!v) return { record: null, step: prevStep };
+  // arcGapMove reads the demanded move off the PREVIOUS section vs the corpus schedule
+  // at this position — "where the build should be by now vs where it is".
+  const want = arcGapMove({ prior: flow.prior, step: prevStep, stepIndex: idx, totalSteps: Math.max(1, total) });
+  const topZ = Object.entries(want.z || {}).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 3);
+  return {
+    record: {
+      residualPct: v.residualPercentile ?? null,
+      deltaPct: v.deltaPercentile ?? null,
+      ok: v.ok,
+      want: want.op, wantVerb: want.verb, wantDerived: want.derived,
+      z: Object.fromEntries(topZ),
+    },
+    step: v.step || prevStep,
+  };
+};
+
+// arcDirectiveFor — the SHAPE lever (flowShape only). The move the arc demands at this
+// position → a soft continuation directive (fold.js OP_DIRECTIVES, the same translation
+// the designed fold path uses). Empty when there is no derived move, so the prompt is
+// byte-identical unless the prior actually has a schedule to reach for.
+const arcDirectiveFor = (flow, prevStep, idx, total) => {
+  if (!flow || !flow.prior) return '';
+  const want = arcGapMove({ prior: flow.prior, step: prevStep, stepIndex: idx, totalSteps: Math.max(1, total) });
+  if (!want.derived) return '';
+  return OP_DIRECTIVES[want.op]?.restated || '';
+};
 
 const MAX_REGEN = 1;   // one regenerate on an ungrounded paragraph, then hold (NUL)
 const BOUND_FLOOR = 0.2;   // write-first: a beat grounding below this regenerates ONCE before it ships
@@ -206,7 +257,7 @@ const carveDesign = ({ design, fold, question }) => {
 // never a gate that deletes. The only birth-time strike is the editor-register
 // leak, which is hygiene (the model narrating the writing), not grounding. `gated`
 // is still computed so the citation labels and sources ride along.
-const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal, weld = null, groundLater = false }) => {
+const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal, weld = null, groundLater = false, arcDirective = '' }) => {
   const seed = seedFor({ beat, slice });
   const ceiling = ceilingFor({ mass: slice.reduce((m, s) => m + (s.score || 0), 0) / slice.length, spans: slice });
   let paragraph = null, gated = null, action = 'regen', leak = null;
@@ -214,7 +265,7 @@ const composeBeat = async (model, { beat, slice, prior, coldStart, genre, signal
     // The design is the length spec: stop at the next heading marker so the model
     // bridges one paragraph's worth to the gap, never a "one paragraph" instruction.
     // A backend without stop sequences ignores it, byte-identical.
-    const messages = renderContinuation({ beat, slice, prior, coldStart, genre });
+    const messages = renderContinuation({ beat, slice, prior, coldStart, genre, arcDirective });
     const raw = await model.phrase(messages, { maxTokens: ceiling, minTokens: FLOOR_TOKENS, stop: ['\n##'], signal });
     // The paragraph is the seed (the DEF the model was handed) plus its
     // continuation — the topic sentence the model finished.
@@ -322,6 +373,14 @@ export const walk = async ({
                           // only editor-register leaks) and let grounding be a downstream per-span
                           // label rather than a birth-time gate that salvages the draft down to its
                           // cited prefix. Off by default — the birth gate stays the shipped floor.
+  flow = null,            // FLOW WITNESS/SHAPE — { prior, parse, perSentences }. The amodal build-arc
+                          // prior (docs/flow-prior.md); `parse` is the injected in-organ accessor
+                          // (text→doc) so the flow engine stays modality-free. When set, each accepted
+                          // paragraph is scored against the prior and the verdict + the arc-demanded
+                          // move ride the trace (OBSERVE — no token change). Null ⇒ identical behavior.
+  flowShape = false,      // SHAPE (rev-flag opt-in) — feed the arc-demanded move into the beat prompt
+                          // as a soft directive. Requires `flow.prior`. Default OFF: the observe path
+                          // measures without steering; only this flips tokens.
   onParagraph = null,     // (record, i) -> void — called as each paragraph is accepted (UI streaming)
   signal = null,
 } = {}) => {
@@ -354,6 +413,11 @@ export const walk = async ({
     // The weld's "anywhere" pool accumulates every span the live walk has been
     // served — the fold as drunk so far — since no static pool exists here.
     const served = [];
+    // FLOW — carry the previous section's vector across beats (the build so far) and a
+    // finite step count for the arc position. prevStep starts null (cold: the arc opens
+    // on DEF/INS); flowTotal is the demand ceiling, defensively finite for a boundless run.
+    let prevStep = null;
+    const flowTotal = Number.isFinite(demandCap) ? demandCap : 6;
     let idx = accepted.length;
     while (idx < demandCap && wrote < maxBeats) {
       if (signal?.aborted) { trace.push({ beat: `b${idx}`, kind: 'aborted' }); break; }
@@ -370,7 +434,10 @@ export const walk = async ({
       const coldStart = accepted.length === 0;
       served.push(...slice);
       const weld = weldOn ? { pool: served, doc } : null;
-      const { paragraph, gated, action, leak, seed, weld: welded } = await composeBeat(model, { beat, slice, prior, coldStart, genre, signal, weld, groundLater });
+      // SHAPE (flowShape only) — the arc-demanded move at this position, derived off the
+      // build so far (prevStep), fed to the prompt as a soft directive. '' when off/underived.
+      const arcDirective = flowShape ? arcDirectiveFor(flow, prevStep, idx, flowTotal) : '';
+      const { paragraph, gated, action, leak, seed, weld: welded } = await composeBeat(model, { beat, slice, prior, coldStart, genre, signal, weld, groundLater, arcDirective });
       // Spend only what the beat CONSUMED: its anchor (a walked beat is never
       // retried against the same anchor — monotone), plus every span the accepted
       // paragraph actually CITED (re-anchoring a cited span later would restate
@@ -391,8 +458,14 @@ export const walk = async ({
       }
       const record = recordFor(beat, seed, paragraph, gated, action);
       accepted.push(record);
+      // OBSERVE — score the running draft's newest section against the flow prior and
+      // carry its vector forward. Pure measurement: the paragraph is already accepted, so
+      // this changes nothing about what shipped — it only rides the trace as a flow record.
+      const fs = flowStep(flow, prevStep, accepted.map(p => p.text).filter(Boolean).join('\n\n'), idx, flowTotal);
+      prevStep = fs.step;
       trace.push({ beat: beat.id, kind: action, cited: gated.sources.length, boundFraction: round3(gated.boundFraction),
-                   ...(welded?.fired ? { weldStruck: welded.spans.filter(s => s.fired).length } : {}) });
+                   ...(welded?.fired ? { weldStruck: welded.spans.filter(s => s.fired).length } : {}),
+                   ...(fs.record ? { flow: fs.record } : {}) });
       if (onParagraph) { try { onParagraph(record, accepted.length - 1); } catch (e) { /* UI hook, never fatal */ } }
     }
     const answerLive = accepted.map(p => p.text).filter(Boolean).join('\n\n');
@@ -400,11 +473,24 @@ export const walk = async ({
     // would order them lexicographically ("10" before "9").
     const sourcesLive = [...new Set(accepted.flatMap(p => p.sources || []))]
       .sort((a, b) => (typeof a === 'number' && typeof b === 'number') ? a - b : String(a).localeCompare(String(b)));
+    // Whole-piece flow report — a compact roll-up of the per-beat records for the audit:
+    // how many beats went off-manifold or lurched, and the sequence of moves the arc
+    // DEMANDED across the walk (e.g. a wall of INS is the flat-refrain signature). Null
+    // when flow was not wired, so the audit stays byte-identical without a prior.
+    const flowRecords = trace.filter(t => t.flow).map(t => ({ beat: t.beat, ...t.flow }));
+    const flowReport = flowRecords.length ? {
+      prior: flow?.prior?.meta?.facets || null,
+      beats: flowRecords,
+      offManifold: flowRecords.filter(r => r.residualPct != null && r.residualPct > 95).length,
+      lurches: flowRecords.filter(r => r.deltaPct != null && r.deltaPct > 90).length,
+      wantSeq: flowRecords.map(r => r.want),
+    } : null;
     return {
       answer: answerLive, paragraphs: accepted, sources: sourcesLive,
       design: Object.freeze({ ...carved, live: true }),
       progress: progressAgainst(carved, accepted), trace,
       state: { design: carved, accepted, covered: [...covered], done: [...done] },
+      ...(flowReport ? { flow: flowReport } : {}),
     };
   }
 
