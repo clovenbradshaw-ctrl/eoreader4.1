@@ -741,7 +741,6 @@
                 <button onclick="{{ onStopGen }}" title="Stop generating" style="font-size:13px;font-weight:600;color:#fff;background:#dc2626;border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;gap:6px;" style-hover="background:#b91c1c"><span style="width:9px;height:9px;background:#fff;border-radius:2px;display:inline-block;"></span>Stop</button>
               </sc-if>
               <sc-if value="{{ !chat.generating }}" hint-placeholder-val="{{ true }}">
-                <button onclick="{{ onLongform }}" title="Write a developed, multi-paragraph answer — one grounded paragraph at a time, across the reading" style="font-size:13px;font-weight:600;color:var(--acc);background:transparent;border:1px solid var(--accline);border-radius:11px;padding:8px 13px;flex:0 0 auto;cursor:pointer;" style-hover="background:var(--app)">¶ Long-form</button>
                 <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
               </sc-if>
             </div>
@@ -1773,7 +1772,6 @@
               <button onclick="{{ onStopGen }}" title="Stop generating" style="font-size:13px;font-weight:600;color:#fff;background:#dc2626;border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;gap:6px;" style-hover="background:#b91c1c"><span style="width:9px;height:9px;background:#fff;border-radius:2px;display:inline-block;"></span>Stop</button>
             </sc-if>
             <sc-if value="{{ !chat.generating }}" hint-placeholder-val="{{ true }}">
-              <button onclick="{{ onLongform }}" title="Write a developed, multi-paragraph answer — one grounded paragraph at a time, across the reading" style="font-size:13px;font-weight:600;color:var(--acc);background:transparent;border:1px solid var(--accline);border-radius:11px;padding:8px 13px;flex:0 0 auto;cursor:pointer;" style-hover="background:var(--app)">¶ Long-form</button>
               <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
             </sc-if>
           </div>
@@ -3783,11 +3781,6 @@ class Component extends DCLogic {
   // the element is the last one typed into.
   _clearComposer(){this._chatDraft='';if(this._chatEl){try{this._chatEl.value='';}catch(e){}}}
   onChatKey(ev){if(ev&&ev.key==='Enter'&&!ev.shiftKey){if(ev.preventDefault)ev.preventDefault();this.sendChat();}}
-  // The composer's "Long-form" button: send this turn but FORCE the multi-paragraph walk,
-  // for when the ask reads short and the automatic cue won't fire. Sets the one-shot
-  // `_forceWalk` flag sendChat consumes; nothing else about the turn changes (it still
-  // grounds, routes, and refolds exactly as a cued walk does).
-  sendLongform(){this._forceWalk=true;this.sendChat();}
   // Per-answer grounding strip: collapsed by default (not overwhelming), one tap reveals
   // the passages/entities the answer is grounded in. Keyed by chat id + message index.
   toggleGround(key){this.setState(s=>{const g={...(s.groundOpen||{})};g[key]=!g[key];return {groundOpen:g};});}
@@ -6804,12 +6797,6 @@ class Component extends DCLogic {
     const q=this.norm(qArg!=null?qArg:(this._chatDraft||''));if(!q)return;
     this._clearComposer();  // empty the DOM box now that the turn is committed
     this._stopGen=false;   // a fresh turn clears any prior stop
-    // MANUAL LONG-FORM — the composer's "Long-form" button sets `_forceWalk`, which this
-    // turn consumes into `_turnForceWalk` (cleared here so it never leaks to the next send).
-    // When set, the two grounded walk cues below force the multi-paragraph walk even when the
-    // ask names no length — the manual override for when the emergent length read comes back
-    // short. Gated the same as the automatic cue: grounded, non-creative reading only.
-    this._turnForceWalk=!!this._forceWalk; this._forceWalk=false;
     this._chatStick=true;   // a fresh turn is sticky — the answer scrolls into view; scrolling up mid-stream unsticks it
     // THE TURN'S CONFIG IS DERIVED, not stored (design/chat-redesign/REVISIONS.md):
     // one emergent read of the ask replaces the old composer mode state. It rides
@@ -7072,27 +7059,23 @@ class Component extends DCLogic {
         finish({text:'Grounded mode: nothing you’ve read covers this, so I won’t answer from the model alone. Read something on it (or turn the web on and ask again), or switch the register to Auto or Creative.',
           groundKind:'model',register:'grounded'});
         return;}
-      // THE WALK TRIGGER (docs/paragraph-at-a-time.md, the multi-paragraph-walk spec).
-      // A DEVELOPED, multi-paragraph ask over grounded reading is not one padded call —
-      // it is the WALK: one paragraph per model call, each a continuation over a fold
-      // that SHIFTS per paragraph (the self-read refold), bound and vetoed at claim
-      // grain, held honestly when the fold is spent rather than padded to length. The
-      // trigger is the discourse read itself (_wantsLongform keys on the metacognition's
-      // develop/brief length demand, with an explicit essay/word-count as the floor) —
-      // the right cue, not a keyword cliff. Soft: a pointed lookup falls straight through
-      // to the single grounded call below, unchanged.
-      // An explicit paragraph count ("5 paragraphs") is a strong longform seed the essay/
-      // word-count floor misses — it names the shape outright, so it cues the walk directly.
-      // So is the metacognition's own settled compose·essay verdict (route=compose,
-      // kind=essay), for the paraphrased essay ask no regex floor catches.
+      // THE LONG-FORM TRIGGER (docs/paragraph-at-a-time.md, docs/longform-generation.md).
+      // A DEVELOPED, multi-section ask over grounded reading is not one padded call — it is the long
+      // form: a planned spine of section intents, each retrieving its own spans, rendered one grounded
+      // prose pass, bound and vetoed at claim grain, held honestly when the fold is spent rather than
+      // padded to length. There is ONE way in, and it is the discourse read itself: _wantsLongform is
+      // the single "does the system believe long-form is warranted?" predicate — it folds in a named
+      // essay/report, an explicit word or paragraph count, the metacognition's own settled
+      // compose·essay verdict, the develop/brief length demand, and the keyword floor. No button, no
+      // keyword fork. Soft: a pointed lookup reads as brief and falls straight through to the single
+      // grounded call below, unchanged.
       {const rd=read||meta;
-      if(grounded&&amode!=='creative'&&(this._turnForceWalk||this._paragraphDemand(q)||this._wantsLongform(q,rd)||(rd&&rd.route==='compose'&&rd.kind==='essay'))){
-        const eo={model,guard,finish,ground,meta,read,prev,forced:this._turnForceWalk};
-        // The Long-form BUTTON and a typed essay/report both run the real essay organ (the sectioned,
-        // grounded piece — the flagship button gives the flagship output); the softer longform cues (a
-        // bare "develop" length read, a paragraph count) stay on the flat multi-paragraph walk.
-        if(this._turnForceWalk||this._essayIntent(q,rd))return await this._essayReply(id,q,sources,eo);
-        return await this._walkReply(id,q,sources,eo);
+      if(grounded&&amode!=='creative'&&this._wantsLongform(q,rd)){
+        // The system judged long-form warranted, so WRITE the long form: the real essay organ composes
+        // it (and degrades to the flat multi-paragraph walk internally when the engine bundle can't
+        // run the organ).
+        const eo={model,guard,finish,ground,meta,read,prev};
+        return await this._essayReply(id,q,sources,eo);
       }}
       let messages;
       // The reader answers as a research LIBRARIAN — sources foregrounded, attributed, quoted —
@@ -7173,7 +7156,7 @@ class Component extends DCLogic {
       // the LAST paragraph as the left-context (generation drives retrieval). The already-
       // written paragraphs seed the run; the walk extends them, grounded, until the fold is
       // spent. Guarded: grounded, contentful, not a Stop, and not already a cued walk.
-      if(grounded&&amode!=='creative'&&!this._stopGen&&!isolated&&!this._paragraphDemand(q)&&!this._wantsLongform(q,read||meta)&&this._isParagraphReturn(text)){
+      if(grounded&&amode!=='creative'&&!this._stopGen&&!isolated&&!this._wantsLongform(q,read||meta)&&this._isParagraphReturn(text)){
         const seedParas=this._seedParasFrom(text);
         if(seedParas.length){ return await this._walkReply(id,q,sources,{model,guard:this._stallGuard(),finish,ground,meta,read,prev,seed:seedParas,shown:true}); }
       }
@@ -7410,14 +7393,20 @@ class Component extends DCLogic {
   // ("detailed", "thorough", "comprehensive", "in-depth"), which merely describe how any answer
   // should read and belong to the physics measure below, not to a keyword cliff.
   _explicitLongform(q){return /\b(essays?|treatise|dissertation|monograph|report|white[\s-]?paper|\d{3,}\s*words?|write\s+(?:me\s+)?(?:a|an)\b[^.?!]*\b(?:essay|report|overview|account|piece|article|guide|breakdown|treatise))\b/i.test(String(q||''));}
-  // _wantsLongform(q, read) — SHOULD this turn render as a developed, multi-section piece rather
-  // than one capped answer? The old hard-keyword _longformIntent misfired both ways: soft
+  // _wantsLongform(q, read) — THE single predicate: should this turn render as a developed, multi-
+  // section piece rather than one capped answer? Every long-form signal folds in HERE, so there is
+  // exactly one decision and one way in — no button, no separate essay-vs-walk fork. The old
+  // hard-keyword _longformIntent misfired both ways: soft
   // qualifiers ("in detail", "thorough") tripped a full essay walk over a turn that wanted a solid
   // paragraph, and a paraphrased long ask with no trigger word rendered flat. So the decision now
   // flows from the discourse PHYSICS (meta-route.js: the develop/brief length demand measured off
   // the metacognition's own speech, crosstalk-nulled) with the regex demoted to a FLOOR:
   //   · an EXPLICIT longform artifact ("an essay", "a report", "500 words") renders outright — a
   //     named artifact is a strong seed, not a soft adverb;
+  //   · an explicit PARAGRAPH count ("5 paragraphs") names the developed shape outright — a strong
+  //     seed too, so it renders regardless of the length read;
+  //   · the metacognition's own settled COMPOSE·ESSAY verdict (route=compose, kind=essay) renders —
+  //     the discourse read's own call, catching the paraphrased essay ask no regex floor would;
   //   · otherwise, when the metacognition read is ALIVE (warm model, a settled read), IT decides —
   //     render iff the speech settled toward a developed treatment (lengthDemand==='develop'), so
   //     "explain this in detail" no longer auto-summons an essay unless the read agrees, and a
@@ -7431,7 +7420,9 @@ class Component extends DCLogic {
   // the research path); null/absent → the floor.
   _wantsLongform(q,read){
     if(this._explicitLongform(q))return true;                       // named artifact / word count — the strong seed
+    if(this._paragraphDemand(q))return true;                        // an explicit paragraph count names the developed shape outright
     if(read){
+      if(read.route==='compose'&&read.kind==='essay')return true;   // the metacognition's own settled compose·essay verdict
       if(read.lengthDemand==='develop')return true;                 // the read asks for a developed, multi-section piece
       if(read.lengthDemand==='brief')return false;                  // the read asks for brevity — override the soft-keyword floor
     }
@@ -7617,12 +7608,6 @@ class Component extends DCLogic {
       related:this.relatedDocs(q,sources),register:'grounded',reflection:this._reflect(text)});
     if(!o.shown)this._pivotChatPanel(q+' '+text);
   }
-  // _essayIntent — a NAMED long piece ("an essay", "a report", "500 words", the metacognition's
-  // own compose·essay verdict). These run the real essay organ (below), not the flat walk: a
-  // named artifact wants a developed, sectioned piece, so it gets one. The soft longform cues
-  // (a "develop" length read, a bare paragraph count) stay on the walk. The manual Long-form
-  // button (_turnForceWalk) is honored as the WALK it names, never silently upgraded to the organ.
-  _essayIntent(ask,rd){ return this._explicitLongform(ask)||!!(rd&&rd.route==='compose'&&rd.kind==='essay'); }
   // ── THE ESSAY ORGAN: a NAMED essay/report runs the real long-form composer ──────────────────
   // (docs/longform-generation.md.) Not the flat walk — one flowing section that drinks a single
   // fold dry after a paragraph or two and stops "saturated" — but the commitments-before-prose
@@ -7634,14 +7619,14 @@ class Component extends DCLogic {
   // piece DEVELOPS instead of re-serving the top-6 similar lines every beat. Length stays emergent
   // (a section renders from what its evidence supports, no more), so a thin reading still stops
   // honestly rather than fabricating — but a real reading now yields a real, sectioned essay.
-  //   o = { model, guard, finish, ground, meta, read, prev, ask?, forced? }
+  //   o = { model, guard, finish, ground, meta, read, prev, ask? }
   async _essayReply(id,q,sources,o){
     if(!this._ME)this._ME=await import((typeof window!=='undefined'&&window.__resources&&window.__resources.eoModel)||'./model-entry.js');
     if(!this._ME.runEssay)return this._walkReply(id,q,sources,o);   // older engine bundle — degrade to the walk
     const ask=o.ask||q;
     // The essay's SUBJECT comes from the discourse-RESOLVED query `q`, not the raw `ask`. `ask` is
-    // carried only to read the longform INTENT off the original turn (_paragraphDemand / _essayIntent
-    // below); it is NOT the subject. On the research path the walk reformulates the turn to the clean
+    // carried only as the literal original turn (before subject-stripping), passed to _walkSubjectTerms
+    // below to scope the piece; it is NOT the subject. On the research path the walk reformulates the turn to the clean
     // subject ("write an essay about this" → q="dolphin") while ask stays the literal original — so
     // titling and planning off ask gave dTitle="This", and _planFacets("This") handed the small model
     // an empty subject it filled with hallucinated angles ("the nature of existence", "literature and
@@ -8262,13 +8247,13 @@ class Component extends DCLogic {
       // developed shape rides from the ORIGINAL turn: the walk's reformulation strips
       // it to the bare subject ("They asked you: batman"), so cue on `orig` first.
       const ask=orig||q;
-      if(grounded&&amode!=='creative'&&(this._turnForceWalk||this._paragraphDemand(ask)||this._wantsLongform(ask,meta)||(meta&&meta.route==='compose'&&meta.kind==='essay'))){
-        const eo={model,guard,finish,ground,meta,read:meta,prev:_prev,ask,forced:this._turnForceWalk};
+      if(grounded&&amode!=='creative'&&this._wantsLongform(ask,meta)){
         // The path "write me an essay about X" actually takes with the web on (compose·essay →
-        // web-as-brain → research → HERE): the Long-form button and a named essay/report both run the
-        // real essay organ; the softer longform cues stay on the flat walk.
-        if(this._turnForceWalk||this._essayIntent(ask,meta))return await this._essayReply(id,q,sources,eo);
-        return await this._walkReply(id,q,sources,eo);
+        // web-as-brain → research → HERE). ONE long-form route, same as the offline gate: the
+        // discourse read decides (_wantsLongform), and when it judges long-form warranted the real
+        // essay organ writes it (degrading to the flat walk internally when the organ can't run).
+        const eo={model,guard,finish,ground,meta,read:meta,prev:_prev,ask};
+        return await this._essayReply(id,q,sources,eo);
       }
       let messages;
       // The research/web chat path: same librarian register, plus the discourse read's steering line
@@ -13324,7 +13309,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       readBtnLabel:this.state.busy?'…':'Read',readBtnStyle:'font-size:12px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:7px;padding:6px 13px;flex:0 0 auto;cursor:pointer;'+(this.state.busy?'opacity:.6;':''),
       onSearch:e=>this.onSearch(e),inboxCount:'',inbox:[],inboxEmpty:true,groups:[],hasEgo:false,
       chats:[],hasChats:false,chatOn:false,chat:null,chatInput:this.state.chatInput||'',askPageOn:false,
-      onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onLongform:()=>this.sendLongform(),onStopGen:()=>this.stopGeneration(),onCloseChat:()=>this.closeChat(),onAskPage:()=>this.askThisPage(),
+      onNewChat:()=>this.newChat(null),onChatInput:e=>this.onChatInput(e),onChatKey:e=>this.onChatKey(e),onSendChat:()=>this.sendChat(),onStopGen:()=>this.stopGeneration(),onCloseChat:()=>this.closeChat(),onAskPage:()=>this.askThisPage(),
       // The composer has no chat-type options \u2014 no readout, no mode buttons. The route
       // is still read off the ask at send time (_read derives the turn's config), and
       // deep research runs from the ask itself or the explicit /research command.

@@ -636,7 +636,6 @@
                 <button onclick="{{ onStopGen }}" title="Stop generating" style="font-size:13px;font-weight:600;color:#fff;background:#dc2626;border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;gap:6px;" style-hover="background:#b91c1c"><span style="width:9px;height:9px;background:#fff;border-radius:2px;display:inline-block;"></span>Stop</button>
               </sc-if>
               <sc-if value="{{ !chat.generating }}" hint-placeholder-val="{{ true }}">
-                <button onclick="{{ onLongform }}" title="Write a developed, multi-paragraph answer — one grounded paragraph at a time, across the reading" style="font-size:13px;font-weight:600;color:var(--acc);background:transparent;border:1px solid var(--accline);border-radius:11px;padding:8px 13px;flex:0 0 auto;cursor:pointer;" style-hover="background:var(--app)">¶ Long-form</button>
                 <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
               </sc-if>
             </div>
@@ -1668,7 +1667,6 @@
               <button onclick="{{ onStopGen }}" title="Stop generating" style="font-size:13px;font-weight:600;color:#fff;background:#dc2626;border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;display:flex;align-items:center;gap:6px;" style-hover="background:#b91c1c"><span style="width:9px;height:9px;background:#fff;border-radius:2px;display:inline-block;"></span>Stop</button>
             </sc-if>
             <sc-if value="{{ !chat.generating }}" hint-placeholder-val="{{ true }}">
-              <button onclick="{{ onLongform }}" title="Write a developed, multi-paragraph answer — one grounded paragraph at a time, across the reading" style="font-size:13px;font-weight:600;color:var(--acc);background:transparent;border:1px solid var(--accline);border-radius:11px;padding:8px 13px;flex:0 0 auto;cursor:pointer;" style-hover="background:var(--app)">¶ Long-form</button>
               <button onclick="{{ onSendChat }}" style="font-size:13px;font-weight:600;color:#fff;background:var(--acc);border:none;border-radius:11px;padding:9px 17px;flex:0 0 auto;cursor:pointer;">Ask</button>
             </sc-if>
           </div>
