@@ -46,8 +46,12 @@ const JSONLD_CONTEXT = Object.freeze({
 //   surf          the surfer's descent (recAxes — the located RECs)
 //   reflections   the deep-reading EVAs read off the log (readReflections) — the reading's own
 //                 held-open reflections at the places of most interest
+//   metaReflections the metacognitive EVAs (fold/weave.js, readMetaReflections) — the reading's
+//                 reflections ABOUT its reflections, one grain up, band void, reafferent
+//   connections   the cross-connections (fold/weave.js, readConnections) — CON bonds between held
+//                 interpretations (echo · bears-on · analogy), band void, reafferent
 //   cursor        where the significance reading was taken (grounder-side; never crosses)
-export const buildSubstrate = ({ structure, significance = null, surf = null, reflections = [], cursor = null } = {}) => {
+export const buildSubstrate = ({ structure, significance = null, surf = null, reflections = [], metaReflections = [], connections = [], cursor = null } = {}) => {
   const relations = structure?.relations || [];
   const defs      = structure?.defs || [];
 
@@ -108,6 +112,42 @@ export const buildSubstrate = ({ structure, significance = null, surf = null, re
     grounded: false,
   })).filter((r) => r.reading);
 
+  // eo:MetaReflection — the reading's reflections ABOUT its reflections (fold/weave.js), one grain
+  // up: a pattern (a recurring focus, a standing strain) read off its own prior EVAs. Carried at
+  // band void, witness 'reafferent' — the same firewall as a first-order reflection.
+  const metaNodes = (metaReflections || []).map((m, i) => Object.freeze({
+    id: `m${i}`,
+    atSentence: m.cursor ?? m.sentIdx ?? null,
+    about: m.focus ?? null,
+    pattern: m.pattern ?? null,
+    reading: String(m.body ?? ''),
+    verdict: m.verdict ?? null,
+    order: 2,
+    band: 'void',                 // always held open — an interpretation, never firm
+    witness: 'reafferent',        // canWitness false — the firewall, explicit on the node
+    grounded: false,
+  })).filter((m) => m.reading);
+
+  // eo:Connection — a CON bond between two held interpretations (fold/weave.js): echo (same
+  // proposition, Born-gated), bears-on (a reflection touching a tension/reframing), or analogy
+  // (same structure, different entities). Void and reafferent: it links void nodes and is itself
+  // void — never a firm edge, never upgraded.
+  const connectionNodes = (connections || []).map((c, i) => Object.freeze({
+    id: `c${i}`,
+    kind: c.kind ?? null,
+    a: c.a ?? null,
+    b: c.b ?? null,
+    aSentence: c.aCursor ?? null,
+    bSentence: c.bCursor ?? null,
+    aDoc: c.aDoc ?? null,
+    bDoc: c.bDoc ?? null,
+    reading: String(c.body ?? ''),
+    sameness: c.sameness ?? null,
+    band: 'void',
+    witness: 'reafferent',
+    grounded: false,
+  })).filter((c) => c.reading);
+
   return Object.freeze({
     '@context': JSONLD_CONTEXT,
     cursor,
@@ -116,6 +156,8 @@ export const buildSubstrate = ({ structure, significance = null, surf = null, re
     tensions,
     reframings,
     reflections: reflectionNodes,
+    metaReflections: metaNodes,
+    connections: connectionNodes,
     // The located-REC narration the reading already computes — the Significance
     // appearance today's notes drop. Carried so the membrane can route it to the
     // "Where the reading turns" group. Surface prose, no index.
@@ -130,6 +172,21 @@ export const buildSubstrate = ({ structure, significance = null, surf = null, re
 export const readReflections = (doc) => {
   const events = typeof doc?.log?.snapshot === 'function' ? doc.log.snapshot() : (doc?.log?.events || []);
   return events.filter((e) => e && e.op === 'EVA' && e.reflection === true && e.register === 'enacted');
+};
+
+// readMetaReflections — the metacognitive EVAs a log carries (fold/weave.js). An enacted EVA one
+// order up, tagged meta:true, layer:'metacognition'. It is deliberately NOT reflection:true, so
+// readReflections never folds it back in — loop 2 reads loop 1's reflections, never its own output.
+export const readMetaReflections = (doc) => {
+  const events = typeof doc?.log?.snapshot === 'function' ? doc.log.snapshot() : (doc?.log?.events || []);
+  return events.filter((e) => e && e.op === 'EVA' && e.meta === true && e.layer === 'metacognition');
+};
+
+// readConnections — the cross-connections a log carries (fold/weave.js): enacted CON bonds tagged
+// connection:true, layer:'connection'. Read off the log at read time, exactly like the reflections.
+export const readConnections = (doc) => {
+  const events = typeof doc?.log?.snapshot === 'function' ? doc.log.snapshot() : (doc?.log?.events || []);
+  return events.filter((e) => e && e.op === 'CON' && e.connection === true && e.layer === 'connection');
 };
 
 // detectTensions — the paraconsistent read (P2). Two shapes:
