@@ -343,8 +343,8 @@ export const mountMonologueSurface = (el, opts = {}) => {
     const div = document.createElement('div');
     div.className = 'mns-thought';
     div.innerHTML = `<div class="mns-th-note">${note}</div>${at ? `<div class="mns-th-at"><span class="p">on</span> “${esc(at)}”</div>` : ''}`;
-    streamEl.appendChild(div);
-    div.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    streamEl.insertBefore(div, streamEl.firstChild);   // newest at the top
+    streamEl.scrollTop = 0;
   };
 
   const refreshTally = () => {
@@ -430,16 +430,32 @@ export const mountMonologueSurface = (el, opts = {}) => {
   // graph rail re-derive from the host's getters and the doc's own log.
   const seenKey = new Set();
   const keyOf = (r) => `${r.peak}|${r.body}`;
+  // The stream of consciousness: new thoughts don't appear all at once — they surface one at a
+  // time, a beat apart, newest at the top. The backlog on first open renders at once (it is the
+  // state so far); everything that arrives after streams in.
+  const THOUGHT_MS = 1100;
+  const queue = [];
+  let draining = false, primed = false;
+  const restPosture = () => setPosture(opts.isSettled && opts.isSettled() ? 'settled' : 'resting');
+  const drainNext = () => {
+    if (!queue.length) { draining = false; restPosture(); return; }
+    draining = true; setPosture('reading');
+    const r = queue.shift();
+    reflections.push(r);
+    simpleThought(r);
+    setTimeout(drainNext, THOUGHT_MS);
+  };
   const syncDriven = () => {
     if (doc) subEl.textContent = `${doc.docId || 'reading'} · ${(doc.units || doc.sentences || []).length} sentences`;
     const list = (opts.getReflections ? opts.getReflections() : []) || [];
-    for (const r of list) {
-      const k = keyOf(r);
-      if (seenKey.has(k)) continue;
-      seenKey.add(k);
-      reflections.push(r);
-      simpleThought(r);           // driven mode is the simple thought stream — just what it's thinking
-    }
+    const fresh = [];
+    for (const r of list) { const k = keyOf(r); if (seenKey.has(k)) continue; seenKey.add(k); fresh.push(r); }
+    // First sync (the initial mount) renders whatever backlog exists at once — it is the state so
+    // far. From then on, every arriving thought STREAMS in, a beat apart.
+    if (!primed) { primed = true; for (const r of fresh) { reflections.push(r); simpleThought(r); } restPosture(); return; }
+    if (!fresh.length) { if (!draining) restPosture(); return; }
+    queue.push(...fresh);
+    if (!draining) drainNext();
   };
 
   const copyLog = async () => {
@@ -460,7 +476,9 @@ export const mountMonologueSurface = (el, opts = {}) => {
       destroy: () => { root.remove(); },
       // refresh(doc?) — re-sync from the host's getters; a new doc identity resets the stream.
       refresh: (d) => {
-        if (d && d !== doc) { doc = d; seenKey.clear(); reflections.length = 0; trail.length = 0; streamEl.innerHTML = DRIVEN_EMPTY; }
+        // A new document — clear the stream, but keep `primed` so the new doc's thoughts STREAM in
+        // (only the first open of an existing backlog renders at once).
+        if (d && d !== doc) { doc = d; seenKey.clear(); reflections.length = 0; trail.length = 0; queue.length = 0; draining = false; streamEl.innerHTML = DRIVEN_EMPTY; }
         else if (d) doc = d;
         syncDriven();
       },

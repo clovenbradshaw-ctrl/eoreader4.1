@@ -2395,12 +2395,9 @@ class Component extends DCLogic {
         this._deepAnchor=this._deepAnchor+8;
       }
       if(this._deepAnchor>=n-1&&!fresh.length)this._deepSettled=true;
-      if(this._monoSurface){
-        if(fresh.length)this._monoSurface.setPosture('reading');
-        try{this._monoSurface.refresh(D.doc);}catch(e){}
-        const settled=this._deepSettled;
-        setTimeout(()=>{if(this._monoSurface){try{this._monoSurface.setPosture(settled?'settled':'resting');}catch(e){}}},fresh.length?600:120);
-      }
+      // The panel owns the reveal and the posture while it streams (isSettled tells it when the
+      // reading has quiesced); the host just hands it the fresh state.
+      if(this._monoSurface){try{this._monoSurface.refresh(D.doc);}catch(e){}}
       if(this.state.deepCount!==this._deepReflections.length)this.setState({deepCount:this._deepReflections.length});
     }finally{this._deepRunning=false;}
   }
@@ -2465,6 +2462,7 @@ class Component extends DCLogic {
       getReflections:()=>this._deepReflections,
       getTrail:()=>(this._deep&&this._deep.reader)?this._deep.reader.trail:[],
       labelClean:(s)=>this._deepCleanLabels(s),
+      isSettled:()=>this._deepSettled,
       onManualTick:()=>this._deepTick(true),
       onClose:()=>this.closeMonologuePanel(),
     });
