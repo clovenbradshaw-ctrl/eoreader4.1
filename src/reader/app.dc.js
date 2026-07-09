@@ -3710,10 +3710,22 @@ class Component extends DCLogic {
     // what it holds is the whole point — so drop the "only glances → say so plainly" tail, which on
     // an open "research X" turns the overview into an apology for the specific aspect the user never
     // named. Keep the tail for pointed questions the reading may genuinely miss.
-    if(meta.speech&&!meta.abstained)bits.push('What this turn is really for — read it as your brief for what the user wants, and let it decide what you foreground and how you shape the reply (a note to you, not the user; don’t quote it or say you were told it): '+meta.speech+' Aim the answer squarely at that. Lead with the part of what you read that actually speaks to what they’re after'+(meta.route==='research'?'.':'; where what you read only glances their question, say so plainly rather than serving the nearest passage as though it were the answer.'));
+    // SHAPE RIDES THE READ, invisibly. The retired STRUCTURE_CUE stamped an answer-first/sectioned
+    // TEMPLATE onto the talker's prompt whenever a keyword matched. That layout guidance now lives
+    // HERE, inside the metacognition's brief — carried only when the read cohered, framed as
+    // emergent ("only when the material genuinely falls into several parts"), and marked "don't
+    // quote it" like the rest of the steer. The talker is never handed a bare layout directive; the
+    // read that understood the turn is what decides how the answer is shaped.
+    if(meta.speech&&!meta.abstained)bits.push('What this turn is really for — read it as your brief for what the user wants, and let it decide what you foreground and how you shape the reply (a note to you, not the user; don’t quote it or say you were told it): '+meta.speech+' Aim the answer squarely at that, and let the answer’s shape follow what you actually have to say: open with a direct answer in a sentence or two, then — only when the material genuinely falls into several distinct parts — give each part its own short "## heading" with the few load-bearing terms in **bold**; when it is one idea, keep it a tight paragraph with no headings. Lead with the part of what you read that actually speaks to what they’re after'+(meta.route==='research'?'.':'; where what you read only glances their question, say so plainly rather than serving the nearest passage as though it were the answer.'));
     if(meta.anchorGap)bits.push('What you’ve read does not mention '+meta.anchorGap.missing.join(', ')+' — where the answer needs that, say so plainly and in the first person ("I didn’t find that in what I read", never "the reading doesn’t mention…") instead of filling it in from memory.');
     return bits.join(' ');
   }
+  // The roomier answer budget (900 vs 512 tokens) keys off the discourse metacognition, not a
+  // keyword shape cue: a turn the read settled as broad/developed (route=research, or an explicit
+  // 'develop' length demand) earns the room to breathe; a pointed lookup stays tight. The same read
+  // that shapes the reply decides the room — no keyword cliff. (Longform stays tight by choice, at
+  // the call site.) A null/abstained read falls through to the tighter budget.
+  _wantsRoom(meta){ return !!(meta && (meta.route==='research' || meta.lengthDemand==='develop')); }
   // ── THE TURN AUDIT — every internal prompt and raw output, recorded on the turn ──────────────
   // Each model touch appends {t,stage,prompt?,output?,note?} to the pending turn's `audit` array,
   // and exportChatAudit ships the whole chat — questions, prompts VERBATIM, raw outputs, the
@@ -4422,11 +4434,13 @@ class Component extends DCLogic {
       }}
       let messages;
       // The reader answers as a research LIBRARIAN — sources foregrounded, attributed, quoted —
-      // not an expert holding forth (the librarian cue, every grounded turn). A broad / explanatory
-      // question additionally gets the answer-first, sectioned SHAPE (headings, bold, bullets);
-      // a pointed lookup keeps just the librarian register and answers straight.
-      // The discourse read rides in as ONE steering line — what would satisfy the asker, and what
-      // the reading does NOT hold (so absence is said plainly instead of padded from priors).
+      // not an expert holding forth (the librarian cue, every grounded turn). How the reply is
+      // SHAPED (a direct lead, then sections when the material genuinely has several parts) is no
+      // longer a keyword cue stamped on the prompt — it is the discourse metacognition's call,
+      // carried invisibly by the steer (_steerLine). A pointed lookup and a broad survey diverge
+      // because the read read them differently, not because a word in the question matched.
+      // The discourse read rides in as ONE steering line — what would satisfy the asker, how to
+      // shape the reply, and what the reading does NOT hold (absence said plainly, not padded).
       // A LONGFORM ask ("write me an essay") folds in the SELF-AWARE capability cue: a small
       // in-browser reader is not a long-form essayist, so it says so plainly and gives a short
       // grounded rundown instead of a slow, padded, part-invented essay.
@@ -4444,13 +4458,12 @@ class Component extends DCLogic {
         ? 'Before anything else: your reading turned up no passage that actually bears on this question. Do NOT say "based on what I read", "as mentioned in the text", or otherwise imply you found this in the sources. Open by saying plainly, in the first person, that you didn’t find it in what you read; then, if you can, answer from general knowledge and mark it as your own knowledge, not the reading.'
         : '';
       const steer=grounded?[this._steerLine(meta),honest].filter(Boolean).join(' '):'';
-      const sectioned=(this._ME.shapeForScope&&this._ME.shapeForScope(q))||'';
       const longform=this._explicitLongform(q);
-      // A LONGFORM ask takes the CAPABILITY cue INSTEAD of the sectioned shape, not alongside it: the
-      // two contradict (one says "lay it out in sections", the other "don't spin up a long piece — give
-      // a short grounded rundown"), and stacking both just hands a small model a mixed signal it pads to
-      // reach. Longform → capability; otherwise → the sectioned shape (empty on a pointed lookup).
-      const shape=grounded?[this._ME.LIBRARIAN_CUE,longform?this._ME.CAPABILITY_CUE:sectioned].filter(Boolean).join('\n\n'):'';
+      // The register bundle: LIBRARIAN every grounded turn, plus the SELF-AWARE capability cue on a
+      // LONGFORM ask (a small in-browser reader is not a long-form essayist — it says so and gives a
+      // short grounded rundown rather than grinding out a slow, padded, part-invented essay). No
+      // layout template rides here any more: shaping is the metacognition's job, via the steer above.
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,longform?this._ME.CAPABILITY_CUE:''].filter(Boolean).join('\n\n'):'';
       if(grounded){
         const pastTurns=prev.filter(m=>m.role==='user').slice(-6).map(m=>this.norm(m.text)).filter(Boolean);
         messages=this._ME.buildGroundedMessages({
@@ -4477,12 +4490,12 @@ class Component extends DCLogic {
       let acc='',raf=0;
       const paint=()=>{raf=0;this._captureStick();const head=this._composeTick(acc);this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,think:head};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
-      // Only a genuinely SECTIONED broad grounded answer gets the 900-token room to breathe; a plain
-      // lookup — and a longform ask we're deliberately keeping short and grounded — stays on the
-      // tighter 512. (The budget once keyed off `shape`, which always carries the librarian cue when
-      // grounded, so every grounded answer silently ran to 900; it now keys off the sectioned read.)
+      // A turn the discourse metacognition reads as BROAD/DEVELOPED gets the 900-token room to
+      // breathe; a pointed lookup — and a longform ask we're deliberately keeping short and grounded
+      // — stays on the tighter 512. The room now keys off the same read that steers the shape
+      // (_wantsRoom: route=research, or an explicit develop demand), not a keyword shape cue.
       // The creative register writes hotter — invention is the point; grounded stays cool and faithful.
-      const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:(grounded&&sectioned&&!longform)?900:512,temperature:amode==='creative'?0.85:0.4,onToken,signal:guard.signal}),guard.race]);
+      const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:(grounded&&this._wantsRoom(meta)&&!longform)?900:512,temperature:amode==='creative'?0.85:0.4,onToken,signal:guard.signal}),guard.race]);
       guard.clear();
       this._auditRec(id,'answer-raw',{output:String(raw||'')});
       // An isolated chat draws on nothing read, so there's no structural fallback to pull from.
@@ -5273,13 +5286,13 @@ class Component extends DCLogic {
         return await this._walkReply(id,q,sources,{model,guard,finish,ground,meta,read:meta,prev:_prev,ask,forced:this._turnForceWalk});
       }
       let messages;
-      // The research/web chat path: same librarian register (+ sectioned shape on a broad question),
-      // plus the discourse read's steering line when the turn carried one (what would satisfy the
-      // asker, and what even the gathered reading still doesn't hold).
+      // The research/web chat path: same librarian register, plus the discourse read's steering line
+      // when the turn carried one (what would satisfy the asker, how to shape the reply, and what even
+      // the gathered reading still doesn't hold). Shaping is the metacognition's call here too — no
+      // keyword shape cue.
       // A LONGFORM ask ("write me an essay") also folds in the SELF-AWARE capability cue: this is a
       // small in-browser reader, not a long-form essayist, so it says so plainly and gives a short
       // grounded rundown rather than grinding out a slow, padded, part-invented essay.
-      const sectioned=(this._ME.shapeForScope&&this._ME.shapeForScope(q))||'';
       const longform=this._explicitLongform(q);
       // The steer rides in its own slot (buildGroundedMessages `steer`) so the read's brief leads the
       // answer clause instead of trailing the librarian cue — the research/web path steers the same way.
@@ -5294,11 +5307,9 @@ class Component extends DCLogic {
         ? 'Before anything else: your reading turned up no passage that actually bears on this question. Do NOT say "based on what I read", "as mentioned in the text", or otherwise imply you found this in the sources. Open by saying plainly, in the first person, that you didn’t find it in what you read; then, if you can, answer from general knowledge and mark it as your own knowledge, not the reading.'
         : '';
       const steer=grounded?[this._steerLine(meta),honest].filter(Boolean).join(' '):'';
-      // A LONGFORM ask takes the CAPABILITY cue INSTEAD of the sectioned shape, not alongside it: the
-      // two contradict (one says "lay it out in sections", the other "don't spin up a long piece — give
-      // a short grounded rundown"), and stacking both just hands a small model a mixed signal it pads to
-      // reach. Longform → capability; otherwise → the sectioned shape (empty on a pointed lookup).
-      const shape=grounded?[this._ME.LIBRARIAN_CUE,longform?this._ME.CAPABILITY_CUE:sectioned].filter(Boolean).join('\n\n'):'';
+      // The register bundle: LIBRARIAN, plus the CAPABILITY cue on a LONGFORM ask (don't spin up a
+      // long piece — give a short grounded rundown). No layout template: shaping rides the steer.
+      const shape=grounded?[this._ME.LIBRARIAN_CUE,longform?this._ME.CAPABILITY_CUE:''].filter(Boolean).join('\n\n'):'';
       if(grounded){
         messages=this._ME.buildGroundedMessages({question:q,spans:ground.spans||[],graph:ground.prop?this._groundCue(ground):this.foldProse(sources),
           orientation:this.chatOrientation(sources),task:this._isSummaryQ(q)?'summary':'answer',conversation:{pastTurns:[]},now:new Date(),shape,steer});
@@ -5308,11 +5319,11 @@ class Component extends DCLogic {
       let acc='',raf=0;
       const paint=()=>{raf=0;this._captureStick();const head=this._composeTick(acc);this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],text:acc,think:head};return {...c,messages:m};})}),()=>this._scrollChat());};
       const onToken=(piece)=>{const s=String(piece||'');if(!s)return;guard.feed();acc+=s;if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
-      // Only a genuinely SECTIONED broad grounded answer gets the 900-token room to breathe; a plain
-      // lookup — and a longform ask we're deliberately keeping short and grounded — stays on the
-      // tighter 512. (The budget once keyed off `shape`, which always carries the librarian cue when
-      // grounded, so every grounded answer silently ran to 900; it now keys off the sectioned read.)
-      const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:(grounded&&sectioned&&!longform)?900:512,temperature:0.4,onToken,signal:guard.signal}),guard.race]);
+      // A turn the discourse metacognition reads as BROAD/DEVELOPED gets the 900-token room to
+      // breathe; a pointed lookup — and a longform ask we're deliberately keeping short and grounded
+      // — stays on the tighter 512. The room keys off the same read that steers the shape
+      // (_wantsRoom), not a keyword shape cue.
+      const raw=await Promise.race([this._ME.streamPhrase(model,messages,{maxTokens:(grounded&&this._wantsRoom(meta)&&!longform)?900:512,temperature:0.4,onToken,signal:guard.signal}),guard.race]);
       guard.clear();
       this._auditRec(id,'answer-raw',{output:String(raw||'')});
       // normMd (not norm): keep the reply's line structure so lists/headings survive into _md.
