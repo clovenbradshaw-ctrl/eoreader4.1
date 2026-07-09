@@ -153,26 +153,29 @@ documents exists yet — that aggregation is next-phase work, not this run's.
 The required human selection arrived as eight candidates. Two fail the same
 structural floors the corpus was gated on and got no spec: the Peirce
 blog exposition (under the 80-sentence read floor) and the Reuters Institute
-News Atom piece (2 natural sections — flat, the wiki failure mode). Six form
-real arcs and were overlaid onto `mixed-en-pooled`:
+News Atom piece (2 natural sections — flat, the wiki failure mode). A third,
+the Bergman triadic essay, was set aside by editorial choice in favour of the
+Bergson essays. The remaining five form real arcs and were overlaid onto
+`mixed-en-pooled`:
 
 | spec (`data/flow-spec-*.json`) | nSent → sections | own-spec arc | vs pooled arc |
 |---|---|---|---|
-| `bergman-triadic` | 204 → 8 | 0.03 | 1.43 |
-| `jazz-omni-american` | 353 → 16 | 0.02 | 0.82 |
-| `omeally-ellison` | 244 → 9 | 0.01 | 0.66 |
+| `rovelli-reality` **(selected)** | 3,264 → 137 | 0.04 | 0.29 |
 | `bergson-laughter` | 1,652 → 153 | 0.04 | 0.97 |
 | `bergson-time-free-will` | 2,274 → 137 | 0.04 | 0.78 |
-| `rovelli-reality` | 3,264 → 137 | 0.04 | 0.29 |
+| `jazz-omni-american` | 353 → 16 | 0.02 | 0.82 |
+| `omeally-ellison` | 244 → 9 | 0.01 | 0.66 |
 
-Calibration is clean on all six (own-spec `meanArcAdherence` 0.01–0.04; the
+`rovelli-reality` is the selected driving spec — the target build the
+generator aims for; the other four remain installed as alternatives.
+Calibration is clean on all five (own-spec `meanArcAdherence` 0.01–0.04; the
 committed viruses example reads 0.06). The "vs pooled" column is how
 off-schedule each piece's build reads against the general English corpus —
-Bergman's essay is the most distinctive build (1.43), Rovelli's the most
-corpus-like (0.29). Specs retain operator statistics plus attribution only,
-no text (the O'Meally piece is an interview — its arc is dialogue-shaped;
-stated so it is not mistaken for essay build). Which spec drives generation
-is an editorial choice, not a measured one — all six load unchanged via
+Rovelli's is the most corpus-like of the five (0.29), Bergson's *Laughter*
+the most distinctive (0.97). Specs retain operator statistics plus attribution
+only, no text (the O'Meally piece is an interview — its arc is dialogue-shaped;
+stated so it is not mistaken for essay build). Which spec drives generation is
+an editorial choice, not a measured one — all five load unchanged via
 `src/flow/index.js`.
 
 ## Reproduction
