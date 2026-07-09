@@ -9,4 +9,14 @@
 // Depends on `core` only. No model. A `propose` backend may be injected to let a talker rank
 // the confined menu; the loop, the firewall, the grade, and the termination are model-independent.
 
-export { walkReasoning, seedCorpus, noStepLaunders } from './walk.js';
+export { walkReasoning, seedCorpus, noStepLaunders, noScopeLaunders, pastMenu, readGraph, IDENTITY } from './walk.js';
+
+// The cursor (reason/cursor.js, CURSOR_REV): the walk's fold generalized to
+// readGraph(log, { upto, scope, grain, origin, door }) — memory, revision, standpoint,
+// height, regret, the modal family, the enactor-DEF counterfactual, possibility/
+// necessity, and reflection, all as specializations of one parameter. IDENTITY folds
+// exactly what the ungeneralized function folded (the golden-parity anchor).
+export {
+  CURSOR_REV, replayState, scopesOf, openScopes, dischargeScope, buildDischarge,
+  contradictionsIn, possible, necessary, reflect,
+} from './cursor.js';

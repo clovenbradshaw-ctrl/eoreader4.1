@@ -43,6 +43,7 @@
 import { fromPerceiver, fromEnactor, classify, canWitness } from '../core/provenance.js';
 import { firm, voidRes, mintHash } from '../core/event.js';
 import { surpriseAt } from '../core/surprise.js';
+import { readGraph, IDENTITY, replayState, buildDischarge } from './cursor.js';
 
 // ── The corpus adapter — appearance events through the PERCEIVER door ─────────
 export const seedCorpus = (log, spec = [], { enactment = 'ingest' } = {}) => {
@@ -56,39 +57,25 @@ export const seedCorpus = (log, spec = [], { enactment = 'ingest' } = {}) => {
 };
 
 // ── Reading the log back into the sets the walk reasons over ──────────────────
-// A figure minted by a WALK step (enactor INS/SYN) is admitted exactly as a corpus figure is, so
-// the next step can bond to it (the accumulation). What differs is the DOOR, which the grade
-// consults, never the reach.
-//
-// The live parser (perceiver/parse) writes a bond's object as `tgt`, and attributes speech and
-// stance as SIG events beside the CONs; both count as exafferent witnesses here. `dst` is read
-// as a fallback so a hand-seeded corpus still parses. Each bond keeps the `sentIdx` its
-// witnessing event was read from — the citation bindCitations wants when a walk step turns out
-// to be grounded.
-const readGraph = (log) => {
-  const events = log.snapshot();
-  const figures = new Map();
-  const bonds = [];
-  for (const e of events) {
-    if ((e.op === 'INS' || e.op === 'SYN') && e.id != null && !figures.has(e.id)) {
-      figures.set(e.id, { id: e.id, label: String(e.label ?? e.id), door: e.prov?.door ?? 'perceiver', grain: e.grain | 0, seq: e.seq });
-    }
-    if ((e.op === 'CON' || e.op === 'SIG') && e.src != null && (e.tgt ?? e.dst) != null) {
-      bonds.push({ src: e.src, dst: e.tgt ?? e.dst, via: String(e.via || 'rel'), door: e.prov?.door ?? 'perceiver',
-        canWitness: canWitness(e.prov ?? null), sentIdx: e.sentIdx ?? null, seq: e.seq });
-    }
-  }
-  const grains = new Set([...figures.values()].map((f) => f.grain));
-  return { events, figures, bonds, grains };
-};
+// The fold now lives in cursor.js as readGraph(log, cursor = IDENTITY) — the CURSOR_REV
+// generalization. The walk calls it at IDENTITY (or with the caller's cursor composed
+// with the open scope), and IDENTITY folds exactly what the local function folded, the
+// golden-parity anchor (tools/cursor/probe-replay.mjs). A figure minted by a WALK step
+// (enactor INS/SYN) is admitted exactly as a corpus figure is, so the next step can bond
+// to it (the accumulation). What differs is the DOOR, which the grade consults, never
+// the reach. Re-exported here so existing importers keep one entrance.
+export { readGraph, IDENTITY } from './cursor.js';
 
 const bondKey = (src, dst, via) => `${src}|${via}|${dst}`;
 const pairKey = (a, b) => (String(a) < String(b) ? `${a}~${b}` : `${b}~${a}`);
 
 // ── The grade, read off the log (never elected) ───────────────────────────────
+// A slack bond (Step 6 — its target holon was term-set, so this former determiner no
+// longer derives it) cannot witness: the sever falls out of the DEF, and the grade
+// reads the severed fold. Inert at IDENTITY — slack never arises without a DEF.
 const gradeBond = ({ src, dst, via }, { bonds, rules }) => {
   const key = bondKey(src, dst, via);
-  const witness = bonds.find((b) => b.canWitness && bondKey(b.src, b.dst, b.via) === key);
+  const witness = bonds.find((b) => b.canWitness && !b.slack && bondKey(b.src, b.dst, b.via) === key);
   if (witness) return { grade: 'grounded', band: firm(), witness: { seq: witness.seq, sentIdx: witness.sentIdx } };
   const rule = rules.find((r) => r.via === via && r.support >= 2);
   if (rule) return { grade: 'warranted-ungrounded', band: voidRes(0.6), warrant: { rule: rule.via, support: rule.support } };
@@ -105,21 +92,42 @@ const gradeBond = ({ src, dst, via }, { bonds, rules }) => {
 // Each candidate carries the `arrival` mass it deposits, so the loop scores it by surprise. A
 // rule's mass reflects the observations it subsumes; a synthesis's mass reflects the new grain it
 // introduces — so the high-information moves are legitimately surprising, not hand-weighted.
-const menu = (graph, { rules, synthesised, bondsSeen }) => {
+const menu = (graph, { rules, synthesised, bondsSeen }, { scope = null, supposedDone = null, scopeConsequences = 0, discharged = false } = {}) => {
   const out = [];
+  const scopeName = scope?.name ?? null;
   const ids = [...graph.figures.keys()];
   const bonded = new Set(graph.bonds.map((b) => pairKey(b.src, b.dst)));
   const viaCounts = new Map();
-  for (const b of graph.bonds) if (b.canWitness) viaCounts.set(b.via, (viaCounts.get(b.via) || 0) + 1);
+  for (const b of graph.bonds) if (b.canWitness && !b.slack) viaCounts.set(b.via, (viaCounts.get(b.via) || 0) + 1);
   const topVia = [...viaCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || 'rel';
 
   // Every candidate carries `note` (the operator trace, for the audit) and `said` (the same
   // move voiced as a declarative claim — what the membrane hands the talker to hedge).
+  // SUPPOSE — Step 5's entry move: seed an enactor INS, CON, or DEF tagged scope:S (the
+  // DEF kind is Step 6's term-setting intervention). Offered only while a scope with
+  // unseeded suppositions is open; absent scope, the menu is byte-identical to before.
+  if (scopeName && !discharged) {
+    (scope.suppositions || []).forEach((spec, idx) => {
+      if (supposedDone?.has(idx)) return;
+      const arrival = new Map([[`suppose:${scopeName}:${idx}`, 1]]);
+      out.push({ op: 'SUPPOSE', spec, specIdx: idx, scope: scopeName, arrival, exaFrac: 1,
+        note: `suppose ${describeSpec(spec)} within ${scopeName}`,
+        said: `suppose ${describeSpec(spec)}` });
+    });
+    // DISCHARGE — fold the scope to one conditional claim once every supposition is
+    // seeded and the scope has developed at least one consequence.
+    if (supposedDone && supposedDone.size === (scope.suppositions || []).length && scopeConsequences > 0) {
+      const arrival = new Map([[`discharge:${scopeName}`, scopeConsequences]]);
+      out.push({ op: 'DISCHARGE', scope: scopeName, arrival, exaFrac: 1,
+        note: `discharge ${scopeName}: it entails its ${scopeConsequences} consequence(s)`,
+        said: `if the supposition holds, what followed under it follows` });
+    }
+  }
   // REC — learn each repeated exafferent relation, once.
   for (const [via, n] of viaCounts) {
     if (n >= 2 && !rules.some((r) => r.via === via)) {
       const arrival = new Map([[`rule:${via}`, n], [`licenses:${via}`, 1]]);
-      out.push({ op: 'REC', via, support: n, arrival, exaFrac: 1, participants: partiesOf(graph.bonds, via),
+      out.push({ op: 'REC', via, support: n, arrival, exaFrac: 1, participants: partiesOf(graph.bonds, via, scopeName),
         note: `learn ${via} as a rule (holds across ${n} attested pairs)`,
         said: `“${via}” recurs across what was read (${n} attested pairs)` });
     }
@@ -130,7 +138,7 @@ const menu = (graph, { rules, synthesised, bondsSeen }) => {
       const a = ids[i], b = ids[j];
       if (bonded.has(pairKey(a, b)) || bondsSeen.has(pairKey(a, b))) continue;
       const arrival = new Map([[`bond:${pairKey(a, b)}`, 1]]);
-      out.push({ op: 'CON', src: a, dst: b, via: topVia, arrival, exaFrac: exaFracOf([a, b], graph.figures),
+      out.push({ op: 'CON', src: a, dst: b, via: topVia, arrival, exaFrac: exaFracOf([a, b], graph.figures, scopeName),
         note: `bond ${graph.figures.get(a)?.label} ${topVia} ${graph.figures.get(b)?.label}`,
         said: `${graph.figures.get(a)?.label} ${topVia} ${graph.figures.get(b)?.label}` });
     }
@@ -147,7 +155,7 @@ const menu = (graph, { rules, synthesised, bondsSeen }) => {
     const id = mintHash(promotedSeq);
     const newGrain = Math.max(0, ...graph.grains) + 1;
     const arrival = new Map([[`syn:${pk}`, 1]]);
-    out.push({ op: 'SYN', id, members: [b.src, b.dst], grain: newGrain, pairKey: pk, arrival, exaFrac: exaFracOf([b.src, b.dst], graph.figures),
+    out.push({ op: 'SYN', id, members: [b.src, b.dst], grain: newGrain, pairKey: pk, arrival, exaFrac: exaFracOf([b.src, b.dst], graph.figures, scopeName),
       label: `${graph.figures.get(b.src)?.label}+${graph.figures.get(b.dst)?.label}`,
       note: `synthesise a figure over {${graph.figures.get(b.src)?.label}, ${graph.figures.get(b.dst)?.label}}`,
       said: `${graph.figures.get(b.src)?.label} and ${graph.figures.get(b.dst)?.label} act as one figure` });
@@ -155,15 +163,35 @@ const menu = (graph, { rules, synthesised, bondsSeen }) => {
   return out;
 };
 
-const exaFracOf = (ids, figures) => {
+const describeSpec = (spec = {}) =>
+  spec.op === 'INS' ? `a figure ${spec.label ?? spec.id}`
+    : spec.op === 'DEF' ? `${spec.id} = ${spec.value}`
+      : `${spec.src} ${spec.via ?? 'rel'} ${spec.tgt ?? spec.dst}`;
+
+// Step 5's anchoring — the Gate B lever. A supposition tagged with the OPEN scope counts
+// as anchored (contributing one) for moves inside that scope, so the walk can DEVELOP
+// the hypothetical instead of starving it; outside any scope the fraction is what it
+// always was, and a stray enactor figure still halves its moves.
+const exaFracOf = (ids, figures, scopeName = null) => {
   if (!ids.length) return 1;
-  const exa = ids.filter((id) => (figures.get(id)?.door ?? 'perceiver') === 'perceiver').length;
-  return exa / ids.length;
+  const anchored = ids.filter((id) => {
+    const f = figures.get(id);
+    if ((f?.door ?? 'perceiver') === 'perceiver') return true;
+    return scopeName != null && f?.scope === scopeName;
+  }).length;
+  return anchored / ids.length;
 };
 
-const partiesOf = (bonds, via) => {
+// The Gate B parity-leak fix: a rule's participants are the figures of its ATTESTED
+// pairs (plus in-scope suppositions when a scope is open). A stray enactor bond outside
+// any open scope never rides into the actual REC.
+const partiesOf = (bonds, via, scopeName = null) => {
   const s = new Set();
-  for (const b of bonds) if (b.via === via) { s.add(b.src); s.add(b.dst); }
+  for (const b of bonds) {
+    if (b.via !== via) continue;
+    if (!(b.canWitness || (b.scope != null && b.scope === scopeName))) continue;
+    s.add(b.src); s.add(b.dst);
+  }
   return [...s];
 };
 
@@ -174,8 +202,16 @@ const surpriseOf = (candidate, profile, gamma) => {
 };
 
 // ── The walk ──────────────────────────────────────────────────────────────────
+// CURSOR_REV additions, both inert when absent (the golden-parity anchor):
+//   cursor   a reason/cursor.js cursor the fold runs under (upto / grain / origin / door).
+//   scope    { name, suppositions: [specs] } — opens a hypothetical: the fold includes
+//            scope-tagged events, the menu gains SUPPOSE/DISCHARGE, in-scope suppositions
+//            count anchored (the Gate B lever), and every step that touches scoped
+//            material is committed scope-tagged and graded `conditional` — a warrant on
+//            the scope, never a witness.
 export const walkReasoning = async (log, {
   gamma = 0.7, epsilon = 0.02, maxSteps = 24, enactment = 'reason', propose = null, selfReachBudget = 3,
+  cursor = null, scope = null,
 } = {}) => {
   const rules = [];
   const synthesised = new Set();
@@ -184,10 +220,14 @@ export const walkReasoning = async (log, {
   let selfReach = selfReachBudget;
   const steps = [];
   const saturationTrace = [];
+  const supposedDone = new Set();
+  let scopeConsequences = 0;
+  let discharged = false;
+  const foldCursor = scope?.name ? { ...(cursor || {}), scope: scope.name } : (cursor || IDENTITY);
 
   for (let i = 0; i < maxSteps; i++) {
-    const graph = readGraph(log);
-    const cands = menu(graph, { rules, synthesised, bondsSeen });
+    const graph = readGraph(log, foldCursor);
+    const cands = menu(graph, { rules, synthesised, bondsSeen }, { scope, supposedDone, scopeConsequences, discharged });
     if (!cands.length) { saturationTrace.push({ i, reason: 'no-admissible-move', bits: 0 }); break; }
 
     // A bounded reach past the ground: the walk may extrapolate beyond the corpus a fixed number
@@ -212,7 +252,23 @@ export const walkReasoning = async (log, {
     const prov = fromEnactor(enactment);   // mine — canWitness will be false, by type
 
     let event, grade, warrant = null, witness = null, sites = [];
-    if (cand.op === 'REC') {
+    if (cand.op === 'SUPPOSE') {
+      // Step 5's entry: seed the supposition through the enactor door, scope-tagged and
+      // marked supposed. A supposed CON registers in bondsSeen so the menu never
+      // re-proposes the pair it already holds hypothetically.
+      supposedDone.add(cand.specIdx);
+      const spec = cand.spec;
+      event = { ...spec, scope: cand.scope, supposed: true, prov };
+      if (spec.op === 'CON' && spec.src != null) bondsSeen.add(pairKey(spec.src, spec.tgt ?? spec.dst));
+      grade = 'conditional'; warrant = { scope: cand.scope };
+      sites = [spec.id, spec.src, spec.tgt ?? spec.dst].filter((x) => x != null);
+    } else if (cand.op === 'DISCHARGE') {
+      // Step 5's exit: fold the scope to ONE conditional claim — S entails its
+      // consequences — through the same single append path as every other step.
+      discharged = true;
+      event = buildDischarge(log, cand.scope, { enactment }) ?? { op: 'REC', kind: 'discharge', scope: cand.scope, if: [], then: [], prov };
+      grade = 'conditional'; warrant = { scope: cand.scope }; sites = [];
+    } else if (cand.op === 'REC') {
       rules.push({ via: cand.via, support: cand.support });
       event = { op: 'REC', via: cand.via, support: cand.support, prov };
       grade = 'warranted-ungrounded'; warrant = { induced_from: cand.support };
@@ -230,6 +286,17 @@ export const walkReasoning = async (log, {
       grade = g.grade; warrant = g.warrant ?? null; witness = g.witness ?? null; sites = [cand.src, cand.dst];
     }
 
+    // Step 5's grade branch: a step that touches scoped material IS an in-scope
+    // consequence — committed scope-tagged, graded `conditional`, warrant the scope,
+    // never a witness. Every downstream consequence inherits the scope it was set under.
+    const stepScope = (scope?.name && !discharged && cand.op !== 'SUPPOSE' && cand.op !== 'DISCHARGE'
+      && sites.some((id) => graph.figures.get(id)?.scope === scope.name)) ? scope.name : null;
+    if (stepScope) {
+      event = { ...event, scope: stepScope };
+      grade = 'conditional'; warrant = { scope: stepScope }; witness = null;
+      scopeConsequences += 1;
+    }
+
     const sealed = log.append(event);   // COMMIT — step i+1 reads it back off the log
 
     const builtOnSelf = sites.some((id) => graph.figures.get(id)?.door === 'enactor');
@@ -238,6 +305,7 @@ export const walkReasoning = async (log, {
       prov: sealed.prov, classified: classify(sealed.prov),
       canWitness: canWitness(sealed.prov),   // FALSE, by type — the firewall
       builtOnSelf, bits: round3(choice.bits),
+      ...(stepScope || cand.op === 'SUPPOSE' || cand.op === 'DISCHARGE' ? { scope: stepScope ?? cand.scope } : {}),
     }));
 
     for (const [a, m] of cand.arrival) profile.set(a, (profile.get(a) || 0) + m);
@@ -263,3 +331,18 @@ const round3 = (x) => (typeof x === 'number' && Number.isFinite(x) ? Math.round(
 // `grounded` grade can only ever come from an EXAFFERENT witness (gradeBond), never from the walk.
 export const noStepLaunders = (result) =>
   result.steps.every((s) => s.canWitness === false);
+
+// noScopeLaunders — noStepLaunders extended to the modal family (Step 5): every step is
+// still reafference, AND every step that touched a scope carries the `conditional` grade
+// with the scope as its warrant — a supposition's consequence never reads grounded or
+// warranted, and never sheds the scope it was set under.
+export const noScopeLaunders = (result) =>
+  noStepLaunders(result) &&
+  result.steps.every((s) => !s.scope || (s.grade === 'conditional' && s.warrant?.scope === s.scope));
+
+// pastMenu — Step 4, regret as a replay of walk state. menu() is a pure function of the
+// graph and { rules, synthesised, bondsSeen }; refold both at seq k and the result is the
+// set of roads not taken at step k, scorable against what arrived by the profile delta.
+// Read-only: nothing is committed.
+export const pastMenu = (log, k, { scope = null } = {}) =>
+  menu(readGraph(log, { upto: k, ...(scope ? { scope } : {}) }), replayState(log, k), scope ? { scope: { name: scope } } : {});
