@@ -148,18 +148,32 @@ finished templates: the discourse-DAG cursor in the CLI output covers one
 document per run, and no aggregation of section-to-section moves across
 documents exists yet — that aggregation is next-phase work, not this run's.
 
-## Task 6 · Exemplar route — **blocked on required input**
+## Task 6 · Exemplar route — **run (addendum, 2026-07-09)**
 
-`exemplar_spec.mjs` is ready to run against the installed `mixed-en-pooled`
-base prior, but it needs one human-selected admired piece in the target
-register (investigative-journalism / EO-essay). The corpus cannot supply it
-and guessing one would defeat the point. **Required input: one exemplar text
-file and its title, chosen by a human.** One command once supplied:
+The required human selection arrived as eight candidates. Two fail the same
+structural floors the corpus was gated on and got no spec: the Peirce
+blog exposition (under the 80-sentence read floor) and the Reuters Institute
+News Atom piece (2 natural sections — flat, the wiki failure mode). Six form
+real arcs and were overlaid onto `mixed-en-pooled`:
 
-```
-node tools/flow/exemplar_spec.mjs --text <piece>.txt --prior data/flow-priors/mixed-en-pooled.json \
-     --eoreader . --title "<title>" --out data/flow-spec-<name>.json
-```
+| spec (`data/flow-spec-*.json`) | nSent → sections | own-spec arc | vs pooled arc |
+|---|---|---|---|
+| `bergman-triadic` | 204 → 8 | 0.03 | 1.43 |
+| `jazz-omni-american` | 353 → 16 | 0.02 | 0.82 |
+| `omeally-ellison` | 244 → 9 | 0.01 | 0.66 |
+| `bergson-laughter` | 1,652 → 153 | 0.04 | 0.97 |
+| `bergson-time-free-will` | 2,274 → 137 | 0.04 | 0.78 |
+| `rovelli-reality` | 3,264 → 137 | 0.04 | 0.29 |
+
+Calibration is clean on all six (own-spec `meanArcAdherence` 0.01–0.04; the
+committed viruses example reads 0.06). The "vs pooled" column is how
+off-schedule each piece's build reads against the general English corpus —
+Bergman's essay is the most distinctive build (1.43), Rovelli's the most
+corpus-like (0.29). Specs retain operator statistics plus attribution only,
+no text (the O'Meally piece is an interview — its arc is dialogue-shaped;
+stated so it is not mistaken for essay build). Which spec drives generation
+is an editorial choice, not a measured one — all six load unchanged via
+`src/flow/index.js`.
 
 ## Reproduction
 
