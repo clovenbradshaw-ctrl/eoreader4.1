@@ -13,26 +13,64 @@
 // deterministically — strip the leaked scaffolding, keep the first plain sentence. Prompt
 // design AND output discipline, because on a 0.5B model the instruction is only half of it.
 
-// We do NOT ask the model what is interesting — the surfer already found the place of most
-// interest (the surprise peak). Asking it to re-identify the interest just yields the empty
-// frame ("the most surprising aspect is …"). The job the reflection actually does is make
-// the IMPLICIT CONNECTION explicit: the surprise is there precisely because the region
-// implies a relation the text does not state. Drawing that unstated link is the developmental
-// move a list of facts lacks (churn is facts without their connections) — and it is the
-// reader's own inference, reafference, correctly held uncitable. One thing the reflection
-// does; others (a tension held, an absence named) can follow the same shape.
-export const SIGNIFICANCE_REFLECT_SYSTEM =
-  'You are a careful reader drawing out what a passage implies but does not say outright. ' +
-  'Given a few statements, name the connection between them that the text leaves unstated — ' +
-  'what they imply together that none says alone. Reply with that connection as one plain ' +
-  'sentence in your own voice: no lead-in, no list, and do not merely repeat what a ' +
-  'statement already says.';
+// A reflection is an EVA — the reader judging a place against its frame — and an EVA is
+// meaningless without its DEF, the terms it evaluates against. The surprise the surfer used
+// to pick this peak IS that gap: what the reading held (the frame) vs what it hit (the
+// arrival). deepReading already computes both sides (verdict = surprise < band; focus; the
+// back=1 span is the frame) and the model-free note uses them — so we hand the model the
+// decomposition, not the arrival prose alone. Then it reports a surprise instead of
+// performing one, and it stops parroting because we never put the meta-vocabulary in the ask.
+// The note is a COMPLETION of the reading's own margin note, not an answer to a critic.
 
-// The chat messages for one reflection over the folded region (verbatim prose at the peak).
-export const significanceReflectMessages = (region) => [
-  { role: 'system', content: SIGNIFICANCE_REFLECT_SYSTEM },
-  { role: 'user', content: `Statements:\n${String(region || '').trim()}\n\nWhat connection between these is implied but not stated? Answer in one plain sentence — the connection itself.` },
-];
+// reflectionInput — the DEF→EVA decomposition, built from what deepReading hands `reflect`
+// (fold, ctx). frame = the span the reading was holding (behind); arrival = the peak it hit;
+// verdict = confirm|strain; highStrain gates the optional REC (reframe) invitation.
+export const reflectionInput = (fold, ctx = {}) => {
+  const sents = (ctx.doc && (ctx.doc.units || ctx.doc.sentences)) || [];
+  const c = Number.isInteger(ctx.cursor) ? ctx.cursor : 0;
+  const arrival = String(sents[c] ?? '').trim();
+  const frame = String(sents[c - 1] ?? '').trim();          // back=1 — what the reading held coming in
+  const verdict = (ctx.surprise != null && ctx.band != null) ? (ctx.surprise < ctx.band ? 'confirm' : 'strain') : 'strain';
+  const highStrain = verdict === 'strain' && ctx.band != null && ctx.surprise > ctx.band * 1.6;
+  return { frame, arrival, verdict, highStrain, focus: ctx.focus ? String(ctx.focus).trim() : null };
+};
+
+// The two reactions the verdict names — a strain and a confirm are different judgments, and
+// the old single ask collapsed them. Fenced to significance over WHAT IS PRESENT ("add no new
+// facts") — the firewall the reflection rides made a prompt constraint, which also structurally
+// blocks the honeybees drift where a model told to conclude invents content.
+const CONFIRM_SYSTEM =
+  "Continue a reader's private margin note. The next line landed where the reader was already " +
+  "heading. In one plain sentence, finish the note with what it now makes plain — the link it " +
+  "confirms between what was held and what came. The reader's own voice; judge only what is " +
+  "already here, and add no new facts.";
+const STRAIN_SYSTEM =
+  "Continue a reader's private margin note. The reader was holding one understanding; the next " +
+  "line cut against it. In one plain sentence, finish the note with what that forces — the link " +
+  "it exposes, or how the earlier reading now has to bend. The reader's own voice; judge only " +
+  "what is already here, and add no new facts.";
+// Offered ONLY at high strain, never commanded — a located REC (docs/deep-reading.md's
+// eo:Reframing). Forcing a reframe on a weak model is the restatement failure; at low strain a
+// plain confirm is the honest output.
+const RECAST_TAIL =
+  ' The strain is large — you may say how the earlier line now has to be read differently.';
+// Kept as the exported default (tests / callers that want a single string) — the strain voice.
+export const SIGNIFICANCE_REFLECT_SYSTEM = STRAIN_SYSTEM;
+
+// significanceReflectMessages — the reflect prompt over the decomposition. Accepts the
+// reflectionInput object; a bare string is treated as an arrival with unknown verdict (strain).
+// The user turn is the reading's note trailing off ("Note on X: ") for the model to COMPLETE —
+// no "what is surprising/interesting/connected" meta-vocabulary for it to echo.
+export const significanceReflectMessages = (input) => {
+  const x = typeof input === 'string' ? { arrival: input, verdict: 'strain' } : (input || {});
+  const system = (x.verdict === 'confirm' ? CONFIRM_SYSTEM : STRAIN_SYSTEM) + (x.highStrain ? RECAST_TAIL : '');
+  const held = x.frame ? `Held: ${x.frame}\n` : '';
+  const then = x.arrival ? `Then: ${x.arrival}\n` : '';
+  return [
+    { role: 'system', content: system },
+    { role: 'user', content: `${held}${then}\nNote${x.focus ? ` on ${x.focus}` : ''}: ` },
+  ];
+};
 
 // Decode hint for the caller — one short sentence, greedy, stop at a line break so the model
 // cannot slide into a second "Also,…" clause or a bulleted expansion.
@@ -65,7 +103,16 @@ const NON_ANSWER = /^(?:implied\b|not\s+(?:explicitly\s+)?stated|it\s+(?:is|'?s)
 // Strips a leaked interjection, a scaffold preamble, and any list lead, unwraps surrounding
 // quotes, keeps the first sentence, caps length. Returns '' when nothing survives (a pure
 // preamble / empty) so the caller feeds no reflection rather than a scaffold.
-export const cleanReflection = (raw, { maxLen = 220 } = {}) => {
+const triSet = (s) => {
+  const w = String(s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(Boolean);
+  const g = new Set(); for (let i = 0; i + 3 <= w.length; i++) g.add(w.slice(i, i + 3).join(' ')); return g;
+};
+
+// `against` — the source spans (the frame and the arrival). A reaction that merely REPEATS a
+// span is a non-judgment (the failure a weak model falls to once it stops parroting): reject
+// it so the walk injects only a genuine reaction, else falls back to baseline. The mirror of
+// the NON_ANSWER guard — one rejects an empty gesture, this rejects an echo.
+export const cleanReflection = (raw, { maxLen = 220, against = [] } = {}) => {
   let t = String(raw || '').replace(/\s+/g, ' ').trim();
   if (!t) return '';
   // take the first non-empty line (the decode stop is '\n', but be robust if it leaked more)
@@ -88,5 +135,15 @@ export const cleanReflection = (raw, { maxLen = 220 } = {}) => {
   if (t.replace(/[^a-z]/gi, '').length < 8) return '';
   if (NON_ANSWER.test(t)) return '';
   if (!/[.!?]$/.test(t) && /\b(?:the|a|an|of|to|and|or|with|for|that|is|are)$/i.test(t)) return '';
+  // restatement guard: if most of the reaction's trigrams already sit in a source span, it is
+  // an echo of the given, not a judgment of it — reject.
+  if (against && against.length) {
+    const rt = triSet(t);
+    if (rt.size) for (const a of against) {
+      const at = triSet(a); if (!at.size) continue;
+      let inter = 0; for (const x of rt) if (at.has(x)) inter++;
+      if (inter / rt.size > 0.6) return '';
+    }
+  }
   return t;
 };

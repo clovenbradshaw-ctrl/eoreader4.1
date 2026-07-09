@@ -20,5 +20,5 @@ export {
 // The significance-reflection prompt (the model voice for `reflect`): first-person,
 // surprise-oriented, plus the output discipline a small model needs (reflect-prompt.js).
 export {
-  SIGNIFICANCE_REFLECT_SYSTEM, significanceReflectMessages, REFLECT_DECODE, cleanReflection,
+  SIGNIFICANCE_REFLECT_SYSTEM, significanceReflectMessages, reflectionInput, REFLECT_DECODE, cleanReflection,
 } from './reflect-prompt.js';

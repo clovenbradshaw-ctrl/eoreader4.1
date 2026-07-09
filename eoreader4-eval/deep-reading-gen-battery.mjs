@@ -12,17 +12,21 @@
 //   chars         length (does reflecting starve or bloat)
 import { pipeline, env } from '@huggingface/transformers';
 import { walk } from '../src/longgen/index.js';
-import { createDeepReader, significanceReflectMessages, cleanReflection, REFLECT_DECODE } from '../src/fold/index.js';
+import { createDeepReader, significanceReflectMessages, reflectionInput, cleanReflection, REFLECT_DECODE } from '../src/fold/index.js';
 import { surfFold } from '../src/surfer/index.js';
 import { parseText } from '../src/perceiver/parse/index.js';
 
 env.allowLocalModels = false;
-const pipe = await pipeline('text-generation', 'onnx-community/Qwen2.5-0.5B-Instruct', { device: 'cpu', dtype: 'q4' });
-const gen = async (messages, maxTok) => { const out = await pipe(messages, { max_new_tokens: maxTok, do_sample: false }); const m = out[0].generated_text; return String(Array.isArray(m) ? (m[m.length - 1]?.content || '') : m).trim(); };
+// Optional bigger reflect voice: REFLECT_MODEL=onnx-community/Qwen2.5-1.5B-Instruct node …
+// (the reflection is the hard, small task; the writer can stay smaller.) Defaults to one model.
+const GEN_ID = 'onnx-community/Qwen2.5-0.5B-Instruct';
+const REFLECT_ID = process.env.REFLECT_MODEL || GEN_ID;
+const pipe = await pipeline('text-generation', GEN_ID, { device: 'cpu', dtype: 'q4' });
+const rpipe = REFLECT_ID === GEN_ID ? pipe : await pipeline('text-generation', REFLECT_ID, { device: 'cpu', dtype: 'q4' });
+const runPipe = (p) => async (messages, maxTok) => { const out = await p(messages, { max_new_tokens: maxTok, do_sample: false }); const m = out[0].generated_text; return String(Array.isArray(m) ? (m[m.length - 1]?.content || '') : m).trim(); };
+const gen = runPipe(pipe);
+const rgen = runPipe(rpipe);
 const model = { name: 'qwen', async phrase(messages, opts = {}) { return gen(messages, Math.min(opts.maxTokens || 160, 200)); } };
-// the DESIGNED significance-reflection prompt (first-person, surprise-oriented) + output
-// discipline (cleanReflection) — the prose, register-matched voice, not an abstract tag.
-const reflectVoice = async (region) => cleanReflection(await gen(significanceReflectMessages(region), REFLECT_DECODE.maxTokens));
 
 const TOPICS = {
   dolphins: ['Dolphins are highly intelligent marine mammals found in oceans worldwide.', 'They use echolocation, emitting clicks and listening for the returning echoes to navigate.', 'Bottlenose dolphins live in social groups called pods that cooperate when hunting.', 'Some populations use marine sponges as tools to protect their snouts while foraging.', 'Dolphins communicate with signature whistles that function like individual names.', 'They are voluntary breathers and must surface regularly to take in air.', 'Calves stay with their mothers for several years, learning to hunt and socialise.', 'Human activities such as bycatch and noise pollution threaten many dolphin populations.'],
@@ -37,8 +41,11 @@ async function voicedReflect(source) {
   const peaks = new Map();
   const reader = createDeepReader({ doc: source, surf: surfFold });
   for (const r of (reader.arrive({ anchor: 0 }).reflections || [])) {
-    const region = (r.sources || []).map((i) => source.sentences[i]).filter(Boolean).join(' ');
-    if (region.length > 20) peaks.set(r.peak, await reflectVoice(region));
+    // hand the reflect the DEF→EVA decomposition (frame vs arrival, branched on verdict), and
+    // reject a restatement of either span — inject only a genuine reaction.
+    const input = reflectionInput(r.fold, { doc: source, cursor: r.peak, focus: r.focus, surprise: r.surprise, band: r.band });
+    const raw = await rgen(significanceReflectMessages(input), REFLECT_DECODE.maxTokens);
+    peaks.set(r.peak, cleanReflection(raw, { against: [input.frame, input.arrival] }));
   }
   return (fold, ctx) => ({ body: peaks.get(ctx.cursor) || '' });
 }
