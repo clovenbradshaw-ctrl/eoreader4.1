@@ -2917,6 +2917,8 @@ class Component extends DCLogic {
     });
   }
   onOpenDoc(){ return this.openDoc(null); }   // the "New document" affordance
+  // The Record panel's "More" disclosure — hold the secondary tools collapsed.
+  toggleTools(){this.setState(s=>({toolsOpen:!s.toolsOpen}));}
   async openDoc(id){
     const docs=this._docsMap();
     if(!id||!docs.has(id)){
@@ -10344,6 +10346,9 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       provMode:'hover',
       onOpenDeepResearch:()=>this.onOpenDeepResearch(),
       onOpenMonologue:()=>this.onOpenMonologue(),
+      // The Record panel's secondary tools live behind a "More" disclosure so the
+      // panel leads with just New chat + Import; the rest expand on demand.
+      toolsOpen:!!this.state.toolsOpen,onToggleTools:()=>this.toggleTools(),toolsCaret:this.state.toolsOpen?'▴':'▾',
       deepCount:this.state.deepCount||0,
       monologueTitle:(this.state.deepCount>0)?('Inner monologue — '+this.state.deepCount+' reflection'+(this.state.deepCount===1?'':'s')+' the reading had at rest'):'Inner monologue — what the reading reflects when you are not chatting',
       onOpenDoc:()=>this.onOpenDoc(),
