@@ -1,0 +1,4459 @@
+{
+  "corpusLen": 8,
+  "steps": [
+    {
+      "i": 0,
+      "op": "REC",
+      "note": "learn employs as a rule (holds across 2 attested pairs)",
+      "said": "“employs” recurs across what was read (2 attested pairs)",
+      "sites": [
+        "a",
+        "b",
+        "c",
+        "d"
+      ],
+      "seq": 8,
+      "grade": "warranted-ungrounded",
+      "warrant": {
+        "induced_from": 2
+      },
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.25
+    },
+    {
+      "i": 1,
+      "op": "CON",
+      "note": "bond Acme employs Dana",
+      "said": "Acme employs Dana",
+      "sites": [
+        "a",
+        "d"
+      ],
+      "seq": 9,
+      "grade": "warranted-ungrounded",
+      "warrant": {
+        "rule": "employs",
+        "support": 2
+      },
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.276
+    },
+    {
+      "i": 2,
+      "op": "CON",
+      "note": "bond Acme employs Eve",
+      "said": "Acme employs Eve",
+      "sites": [
+        "a",
+        "e"
+      ],
+      "seq": 10,
+      "grade": "warranted-ungrounded",
+      "warrant": {
+        "rule": "employs",
+        "support": 2
+      },
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.299
+    },
+    {
+      "i": 3,
+      "op": "CON",
+      "note": "bond Bob employs Corp",
+      "said": "Bob employs Corp",
+      "sites": [
+        "b",
+        "c"
+      ],
+      "seq": 11,
+      "grade": "warranted-ungrounded",
+      "warrant": {
+        "rule": "employs",
+        "support": 2
+      },
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.308
+    },
+    {
+      "i": 4,
+      "op": "CON",
+      "note": "bond Bob employs Dana",
+      "said": "Bob employs Dana",
+      "sites": [
+        "b",
+        "d"
+      ],
+      "seq": 12,
+      "grade": "warranted-ungrounded",
+      "warrant": {
+        "rule": "employs",
+        "support": 2
+      },
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.308
+    },
+    {
+      "i": 5,
+      "op": "CON",
+      "note": "bond Bob employs Eve",
+      "said": "Bob employs Eve",
+      "sites": [
+        "b",
+        "e"
+      ],
+      "seq": 13,
+      "grade": "warranted-ungrounded",
+      "warrant": {
+        "rule": "employs",
+        "support": 2
+      },
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.305
+    },
+    {
+      "i": 6,
+      "op": "CON",
+      "note": "bond Corp employs Eve",
+      "said": "Corp employs Eve",
+      "sites": [
+        "c",
+        "e"
+      ],
+      "seq": 14,
+      "grade": "warranted-ungrounded",
+      "warrant": {
+        "rule": "employs",
+        "support": 2
+      },
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.3
+    },
+    {
+      "i": 7,
+      "op": "CON",
+      "note": "bond Dana employs Eve",
+      "said": "Dana employs Eve",
+      "sites": [
+        "d",
+        "e"
+      ],
+      "seq": 15,
+      "grade": "warranted-ungrounded",
+      "warrant": {
+        "rule": "employs",
+        "support": 2
+      },
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.293
+    },
+    {
+      "i": 8,
+      "op": "SYN",
+      "note": "synthesise a figure over {Acme, Bob}",
+      "said": "Acme and Bob act as one figure",
+      "sites": [
+        "a",
+        "b"
+      ],
+      "seq": 16,
+      "grade": "idle-ungrounded",
+      "warrant": null,
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.286
+    },
+    {
+      "i": 9,
+      "op": "SYN",
+      "note": "synthesise a figure over {Corp, Dana}",
+      "said": "Corp and Dana act as one figure",
+      "sites": [
+        "c",
+        "d"
+      ],
+      "seq": 17,
+      "grade": "idle-ungrounded",
+      "warrant": null,
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.278
+    },
+    {
+      "i": 10,
+      "op": "SYN",
+      "note": "synthesise a figure over {Acme, Corp}",
+      "said": "Acme and Corp act as one figure",
+      "sites": [
+        "a",
+        "c"
+      ],
+      "seq": 18,
+      "grade": "idle-ungrounded",
+      "warrant": null,
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.271
+    },
+    {
+      "i": 11,
+      "op": "SYN",
+      "note": "synthesise a figure over {Acme, Dana}",
+      "said": "Acme and Dana act as one figure",
+      "sites": [
+        "a",
+        "d"
+      ],
+      "seq": 19,
+      "grade": "idle-ungrounded",
+      "warrant": null,
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.263
+    },
+    {
+      "i": 12,
+      "op": "SYN",
+      "note": "synthesise a figure over {Acme, Eve}",
+      "said": "Acme and Eve act as one figure",
+      "sites": [
+        "a",
+        "e"
+      ],
+      "seq": 20,
+      "grade": "idle-ungrounded",
+      "warrant": null,
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.256
+    },
+    {
+      "i": 13,
+      "op": "SYN",
+      "note": "synthesise a figure over {Bob, Corp}",
+      "said": "Bob and Corp act as one figure",
+      "sites": [
+        "b",
+        "c"
+      ],
+      "seq": 21,
+      "grade": "idle-ungrounded",
+      "warrant": null,
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.25
+    },
+    {
+      "i": 14,
+      "op": "SYN",
+      "note": "synthesise a figure over {Bob, Dana}",
+      "said": "Bob and Dana act as one figure",
+      "sites": [
+        "b",
+        "d"
+      ],
+      "seq": 22,
+      "grade": "idle-ungrounded",
+      "warrant": null,
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.243
+    },
+    {
+      "i": 15,
+      "op": "SYN",
+      "note": "synthesise a figure over {Bob, Eve}",
+      "said": "Bob and Eve act as one figure",
+      "sites": [
+        "b",
+        "e"
+      ],
+      "seq": 23,
+      "grade": "idle-ungrounded",
+      "warrant": null,
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.237
+    },
+    {
+      "i": 16,
+      "op": "SYN",
+      "note": "synthesise a figure over {Corp, Eve}",
+      "said": "Corp and Eve act as one figure",
+      "sites": [
+        "c",
+        "e"
+      ],
+      "seq": 24,
+      "grade": "idle-ungrounded",
+      "warrant": null,
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.231
+    },
+    {
+      "i": 17,
+      "op": "SYN",
+      "note": "synthesise a figure over {Dana, Eve}",
+      "said": "Dana and Eve act as one figure",
+      "sites": [
+        "d",
+        "e"
+      ],
+      "seq": 25,
+      "grade": "idle-ungrounded",
+      "warrant": null,
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": false,
+      "bits": 0.225
+    },
+    {
+      "i": 18,
+      "op": "CON",
+      "note": "bond Acme employs Acme+Bob",
+      "said": "Acme employs Acme+Bob",
+      "sites": [
+        "a",
+        "r#006"
+      ],
+      "seq": 26,
+      "grade": "warranted-ungrounded",
+      "warrant": {
+        "rule": "employs",
+        "support": 2
+      },
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": true,
+      "bits": 0.22
+    },
+    {
+      "i": 19,
+      "op": "CON",
+      "note": "bond Acme employs Corp+Dana",
+      "said": "Acme employs Corp+Dana",
+      "sites": [
+        "a",
+        "r#00c"
+      ],
+      "seq": 27,
+      "grade": "warranted-ungrounded",
+      "warrant": {
+        "rule": "employs",
+        "support": 2
+      },
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": true,
+      "bits": 0.215
+    },
+    {
+      "i": 20,
+      "op": "CON",
+      "note": "bond Acme employs Acme+Corp",
+      "said": "Acme employs Acme+Corp",
+      "sites": [
+        "a",
+        "r#00j"
+      ],
+      "seq": 28,
+      "grade": "warranted-ungrounded",
+      "warrant": {
+        "rule": "employs",
+        "support": 2
+      },
+      "witness": null,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "classified": "reafference",
+      "canWitness": false,
+      "builtOnSelf": true,
+      "bits": 0.21
+    }
+  ],
+  "saturationTrace": [
+    {
+      "i": 0,
+      "reason": "reach",
+      "op": "REC",
+      "bits": 0.25
+    },
+    {
+      "i": 1,
+      "reason": "reach",
+      "op": "CON",
+      "bits": 0.276
+    },
+    {
+      "i": 2,
+      "reason": "reach",
+      "op": "CON",
+      "bits": 0.299
+    },
+    {
+      "i": 3,
+      "reason": "reach",
+      "op": "CON",
+      "bits": 0.308
+    },
+    {
+      "i": 4,
+      "reason": "reach",
+      "op": "CON",
+      "bits": 0.308
+    },
+    {
+      "i": 5,
+      "reason": "reach",
+      "op": "CON",
+      "bits": 0.305
+    },
+    {
+      "i": 6,
+      "reason": "reach",
+      "op": "CON",
+      "bits": 0.3
+    },
+    {
+      "i": 7,
+      "reason": "reach",
+      "op": "CON",
+      "bits": 0.293
+    },
+    {
+      "i": 8,
+      "reason": "reach",
+      "op": "SYN",
+      "bits": 0.286
+    },
+    {
+      "i": 9,
+      "reason": "reach",
+      "op": "SYN",
+      "bits": 0.278
+    },
+    {
+      "i": 10,
+      "reason": "reach",
+      "op": "SYN",
+      "bits": 0.271
+    },
+    {
+      "i": 11,
+      "reason": "reach",
+      "op": "SYN",
+      "bits": 0.263
+    },
+    {
+      "i": 12,
+      "reason": "reach",
+      "op": "SYN",
+      "bits": 0.256
+    },
+    {
+      "i": 13,
+      "reason": "reach",
+      "op": "SYN",
+      "bits": 0.25
+    },
+    {
+      "i": 14,
+      "reason": "reach",
+      "op": "SYN",
+      "bits": 0.243
+    },
+    {
+      "i": 15,
+      "reason": "reach",
+      "op": "SYN",
+      "bits": 0.237
+    },
+    {
+      "i": 16,
+      "reason": "reach",
+      "op": "SYN",
+      "bits": 0.231
+    },
+    {
+      "i": 17,
+      "reason": "reach",
+      "op": "SYN",
+      "bits": 0.225
+    },
+    {
+      "i": 18,
+      "reason": "reach",
+      "op": "CON",
+      "bits": 0.22
+    },
+    {
+      "i": 19,
+      "reason": "reach",
+      "op": "CON",
+      "bits": 0.215
+    },
+    {
+      "i": 20,
+      "reason": "reach",
+      "op": "CON",
+      "bits": 0.21
+    },
+    {
+      "i": 21,
+      "reason": "ground-covered",
+      "bits": 0
+    }
+  ],
+  "gradeCounts": {
+    "warranted-ungrounded": 11,
+    "idle-ungrounded": 10
+  },
+  "groundedFraction": 0,
+  "quiesced": true,
+  "graphsSeen": [
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        }
+      ],
+      "grains": [
+        0
+      ],
+      "eventCount": 8
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        }
+      ],
+      "grains": [
+        0
+      ],
+      "eventCount": 9
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        }
+      ],
+      "grains": [
+        0
+      ],
+      "eventCount": 10
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        }
+      ],
+      "grains": [
+        0
+      ],
+      "eventCount": 11
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        }
+      ],
+      "grains": [
+        0
+      ],
+      "eventCount": 12
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        }
+      ],
+      "grains": [
+        0
+      ],
+      "eventCount": 13
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        },
+        {
+          "src": "b",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 13
+        }
+      ],
+      "grains": [
+        0
+      ],
+      "eventCount": 14
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        },
+        {
+          "src": "b",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 13
+        },
+        {
+          "src": "c",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 14
+        }
+      ],
+      "grains": [
+        0
+      ],
+      "eventCount": 15
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        },
+        {
+          "src": "b",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 13
+        },
+        {
+          "src": "c",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 14
+        },
+        {
+          "src": "d",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 15
+        }
+      ],
+      "grains": [
+        0
+      ],
+      "eventCount": 16
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        },
+        {
+          "id": "r#006",
+          "label": "Acme+Bob",
+          "door": "enactor",
+          "grain": 1,
+          "seq": 16
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        },
+        {
+          "src": "b",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 13
+        },
+        {
+          "src": "c",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 14
+        },
+        {
+          "src": "d",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 15
+        }
+      ],
+      "grains": [
+        0,
+        1
+      ],
+      "eventCount": 17
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        },
+        {
+          "id": "r#006",
+          "label": "Acme+Bob",
+          "door": "enactor",
+          "grain": 1,
+          "seq": 16
+        },
+        {
+          "id": "r#00c",
+          "label": "Corp+Dana",
+          "door": "enactor",
+          "grain": 2,
+          "seq": 17
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        },
+        {
+          "src": "b",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 13
+        },
+        {
+          "src": "c",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 14
+        },
+        {
+          "src": "d",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 15
+        }
+      ],
+      "grains": [
+        0,
+        1,
+        2
+      ],
+      "eventCount": 18
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        },
+        {
+          "id": "r#006",
+          "label": "Acme+Bob",
+          "door": "enactor",
+          "grain": 1,
+          "seq": 16
+        },
+        {
+          "id": "r#00c",
+          "label": "Corp+Dana",
+          "door": "enactor",
+          "grain": 2,
+          "seq": 17
+        },
+        {
+          "id": "r#00j",
+          "label": "Acme+Corp",
+          "door": "enactor",
+          "grain": 3,
+          "seq": 18
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        },
+        {
+          "src": "b",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 13
+        },
+        {
+          "src": "c",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 14
+        },
+        {
+          "src": "d",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 15
+        }
+      ],
+      "grains": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "eventCount": 19
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        },
+        {
+          "id": "r#006",
+          "label": "Acme+Bob",
+          "door": "enactor",
+          "grain": 1,
+          "seq": 16
+        },
+        {
+          "id": "r#00c",
+          "label": "Corp+Dana",
+          "door": "enactor",
+          "grain": 2,
+          "seq": 17
+        },
+        {
+          "id": "r#00j",
+          "label": "Acme+Corp",
+          "door": "enactor",
+          "grain": 3,
+          "seq": 18
+        },
+        {
+          "id": "r#00r",
+          "label": "Acme+Dana",
+          "door": "enactor",
+          "grain": 4,
+          "seq": 19
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        },
+        {
+          "src": "b",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 13
+        },
+        {
+          "src": "c",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 14
+        },
+        {
+          "src": "d",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 15
+        }
+      ],
+      "grains": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "eventCount": 20
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        },
+        {
+          "id": "r#006",
+          "label": "Acme+Bob",
+          "door": "enactor",
+          "grain": 1,
+          "seq": 16
+        },
+        {
+          "id": "r#00c",
+          "label": "Corp+Dana",
+          "door": "enactor",
+          "grain": 2,
+          "seq": 17
+        },
+        {
+          "id": "r#00j",
+          "label": "Acme+Corp",
+          "door": "enactor",
+          "grain": 3,
+          "seq": 18
+        },
+        {
+          "id": "r#00r",
+          "label": "Acme+Dana",
+          "door": "enactor",
+          "grain": 4,
+          "seq": 19
+        },
+        {
+          "id": "r#010",
+          "label": "Acme+Eve",
+          "door": "enactor",
+          "grain": 5,
+          "seq": 20
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        },
+        {
+          "src": "b",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 13
+        },
+        {
+          "src": "c",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 14
+        },
+        {
+          "src": "d",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 15
+        }
+      ],
+      "grains": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "eventCount": 21
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        },
+        {
+          "id": "r#006",
+          "label": "Acme+Bob",
+          "door": "enactor",
+          "grain": 1,
+          "seq": 16
+        },
+        {
+          "id": "r#00c",
+          "label": "Corp+Dana",
+          "door": "enactor",
+          "grain": 2,
+          "seq": 17
+        },
+        {
+          "id": "r#00j",
+          "label": "Acme+Corp",
+          "door": "enactor",
+          "grain": 3,
+          "seq": 18
+        },
+        {
+          "id": "r#00r",
+          "label": "Acme+Dana",
+          "door": "enactor",
+          "grain": 4,
+          "seq": 19
+        },
+        {
+          "id": "r#010",
+          "label": "Acme+Eve",
+          "door": "enactor",
+          "grain": 5,
+          "seq": 20
+        },
+        {
+          "id": "r#01a",
+          "label": "Bob+Corp",
+          "door": "enactor",
+          "grain": 6,
+          "seq": 21
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        },
+        {
+          "src": "b",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 13
+        },
+        {
+          "src": "c",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 14
+        },
+        {
+          "src": "d",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 15
+        }
+      ],
+      "grains": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "eventCount": 22
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        },
+        {
+          "id": "r#006",
+          "label": "Acme+Bob",
+          "door": "enactor",
+          "grain": 1,
+          "seq": 16
+        },
+        {
+          "id": "r#00c",
+          "label": "Corp+Dana",
+          "door": "enactor",
+          "grain": 2,
+          "seq": 17
+        },
+        {
+          "id": "r#00j",
+          "label": "Acme+Corp",
+          "door": "enactor",
+          "grain": 3,
+          "seq": 18
+        },
+        {
+          "id": "r#00r",
+          "label": "Acme+Dana",
+          "door": "enactor",
+          "grain": 4,
+          "seq": 19
+        },
+        {
+          "id": "r#010",
+          "label": "Acme+Eve",
+          "door": "enactor",
+          "grain": 5,
+          "seq": 20
+        },
+        {
+          "id": "r#01a",
+          "label": "Bob+Corp",
+          "door": "enactor",
+          "grain": 6,
+          "seq": 21
+        },
+        {
+          "id": "r#01l",
+          "label": "Bob+Dana",
+          "door": "enactor",
+          "grain": 7,
+          "seq": 22
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        },
+        {
+          "src": "b",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 13
+        },
+        {
+          "src": "c",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 14
+        },
+        {
+          "src": "d",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 15
+        }
+      ],
+      "grains": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+      ],
+      "eventCount": 23
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        },
+        {
+          "id": "r#006",
+          "label": "Acme+Bob",
+          "door": "enactor",
+          "grain": 1,
+          "seq": 16
+        },
+        {
+          "id": "r#00c",
+          "label": "Corp+Dana",
+          "door": "enactor",
+          "grain": 2,
+          "seq": 17
+        },
+        {
+          "id": "r#00j",
+          "label": "Acme+Corp",
+          "door": "enactor",
+          "grain": 3,
+          "seq": 18
+        },
+        {
+          "id": "r#00r",
+          "label": "Acme+Dana",
+          "door": "enactor",
+          "grain": 4,
+          "seq": 19
+        },
+        {
+          "id": "r#010",
+          "label": "Acme+Eve",
+          "door": "enactor",
+          "grain": 5,
+          "seq": 20
+        },
+        {
+          "id": "r#01a",
+          "label": "Bob+Corp",
+          "door": "enactor",
+          "grain": 6,
+          "seq": 21
+        },
+        {
+          "id": "r#01l",
+          "label": "Bob+Dana",
+          "door": "enactor",
+          "grain": 7,
+          "seq": 22
+        },
+        {
+          "id": "r#01x",
+          "label": "Bob+Eve",
+          "door": "enactor",
+          "grain": 8,
+          "seq": 23
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        },
+        {
+          "src": "b",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 13
+        },
+        {
+          "src": "c",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 14
+        },
+        {
+          "src": "d",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 15
+        }
+      ],
+      "grains": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "eventCount": 24
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        },
+        {
+          "id": "r#006",
+          "label": "Acme+Bob",
+          "door": "enactor",
+          "grain": 1,
+          "seq": 16
+        },
+        {
+          "id": "r#00c",
+          "label": "Corp+Dana",
+          "door": "enactor",
+          "grain": 2,
+          "seq": 17
+        },
+        {
+          "id": "r#00j",
+          "label": "Acme+Corp",
+          "door": "enactor",
+          "grain": 3,
+          "seq": 18
+        },
+        {
+          "id": "r#00r",
+          "label": "Acme+Dana",
+          "door": "enactor",
+          "grain": 4,
+          "seq": 19
+        },
+        {
+          "id": "r#010",
+          "label": "Acme+Eve",
+          "door": "enactor",
+          "grain": 5,
+          "seq": 20
+        },
+        {
+          "id": "r#01a",
+          "label": "Bob+Corp",
+          "door": "enactor",
+          "grain": 6,
+          "seq": 21
+        },
+        {
+          "id": "r#01l",
+          "label": "Bob+Dana",
+          "door": "enactor",
+          "grain": 7,
+          "seq": 22
+        },
+        {
+          "id": "r#01x",
+          "label": "Bob+Eve",
+          "door": "enactor",
+          "grain": 8,
+          "seq": 23
+        },
+        {
+          "id": "r#02a",
+          "label": "Corp+Eve",
+          "door": "enactor",
+          "grain": 9,
+          "seq": 24
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        },
+        {
+          "src": "b",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 13
+        },
+        {
+          "src": "c",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 14
+        },
+        {
+          "src": "d",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 15
+        }
+      ],
+      "grains": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "eventCount": 25
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        },
+        {
+          "id": "r#006",
+          "label": "Acme+Bob",
+          "door": "enactor",
+          "grain": 1,
+          "seq": 16
+        },
+        {
+          "id": "r#00c",
+          "label": "Corp+Dana",
+          "door": "enactor",
+          "grain": 2,
+          "seq": 17
+        },
+        {
+          "id": "r#00j",
+          "label": "Acme+Corp",
+          "door": "enactor",
+          "grain": 3,
+          "seq": 18
+        },
+        {
+          "id": "r#00r",
+          "label": "Acme+Dana",
+          "door": "enactor",
+          "grain": 4,
+          "seq": 19
+        },
+        {
+          "id": "r#010",
+          "label": "Acme+Eve",
+          "door": "enactor",
+          "grain": 5,
+          "seq": 20
+        },
+        {
+          "id": "r#01a",
+          "label": "Bob+Corp",
+          "door": "enactor",
+          "grain": 6,
+          "seq": 21
+        },
+        {
+          "id": "r#01l",
+          "label": "Bob+Dana",
+          "door": "enactor",
+          "grain": 7,
+          "seq": 22
+        },
+        {
+          "id": "r#01x",
+          "label": "Bob+Eve",
+          "door": "enactor",
+          "grain": 8,
+          "seq": 23
+        },
+        {
+          "id": "r#02a",
+          "label": "Corp+Eve",
+          "door": "enactor",
+          "grain": 9,
+          "seq": 24
+        },
+        {
+          "id": "r#02o",
+          "label": "Dana+Eve",
+          "door": "enactor",
+          "grain": 10,
+          "seq": 25
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        },
+        {
+          "src": "b",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 13
+        },
+        {
+          "src": "c",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 14
+        },
+        {
+          "src": "d",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 15
+        }
+      ],
+      "grains": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "eventCount": 26
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        },
+        {
+          "id": "r#006",
+          "label": "Acme+Bob",
+          "door": "enactor",
+          "grain": 1,
+          "seq": 16
+        },
+        {
+          "id": "r#00c",
+          "label": "Corp+Dana",
+          "door": "enactor",
+          "grain": 2,
+          "seq": 17
+        },
+        {
+          "id": "r#00j",
+          "label": "Acme+Corp",
+          "door": "enactor",
+          "grain": 3,
+          "seq": 18
+        },
+        {
+          "id": "r#00r",
+          "label": "Acme+Dana",
+          "door": "enactor",
+          "grain": 4,
+          "seq": 19
+        },
+        {
+          "id": "r#010",
+          "label": "Acme+Eve",
+          "door": "enactor",
+          "grain": 5,
+          "seq": 20
+        },
+        {
+          "id": "r#01a",
+          "label": "Bob+Corp",
+          "door": "enactor",
+          "grain": 6,
+          "seq": 21
+        },
+        {
+          "id": "r#01l",
+          "label": "Bob+Dana",
+          "door": "enactor",
+          "grain": 7,
+          "seq": 22
+        },
+        {
+          "id": "r#01x",
+          "label": "Bob+Eve",
+          "door": "enactor",
+          "grain": 8,
+          "seq": 23
+        },
+        {
+          "id": "r#02a",
+          "label": "Corp+Eve",
+          "door": "enactor",
+          "grain": 9,
+          "seq": 24
+        },
+        {
+          "id": "r#02o",
+          "label": "Dana+Eve",
+          "door": "enactor",
+          "grain": 10,
+          "seq": 25
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        },
+        {
+          "src": "b",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 13
+        },
+        {
+          "src": "c",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 14
+        },
+        {
+          "src": "d",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 15
+        },
+        {
+          "src": "a",
+          "dst": "r#006",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 26
+        }
+      ],
+      "grains": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "eventCount": 27
+    },
+    {
+      "figures": [
+        {
+          "id": "a",
+          "label": "Acme",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 0
+        },
+        {
+          "id": "b",
+          "label": "Bob",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 1
+        },
+        {
+          "id": "c",
+          "label": "Corp",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 2
+        },
+        {
+          "id": "d",
+          "label": "Dana",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 3
+        },
+        {
+          "id": "e",
+          "label": "Eve",
+          "door": "perceiver",
+          "grain": 0,
+          "seq": 4
+        },
+        {
+          "id": "r#006",
+          "label": "Acme+Bob",
+          "door": "enactor",
+          "grain": 1,
+          "seq": 16
+        },
+        {
+          "id": "r#00c",
+          "label": "Corp+Dana",
+          "door": "enactor",
+          "grain": 2,
+          "seq": 17
+        },
+        {
+          "id": "r#00j",
+          "label": "Acme+Corp",
+          "door": "enactor",
+          "grain": 3,
+          "seq": 18
+        },
+        {
+          "id": "r#00r",
+          "label": "Acme+Dana",
+          "door": "enactor",
+          "grain": 4,
+          "seq": 19
+        },
+        {
+          "id": "r#010",
+          "label": "Acme+Eve",
+          "door": "enactor",
+          "grain": 5,
+          "seq": 20
+        },
+        {
+          "id": "r#01a",
+          "label": "Bob+Corp",
+          "door": "enactor",
+          "grain": 6,
+          "seq": 21
+        },
+        {
+          "id": "r#01l",
+          "label": "Bob+Dana",
+          "door": "enactor",
+          "grain": 7,
+          "seq": 22
+        },
+        {
+          "id": "r#01x",
+          "label": "Bob+Eve",
+          "door": "enactor",
+          "grain": 8,
+          "seq": 23
+        },
+        {
+          "id": "r#02a",
+          "label": "Corp+Eve",
+          "door": "enactor",
+          "grain": 9,
+          "seq": 24
+        },
+        {
+          "id": "r#02o",
+          "label": "Dana+Eve",
+          "door": "enactor",
+          "grain": 10,
+          "seq": 25
+        }
+      ],
+      "bonds": [
+        {
+          "src": "a",
+          "dst": "b",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 5
+        },
+        {
+          "src": "c",
+          "dst": "d",
+          "via": "employs",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 6
+        },
+        {
+          "src": "a",
+          "dst": "c",
+          "via": "partners",
+          "door": "perceiver",
+          "canWitness": true,
+          "sentIdx": null,
+          "seq": 7
+        },
+        {
+          "src": "a",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 9
+        },
+        {
+          "src": "a",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 10
+        },
+        {
+          "src": "b",
+          "dst": "c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 11
+        },
+        {
+          "src": "b",
+          "dst": "d",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 12
+        },
+        {
+          "src": "b",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 13
+        },
+        {
+          "src": "c",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 14
+        },
+        {
+          "src": "d",
+          "dst": "e",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 15
+        },
+        {
+          "src": "a",
+          "dst": "r#006",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 26
+        },
+        {
+          "src": "a",
+          "dst": "r#00c",
+          "via": "employs",
+          "door": "enactor",
+          "canWitness": false,
+          "sentIdx": null,
+          "seq": 27
+        }
+      ],
+      "grains": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "eventCount": 28
+    }
+  ],
+  "logEvents": [
+    {
+      "op": "INS",
+      "id": "a",
+      "label": "Acme",
+      "prov": {
+        "door": "perceiver",
+        "enactment": "ingest"
+      },
+      "seq": 0,
+      "t": 0,
+      "eo": {
+        "notation": "INS(a@Void, Cultivating)",
+        "terrain": "Void",
+        "stance": "Cultivating",
+        "address": {
+          "path": "a",
+          "id": "e40c292c",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "INS",
+      "id": "b",
+      "label": "Bob",
+      "prov": {
+        "door": "perceiver",
+        "enactment": "ingest"
+      },
+      "seq": 1,
+      "t": 0,
+      "eo": {
+        "notation": "INS(b@Void, Cultivating)",
+        "terrain": "Void",
+        "stance": "Cultivating",
+        "address": {
+          "path": "b",
+          "id": "e70c2de5",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "INS",
+      "id": "c",
+      "label": "Corp",
+      "prov": {
+        "door": "perceiver",
+        "enactment": "ingest"
+      },
+      "seq": 2,
+      "t": 0,
+      "eo": {
+        "notation": "INS(c@Void, Cultivating)",
+        "terrain": "Void",
+        "stance": "Cultivating",
+        "address": {
+          "path": "c",
+          "id": "e60c2c52",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "INS",
+      "id": "d",
+      "label": "Dana",
+      "prov": {
+        "door": "perceiver",
+        "enactment": "ingest"
+      },
+      "seq": 3,
+      "t": 0,
+      "eo": {
+        "notation": "INS(d@Void, Cultivating)",
+        "terrain": "Void",
+        "stance": "Cultivating",
+        "address": {
+          "path": "d",
+          "id": "e10c2473",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "INS",
+      "id": "e",
+      "label": "Eve",
+      "prov": {
+        "door": "perceiver",
+        "enactment": "ingest"
+      },
+      "seq": 4,
+      "t": 0,
+      "eo": {
+        "notation": "INS(e@Void, Cultivating)",
+        "terrain": "Void",
+        "stance": "Cultivating",
+        "address": {
+          "path": "e",
+          "id": "e00c22e0",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "CON",
+      "src": "a",
+      "tgt": "b",
+      "via": "employs",
+      "prov": {
+        "door": "perceiver",
+        "enactment": "ingest"
+      },
+      "seq": 5,
+      "t": 0,
+      "eo": {
+        "notation": "CON(a@Network, Tracing)",
+        "terrain": "Network",
+        "stance": "Tracing",
+        "address": {
+          "path": "a",
+          "id": "e40c292c",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "CON",
+      "src": "c",
+      "tgt": "d",
+      "via": "employs",
+      "prov": {
+        "door": "perceiver",
+        "enactment": "ingest"
+      },
+      "seq": 6,
+      "t": 0,
+      "eo": {
+        "notation": "CON(c@Network, Tracing)",
+        "terrain": "Network",
+        "stance": "Tracing",
+        "address": {
+          "path": "c",
+          "id": "e60c2c52",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "CON",
+      "src": "a",
+      "tgt": "c",
+      "via": "partners",
+      "prov": {
+        "door": "perceiver",
+        "enactment": "ingest"
+      },
+      "seq": 7,
+      "t": 0,
+      "eo": {
+        "notation": "CON(a@Network, Tracing)",
+        "terrain": "Network",
+        "stance": "Tracing",
+        "address": {
+          "path": "a",
+          "id": "e40c292c",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "REC",
+      "via": "employs",
+      "support": 2,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 8,
+      "t": 0,
+      "eo": {
+        "notation": "REC(Paradigm, Composing)",
+        "terrain": "Paradigm",
+        "stance": "Composing",
+        "address": null
+      }
+    },
+    {
+      "op": "CON",
+      "src": "a",
+      "tgt": "d",
+      "via": "employs",
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 9,
+      "t": 0,
+      "eo": {
+        "notation": "CON(a@Network, Tracing)",
+        "terrain": "Network",
+        "stance": "Tracing",
+        "address": {
+          "path": "a",
+          "id": "e40c292c",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "CON",
+      "src": "a",
+      "tgt": "e",
+      "via": "employs",
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 10,
+      "t": 0,
+      "eo": {
+        "notation": "CON(a@Network, Tracing)",
+        "terrain": "Network",
+        "stance": "Tracing",
+        "address": {
+          "path": "a",
+          "id": "e40c292c",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "CON",
+      "src": "b",
+      "tgt": "c",
+      "via": "employs",
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 11,
+      "t": 0,
+      "eo": {
+        "notation": "CON(b@Network, Tracing)",
+        "terrain": "Network",
+        "stance": "Tracing",
+        "address": {
+          "path": "b",
+          "id": "e70c2de5",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "CON",
+      "src": "b",
+      "tgt": "d",
+      "via": "employs",
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 12,
+      "t": 0,
+      "eo": {
+        "notation": "CON(b@Network, Tracing)",
+        "terrain": "Network",
+        "stance": "Tracing",
+        "address": {
+          "path": "b",
+          "id": "e70c2de5",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "CON",
+      "src": "b",
+      "tgt": "e",
+      "via": "employs",
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 13,
+      "t": 0,
+      "eo": {
+        "notation": "CON(b@Network, Tracing)",
+        "terrain": "Network",
+        "stance": "Tracing",
+        "address": {
+          "path": "b",
+          "id": "e70c2de5",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "CON",
+      "src": "c",
+      "tgt": "e",
+      "via": "employs",
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 14,
+      "t": 0,
+      "eo": {
+        "notation": "CON(c@Network, Tracing)",
+        "terrain": "Network",
+        "stance": "Tracing",
+        "address": {
+          "path": "c",
+          "id": "e60c2c52",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "CON",
+      "src": "d",
+      "tgt": "e",
+      "via": "employs",
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 15,
+      "t": 0,
+      "eo": {
+        "notation": "CON(d@Network, Tracing)",
+        "terrain": "Network",
+        "stance": "Tracing",
+        "address": {
+          "path": "d",
+          "id": "e10c2473",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "SYN",
+      "id": "r#006",
+      "label": "Acme+Bob",
+      "members": [
+        "a",
+        "b"
+      ],
+      "grain": 1,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 16,
+      "t": 0,
+      "eo": {
+        "notation": "SYN(r#006@null, null)",
+        "terrain": null,
+        "stance": null,
+        "address": {
+          "path": "r#006",
+          "id": "0769668c",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "SYN",
+      "id": "r#00c",
+      "label": "Corp+Dana",
+      "members": [
+        "c",
+        "d"
+      ],
+      "grain": 2,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 17,
+      "t": 0,
+      "eo": {
+        "notation": "SYN(r#00c@null, null)",
+        "terrain": null,
+        "stance": null,
+        "address": {
+          "path": "r#00c",
+          "id": "d4691643",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "SYN",
+      "id": "r#00j",
+      "label": "Acme+Corp",
+      "members": [
+        "a",
+        "c"
+      ],
+      "grain": 3,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 18,
+      "t": 0,
+      "eo": {
+        "notation": "SYN(r#00j@null, null)",
+        "terrain": null,
+        "stance": null,
+        "address": {
+          "path": "r#00j",
+          "id": "db692148",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "SYN",
+      "id": "r#00r",
+      "label": "Acme+Dana",
+      "members": [
+        "a",
+        "d"
+      ],
+      "grain": 4,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 19,
+      "t": 0,
+      "eo": {
+        "notation": "SYN(r#00r@null, null)",
+        "terrain": null,
+        "stance": null,
+        "address": {
+          "path": "r#00r",
+          "id": "c368fb80",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "SYN",
+      "id": "r#010",
+      "label": "Acme+Eve",
+      "members": [
+        "a",
+        "e"
+      ],
+      "grain": 5,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 20,
+      "t": 0,
+      "eo": {
+        "notation": "SYN(r#010@null, null)",
+        "terrain": null,
+        "stance": null,
+        "address": {
+          "path": "r#010",
+          "id": "8b6c74ef",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "SYN",
+      "id": "r#01a",
+      "label": "Bob+Corp",
+      "members": [
+        "b",
+        "c"
+      ],
+      "grain": 6,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 21,
+      "t": 0,
+      "eo": {
+        "notation": "SYN(r#01a@null, null)",
+        "terrain": null,
+        "stance": null,
+        "address": {
+          "path": "r#01a",
+          "id": "ba6cbeec",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "SYN",
+      "id": "r#01l",
+      "label": "Bob+Dana",
+      "members": [
+        "b",
+        "d"
+      ],
+      "grain": 7,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 22,
+      "t": 0,
+      "eo": {
+        "notation": "SYN(r#01l@null, null)",
+        "terrain": null,
+        "stance": null,
+        "address": {
+          "path": "r#01l",
+          "id": "bf6cc6cb",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "SYN",
+      "id": "r#01x",
+      "label": "Bob+Eve",
+      "members": [
+        "b",
+        "e"
+      ],
+      "grain": 8,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 23,
+      "t": 0,
+      "eo": {
+        "notation": "SYN(r#01x@null, null)",
+        "terrain": null,
+        "stance": null,
+        "address": {
+          "path": "r#01x",
+          "id": "d36ce647",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "SYN",
+      "id": "r#02a",
+      "label": "Corp+Eve",
+      "members": [
+        "c",
+        "e"
+      ],
+      "grain": 9,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 24,
+      "t": 0,
+      "eo": {
+        "notation": "SYN(r#02a@null, null)",
+        "terrain": null,
+        "stance": null,
+        "address": {
+          "path": "r#02a",
+          "id": "ca648957",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "SYN",
+      "id": "r#02o",
+      "label": "Dana+Eve",
+      "members": [
+        "d",
+        "e"
+      ],
+      "grain": 10,
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 25,
+      "t": 0,
+      "eo": {
+        "notation": "SYN(r#02o@null, null)",
+        "terrain": null,
+        "stance": null,
+        "address": {
+          "path": "r#02o",
+          "id": "c0647999",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "CON",
+      "src": "a",
+      "tgt": "r#006",
+      "via": "employs",
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 26,
+      "t": 0,
+      "eo": {
+        "notation": "CON(a@Network, Tracing)",
+        "terrain": "Network",
+        "stance": "Tracing",
+        "address": {
+          "path": "a",
+          "id": "e40c292c",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "CON",
+      "src": "a",
+      "tgt": "r#00c",
+      "via": "employs",
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 27,
+      "t": 0,
+      "eo": {
+        "notation": "CON(a@Network, Tracing)",
+        "terrain": "Network",
+        "stance": "Tracing",
+        "address": {
+          "path": "a",
+          "id": "e40c292c",
+          "depth": 1
+        }
+      }
+    },
+    {
+      "op": "CON",
+      "src": "a",
+      "tgt": "r#00j",
+      "via": "employs",
+      "prov": {
+        "door": "enactor",
+        "enactment": "reason"
+      },
+      "seq": 28,
+      "t": 0,
+      "eo": {
+        "notation": "CON(a@Network, Tracing)",
+        "terrain": "Network",
+        "stance": "Tracing",
+        "address": {
+          "path": "a",
+          "id": "e40c292c",
+          "depth": 1
+        }
+      }
+    }
+  ]
+}
