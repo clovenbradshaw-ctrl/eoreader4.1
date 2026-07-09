@@ -48,6 +48,12 @@
      (not a module) so it can't import; it reads this global instead and degrades to a
      no-op file explorer until the module lands. -->
 <script type="module">import(new URL('src/workspace/index.js', document.baseURI).href).then(m=>{window.EOWorkspace=m;}).catch(e=>console.warn('workspace load failed:', e));</script>
+<!-- The LENS layer (src/workspace/lens.js): named workspaces laid over the shared Record —
+     each pins a slice of memory, carries its own accent, and remembers how its panel was
+     organized. It is the grounding spine: "narrow to workspace" grounds a chat in the active
+     lens's pins, "widen to memory" grounds it in everything read. Exposed as
+     window.EOWorkspaceLens; the app degrades to a single implicit lens until it lands. -->
+<script type="module">import(new URL('src/workspace/lens.js', document.baseURI).href).then(m=>{window.EOWorkspaceLens=m;}).catch(e=>console.warn('lens load failed:', e));</script>
 <!-- The EOT ledger + its live terminal surface (src/audit/): every operation the app
      performs — a read, a search, a route, a prompt, a generation, a bind, a veto — read
      out as one EOT line the moment it happens, tailed in a terminal drawer (Ctrl+backtick),
