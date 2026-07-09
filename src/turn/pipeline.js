@@ -13,6 +13,7 @@
 // vetoes ride alongside as `flags`.
 
 import { stages } from './stages.js';
+import { stageFace } from './stage-faces.js';
 import { proposeWebSearch } from './propose.js';
 import { createCompositeDoc } from '../organs/in/index.js';
 import { siteTerrainAt } from '../surfer/index.js';
@@ -133,8 +134,15 @@ export const runTurn = async ({ question, doc, docs, model, embedder, geometricE
   // single doc passes through untouched; the legacy `doc` argument still works.
   const groundingDoc = (Array.isArray(docs) && docs.length) ? createCompositeDoc(docs) : (doc || null);
   const turn      = auditLog.turn(question);
+  // Print the faces (docs/spec-good-watchmaker.md, migration step 1): every stage
+  // carries its canonical notate(event) spelling — operator(Site, Stance) — beside
+  // its human label, so the Site and Stance faces are visible in the trace and not
+  // just the Act label. `stageFace` returns null for the pipeline's book-keeping
+  // steps (error/reflect/propose-web), which are not cube stages and stay unspelled.
   const stepFan   = (name, ctx, ms) => {
     const data = summarize(name, ctx, ms);
+    const face = stageFace(name);
+    if (face) { data.eo = face.notation; data.faces = face.cells; }
     turn.step(name, data);
     onStep?.(name, ctx, data);
   };
