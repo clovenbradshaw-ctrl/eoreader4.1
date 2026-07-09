@@ -31,16 +31,51 @@ export const makeWebllmBackend = (defaults = {}) => (opts = {}) => {
   let engine  = null;
   let loading = null;
 
-  // PICK THE 3B BUILD BY WHAT THE GPU CAN DO. The suffix is the accumulation dtype, not the weight
-  // width (both are 4-bit): q4f16_1 accumulates in fp16 and decodes fast — but ONLY on a GPU that
-  // exposes the WebGPU `shader-f16` feature. Without it (many integrated/older GPUs, some browsers)
-  // q4f16 runs an emulated path that is SLOWER than q4f32_1, so the fp32-accumulation build is the
-  // right, broadly-portable default there. So: probe the adapter for shader-f16 and take the fast
-  // build only when it's real; fall back to the portable build otherwise. Fail-soft — any detection
-  // fault (no navigator, no adapter, a throw) resolves to the portable build, never a broken fetch.
+  // A user can pin an explicit MLC artifact through localStorage (eo_webllm_model) to
+  // override every heuristic below — an escape hatch for testing a bigger/smaller build
+  // without a code change. Empty / unreadable ⇒ ignored, the adaptive pick stands.
+  const pinnedLS = () => {
+    try {
+      if (typeof localStorage === 'undefined') return null;
+      const v = localStorage.getItem('eo_webllm_model');
+      return v && v.trim() ? v.trim() : null;
+    } catch { return null; }
+  };
+
+  // IS THIS A PHONE / LOW-MEMORY DEVICE. The 3B build is ~1.9GB to download and hold in
+  // memory — on a phone or tablet that is a punishing first load and a real OOM risk, and
+  // "the model takes forever to load" is almost always this. The 1B build (~0.9GB) loads
+  // roughly twice as fast, fits far more devices, and still talks. Signals, any of which
+  // is enough: a small `deviceMemory`, a mobile user-agent, or a touch-first machine that
+  // reports as desktop (iPadOS 13+ masquerades as Macintosh Safari). Fail-soft — any fault
+  // resolves to "not small", i.e. the full 3B default, never a broken pick.
+  const isSmallDevice = () => {
+    try {
+      if (typeof navigator === 'undefined') return false;
+      const mem = navigator.deviceMemory;                       // GB, coarse & optional
+      if (typeof mem === 'number' && mem > 0 && mem <= 4) return true;
+      const ua = navigator.userAgent || '';
+      if (/Android|iPhone|iPad|iPod|Mobile|Silk|Kindle|Windows Phone/i.test(ua)) return true;
+      if ((navigator.maxTouchPoints || 0) > 1 && /Macintosh/.test(ua)) return true;
+      return false;
+    } catch { return false; }
+  };
+
+  // PICK THE BUILD BY DEVICE CLASS × WHAT THE GPU CAN DO. Two axes:
+  //  · SIZE — 1B on a phone/low-memory device (fast to fetch, fits), 3B otherwise.
+  //  · DTYPE — the suffix is the accumulation dtype, not the weight width (both are 4-bit):
+  //    q4f16_1 accumulates in fp16 and decodes fast, but ONLY on a GPU exposing the WebGPU
+  //    `shader-f16` feature. Without it (many integrated/older GPUs, some browsers) q4f16 runs
+  //    an emulated path SLOWER than q4f32_1, so the fp32-accumulation build is the right,
+  //    broadly-portable default there. Probe the adapter for shader-f16 and take the fast
+  //    build only when it's real. Fail-soft — any detection fault (no navigator, no adapter,
+  //    a throw) resolves to the portable build of the chosen size, never a broken fetch.
   const pickModel = async () => {
-    const PORTABLE = 'Llama-3.2-3B-Instruct-q4f32_1-MLC';
-    const FAST     = 'Llama-3.2-3B-Instruct-q4f16_1-MLC';
+    const explicit = pinnedLS();
+    if (explicit) return explicit;
+    const small = isSmallDevice();
+    const PORTABLE = small ? 'Llama-3.2-1B-Instruct-q4f32_1-MLC' : 'Llama-3.2-3B-Instruct-q4f32_1-MLC';
+    const FAST     = small ? 'Llama-3.2-1B-Instruct-q4f16_1-MLC' : 'Llama-3.2-3B-Instruct-q4f16_1-MLC';
     try {
       if (typeof navigator === 'undefined' || !navigator.gpu) return PORTABLE;
       const adapter = await navigator.gpu.requestAdapter();

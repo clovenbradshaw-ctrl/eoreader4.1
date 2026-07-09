@@ -2559,6 +2559,11 @@ class Component extends DCLogic {
       // (the workspace itself lives on this._ws, persisted to localStorage).
       explorerView:null, wsExpanded:{}, wsRenaming:null, wsFileMenu:null, wsRev:0 };
     this._ws=null; this._wsLoaded=false;
+    // LOCAL PERSISTENCE of the reading corpus + chats (docs are large, so IndexedDB, not
+    // localStorage's ~5MB cap). _persistReady gates writes until the initial restore has run,
+    // so a fresh empty state can never clobber saved data before it's loaded; _persistLastSig
+    // is the cheap change-detector componentDidUpdate diffs against to schedule a debounced save.
+    this._persistReady=false; this._persistLastSig='';
   }
   // ── theme helpers ─────────────────────────────────────────────────────
   _hx(h){h=String(h||'').replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16);return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
@@ -2984,11 +2989,18 @@ class Component extends DCLogic {
     // Start the chat model downloading immediately so it's ready by the time the first
     // question is asked (progress is throttled in ensureChatModel to keep typing smooth).
     if(this.state.backend!=='echo') this.ensureChatModel().catch(()=>{});
-    // An explicit seed URL reads on load; otherwise we stay empty and just OFFER a random
-    // Wikipedia page + a few random English books as suggestions (loaded only when clicked).
+    // Restore the corpus + chats saved locally last session, THEN open writes: _persistReady
+    // flips true only after the restore settles, so the initial empty state can never overwrite
+    // the saved data before it loads. _persistLastSig is seeded to the just-restored signature so
+    // the next componentDidUpdate doesn't schedule a redundant re-save of what we just read.
+    let restored=false;
+    try{ restored=await this._persistRestore(); }catch(e){}
+    this._persistReady=true; this._persistLastSig=this._persistSig();
+    // An explicit seed URL reads on load; otherwise, unless we restored a saved corpus, OFFER a
+    // random Wikipedia page + a few random English books as suggestions (loaded only when clicked).
     const seed=(this.props&&this.props.seedUrl);
     if(seed) this.readURL(seed,'read');
-    else this.loadSuggestions();
+    else if(!restored) this.loadSuggestions();
     // Track viewport width so the layout engine can pick its tier. A 40px threshold
     // keeps a browser-resize drag from flooding setState; gridCols re-reads vw on render.
     if(typeof window!=='undefined'){
@@ -3004,6 +3016,83 @@ class Component extends DCLogic {
     if(this._citeCard&&this._citeCard.parentNode)this._citeCard.parentNode.removeChild(this._citeCard);
     if(this._selPopInit){document.removeEventListener('mouseup',this._onSelUp);document.removeEventListener('mousedown',this._onSelDown,true);window.removeEventListener('scroll',this._onSelScroll,true);document.removeEventListener('keydown',this._onSelKey);}
     if(this._selPop&&this._selPop.parentNode)this._selPop.parentNode.removeChild(this._selPop);
+    clearTimeout(this._persistT);this._persistFlush();
+  }
+  // ── local persistence (IndexedDB) ──────────────────────────────────────────
+  // The reading corpus (state.pages — imported/read sources with their folded events)
+  // and the chats live only in memory, so a refresh used to wipe everything read and
+  // every conversation. They persist here across reloads. IndexedDB, not localStorage:
+  // a single imported book easily exceeds localStorage's ~5MB budget. All writes are
+  // best-effort — a quota trip or a private-mode block degrades to the old in-memory-only
+  // behaviour, never a thrown boot.
+  _pdb(){
+    if(this._pdbP)return this._pdbP;
+    this._pdbP=new Promise((res,rej)=>{
+      try{
+        if(typeof indexedDB==='undefined'){rej(new Error('no indexedDB'));return;}
+        const req=indexedDB.open('eoreader',1);
+        req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains('kv'))db.createObjectStore('kv');};
+        req.onsuccess=()=>res(req.result);
+        req.onerror=()=>rej(req.error);
+      }catch(e){rej(e);}
+    });
+    return this._pdbP;
+  }
+  async _idbGet(key){const db=await this._pdb();return new Promise((res,rej)=>{const t=db.transaction('kv','readonly');const r=t.objectStore('kv').get(key);r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+  async _idbSet(key,val){const db=await this._pdb();return new Promise((res,rej)=>{const t=db.transaction('kv','readwrite');t.objectStore('kv').put(val,key);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});}
+  // A page carries live, non-cloneable handles (_doc's log has methods; media may be a Blob;
+  // _organ can be deep) that IndexedDB's structured clone rejects. Persist only the plain,
+  // re-projectable data — enough for rebuild() to reconstruct master/graph on load. Restored
+  // pages lack _doc/_organ/media, so re-SVO and table/transcript/media playback fall back to
+  // plain rendering (every reader of those fields is already null-guarded), but the text,
+  // entities and reading position all survive.
+  _serializablePages(){return (this.state.pages||[]).map(p=>({url:p.url,title:p.title,text:p.text||'',events:p.events||[],sentences:p.sentences||[],propCount:p.propCount,ts:p.ts,via:p.via,image:p.image||null,parent:p.parent||null,wikiLinks:p.wikiLinks||null,author:p.author||null,authorDates:p.authorDates||null,published:p.published||null,modality:p.modality||'text',mediaKind:p.mediaKind||null,svo:p.svo||0,audit:p.audit||null}));}
+  // Chats go through a JSON round-trip so any stray non-cloneable value (a function on a
+  // seed, an undefined) is stripped rather than aborting the whole write.
+  _serializableChats(){try{return JSON.parse(JSON.stringify(this.state.chats||[]));}catch(e){return [];}}
+  // A cheap signature over everything persisted — page set + per-page event count (SVO folds
+  // more in later), chat set + per-chat message count + the growing last-message length (a
+  // streamed answer), and the identity-verdict count. componentDidUpdate diffs this to decide
+  // whether a save is due, so an unrelated re-render (hover, scroll) never triggers a write.
+  _persistSig(){
+    const p=this.state.pages||[],c=this.state.chats||[];
+    let s=p.length+'|';for(const pg of p)s+=pg.url+':'+(pg.events?pg.events.length:0)+',';
+    s+='#'+c.length+'|';for(const ch of c){const m=ch.messages||[];s+=ch.id+':'+m.length+':'+(m.length?String(m[m.length-1].text||'').length:0)+',';}
+    return s+'#'+((this._identityJudgments&&this._identityJudgments.length)||0)+'#'+this._persistView();
+  }
+  // The last-viewed IMPORTED source (a text: url), so a reload lands back on what you were
+  // reading, not an empty center. Only text: sources — reopening a web url would silently
+  // refetch it on boot; those the reader re-clicks from the restored source list.
+  _persistView(){const v=this.state.viewUrl;return (v&&/^text:/i.test(v))?v:'';}
+  _persistSoon(){if(!this._persistReady)return;clearTimeout(this._persistT);this._persistT=setTimeout(()=>this._persistFlush(),700);}
+  async _persistFlush(){
+    if(!this._persistReady)return;
+    try{
+      await this._idbSet('pages',this._serializablePages());
+      await this._idbSet('chats',this._serializableChats());
+      await this._idbSet('identityJudgments',this._identityJudgments||[]);
+      await this._idbSet('view',this._persistView());
+    }catch(e){/* quota / private mode — best effort, stay in-memory */}
+  }
+  // Rehydrate on boot. Runs after the engine is loaded (rebuild needs this.E) and after the
+  // empty seed rebuild, so restored pages fold in over a known-good base. Identity verdicts
+  // load first so rebuild() folds them back in. Returns whether anything was restored, so the
+  // caller can skip the empty-state suggestions when the reader already has content.
+  async _persistRestore(){
+    let restored=false;
+    try{
+      const [pages,chats,ij,view]=await Promise.all([this._idbGet('pages'),this._idbGet('chats'),this._idbGet('identityJudgments'),this._idbGet('view')]);
+      if(Array.isArray(ij))this._identityJudgments=ij;
+      if(Array.isArray(pages)&&pages.length){
+        this.rebuild(pages);this.setState(s=>({pages,selId:s.selId||this.topEntity(),rev:(s.rev||0)+1}));restored=true;
+        // Reopen the source that was up last, so a reload resumes reading rather than
+        // dropping to an empty center. Guarded to imported (text:) sources present in the
+        // restored corpus; loadCenter's text: branch renders it from master.pages locally.
+        if(view&&/^text:/i.test(view)&&pages.some(p=>p.url===view)){this.setState({viewUrl:view});try{this.loadCenter(view);}catch(e){}}
+      }
+      if(Array.isArray(chats)&&chats.length){this.setState({chats});restored=true;}
+    }catch(e){/* corrupt/absent store — start fresh */}
+    return restored;
   }
   // ── Responsive tiers ──────────────────────────────────────────────────────
   // Wide (≥1180): chat can dock as its own column. Mid (760–1179): chat reverts to the
@@ -12228,6 +12317,9 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     if(this._drDock)this._positionDrDock();
     this._syncDocDock();
     this._syncDataDock();
+    // Corpus or chats changed since the last save? Schedule a debounced write to IndexedDB.
+    // Cheap: a signature diff over small arrays, gated so it never fires before the restore.
+    if(this._persistReady){const sig=this._persistSig();if(sig!==this._persistLastSig){this._persistLastSig=sig;this._persistSoon();}}
   }
   _scheduleDecorate(){clearTimeout(this._decoT);let tries=0;const tick=()=>{const ifr=document.querySelector('iframe[data-eo-center]');const d=ifr&&ifr.contentDocument;if(d&&d.body&&d.body.childNodes.length){this.decorateFrame(d,ifr);}else if(tries++<50){this._decoT=setTimeout(tick,80);}};this._decoT=setTimeout(tick,60);}
   _frameOffset(){const ifr=document.querySelector('iframe[data-eo-center]');if(!ifr)return{x:0,y:0};const r=ifr.getBoundingClientRect();return{x:r.left,y:r.top};}
