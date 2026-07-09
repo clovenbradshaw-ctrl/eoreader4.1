@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 
 import {
   ROUTE_ALPHABET, ROUTE_EXEMPLARS, FORM_EXEMPLARS, KIND_EXEMPLARS, LENGTH_EXEMPLARS,
-  REGISTER_EXEMPLARS, CLARIFY_EXEMPLARS,
+  REGISTER_EXEMPLARS, CLARIFY_EXEMPLARS, REVISE_EXEMPLARS, REVISE_OP_EXEMPLARS,
   buildBases, defaultBases, speechCurrents, relaxRoute, formKindOf, steerKindOf,
   lengthDemandOf, developDrive, registerDemandOf, creativeDrive,
-  clarifyDemandOf, clarifyDrive,
+  clarifyDemandOf, clarifyDrive, reviseDemandOf, reviseDrive, reviseOpOf,
   metaRoute, createMetaRouter, discoursePrompt, leadsOf,
 } from '../src/turn/meta-route.js';
 import { routeStance, isExplicitCompose } from '../src/core/conversation-fold.js';
@@ -463,4 +463,76 @@ test('leadsOf returns the novel content terms, minus the known thread and basis 
 test('leadsOf tokenizes through the one tokenizer (no drift)', () => {
   const leads = leadsOf('Zanzibar!', { known: '' });
   assert.deepEqual(leads, tok('Zanzibar!'));
+});
+
+// ---------------------------------------------------------------------------
+// REVISION — the edit-in-place demand (revise ⟂ fresh), Born-measured like the
+// other orthogonal demands. The router recognizes "edit the standing piece" so
+// the caller can revise the document instead of researching afresh.
+
+test('revise/fresh each get a finite crosstalk null', () => {
+  const bases = defaultBases();
+  for (const dir of Object.keys(REVISE_EXEMPLARS)) {
+    const b = bases.revise.get(dir);
+    assert.ok(b && Number.isFinite(b.null), dir + ' has a finite null');
+  }
+});
+
+test('reviseDemandOf reads edit-in-place speech as revise', () => {
+  const speech = 'The user wants to rework the essay we already wrote — reorganize what is there into clearer sections, not start a new piece.';
+  assert.equal(reviseDemandOf(speech), 'revise');
+});
+
+test('reviseDemandOf reads a from-scratch ask as fresh', () => {
+  const speech = 'They want a brand-new essay written from scratch on a different subject; there is no earlier draft to edit.';
+  assert.equal(reviseDemandOf(speech), 'fresh');
+});
+
+test('reviseDrive is positive on revise speech and zero on unrelated speech', () => {
+  const rev = 'They want to edit the existing draft in place, restructuring what is already written.';
+  assert.ok(reviseDrive(rev) > 0);
+  assert.equal(reviseDrive('The user is asking what the capital of France is.'), 0);
+});
+
+test('crosstalk: no route or clarify exemplar reads as revise', () => {
+  const bases = defaultBases();
+  for (const [group, exemplars] of [['route', ROUTE_EXEMPLARS], ['clarify', CLARIFY_EXEMPLARS]]) {
+    for (const [dir, phrases] of Object.entries(exemplars)) {
+      for (const p of phrases) {
+        assert.notEqual(reviseDemandOf(p, bases), 'revise', group + '.' + dir + ' "' + p + '" must not read as revise');
+      }
+    }
+  }
+});
+
+test('revise self-recovery: each revise exemplar reads revise, each fresh reads fresh', () => {
+  for (const p of REVISE_EXEMPLARS.revise) assert.equal(reviseDemandOf(p), 'revise', p);
+  for (const p of REVISE_EXEMPLARS.fresh) assert.equal(reviseDemandOf(p), 'fresh', p);
+});
+
+test('reviseOpOf picks the edit family — structural vs cut', () => {
+  assert.equal(reviseOpOf('reorganize it into clearer sections with headings'), 'structural');
+  assert.equal(reviseOpOf('remove the part about the football team; it wandered off topic'), 'cut');
+});
+
+test('metaRoute surfaces reviseDemand / reviseDrive / reviseOp', () => {
+  const m = metaRoute('They want to restructure the essay we wrote into better sections with headings.');
+  assert.equal(m.reviseDemand, 'revise');
+  assert.ok(m.reviseDrive > 0);
+  assert.ok(['structural', 'cut', 'add', 'tone', ''].includes(m.reviseOp));
+});
+
+test('discoursePrompt states the standing-document fact only when one is in scope', () => {
+  const withDoc = discoursePrompt('do it again with better sections', null, { standing: 'Dolphins' });
+  assert.ok(withDoc.includes('standing document'), 'names the standing document');
+  assert.ok(withDoc.includes('Dolphins'), 'names the piece');
+  const without = discoursePrompt('do it again with better sections', null, {});
+  assert.ok(!without.includes('standing document'), 'omitted when no piece is in scope');
+});
+
+test('revise accessors tolerate legacy bases without a revise group', () => {
+  const legacy = { route: new Map(), vocab: new Set() };
+  assert.equal(reviseDemandOf('rework the draft', legacy), '');
+  assert.equal(reviseDrive('rework the draft', legacy), 0);
+  assert.equal(reviseOpOf('reorganize into sections', legacy), '');
 });

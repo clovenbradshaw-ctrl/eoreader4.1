@@ -14,3 +14,4 @@ export { projectDoc } from './project.js';
 export { projectHistory, charDiff } from './history.js';
 export { renderDocFragment, renderHistoryFragment, docStatLine, DOC_CSS } from './render.js';
 export { mountDocSurface } from './surface.js';
+export { blocksFromText, docToMarkdown, outlineOf, groundBlock, sectionBoundaries, planRevision, reviseBlockMessages } from './revise.js';
