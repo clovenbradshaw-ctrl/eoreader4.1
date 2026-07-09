@@ -309,8 +309,51 @@
   <div id="eo-grid" style="display:grid;grid-template-columns:{{ gridCols }};min-height:0;min-width:0;">
 
     <sc-if value="{{ leftShow }}" hint-placeholder-val="{{ true }}">
-    <aside style="border-right:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;min-width:0;order:{{ leftOrder }};">
-      <div style="padding:11px 13px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:3;">
+    <aside style="border-right:1px solid var(--line);background:var(--card);overflow-y:auto;min-height:0;min-width:0;order:{{ leftOrder }};position:relative;">
+      <!-- Workspace switcher — the active lens (accent chip + name + counts) and a
+           dropdown to switch, rename, delete, or start a new workspace. -->
+      <div style="padding:9px 12px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:6;">
+        <button onclick="{{ onLensMenu }}" title="Switch workspace" style="display:flex;align-items:center;gap:8px;width:100%;text-align:left;border:1px solid var(--line2);background:var(--app);border-radius:9px;padding:7px 9px;cursor:pointer;" style-hover="background:#f4f5f7">
+          <span style="{{ wsChipStyle }}">◧</span>
+          <span style="min-width:0;flex:1;">
+            <span style="display:block;font-size:12.5px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ wsName }}</span>
+            <span style="display:block;font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ wsSubLabel }}</span>
+          </span>
+          <span style="color:var(--ink3);font-size:10px;flex:0 0 auto;">⌄</span>
+        </button>
+        <sc-if value="{{ lensMenuOpen }}" hint-placeholder-val="{{ false }}">
+          <div onclick="{{ onLensMenuClose }}" style="position:fixed;inset:0;z-index:32;"></div>
+          <div style="position:absolute;top:52px;left:10px;right:10px;z-index:33;background:var(--card);border:1px solid var(--line2);border-radius:10px;box-shadow:0 14px 34px rgba(20,24,30,.2);padding:5px;animation:eopop .1s ease-out;">
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);padding:5px 7px 4px;">Your workspaces</div>
+            <sc-for list="{{ wsMenuItems }}" as="w" hint-placeholder-count="1">
+              <div onclick="{{ w.onClick }}" style="{{ w.rowStyle }}" style-hover="background:#f7f8fa">
+                <span style="width:22px;height:22px;border-radius:6px;flex:0 0 auto;background:{{ w.iconBg }};color:{{ w.iconCl }};display:flex;align-items:center;justify-content:center;font-size:11px;">◧</span>
+                <sc-if value="{{ w.notRenaming }}" hint-placeholder-val="{{ true }}">
+                  <span style="min-width:0;flex:1;" ondblclick="{{ w.onStartRename }}">
+                    <span style="display:block;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ w.name }}</span>
+                    <span style="display:block;font-size:10px;color:var(--ink3);">{{ w.sub }}</span>
+                  </span>
+                  <sc-if value="{{ w.active }}" hint-placeholder-val="{{ false }}"><span style="color:var(--acc);flex:0 0 auto;">✓</span></sc-if>
+                  <span onclick="{{ w.onStartRename }}" title="Rename" style="flex:0 0 auto;width:22px;height:22px;border-radius:6px;color:var(--ink3);font-size:12px;display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:#eef0f3;color:var(--ink)">✎</span>
+                  <sc-if value="{{ w.canDelete }}" hint-placeholder-val="{{ true }}">
+                    <span onclick="{{ w.onDelete }}" title="Delete this workspace (sources stay in memory)" style="flex:0 0 auto;width:22px;height:22px;border-radius:6px;color:var(--ink3);font-size:13px;display:flex;align-items:center;justify-content:center;cursor:pointer;" style-hover="background:#fdecec;color:var(--sig)">×</span>
+                  </sc-if>
+                </sc-if>
+                <sc-if value="{{ w.renaming }}" hint-placeholder-val="{{ false }}">
+                  <input value="{{ w.name }}" oninput="{{ w.onRenameInput }}" onblur="{{ w.onRenameDone }}" onkeydown="{{ w.onRenameKey }}" onclick="{{ w.onStopClick }}" style="{{ w.renameStyle }}">
+                  <span onclick="{{ w.onRenameDone }}" title="Done" style="flex:0 0 auto;width:22px;height:22px;border-radius:6px;background:var(--acc);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;">✓</span>
+                </sc-if>
+              </div>
+            </sc-for>
+            <div style="height:1px;background:var(--line);margin:4px 6px;"></div>
+            <div onclick="{{ onNewWorkspace }}" style="display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;cursor:pointer;color:var(--acc);" style-hover="background:var(--accbg)">
+              <span style="width:22px;height:22px;border-radius:6px;flex:0 0 auto;border:1px dashed var(--accline);display:flex;align-items:center;justify-content:center;font-size:13px;">＋</span>
+              <span style="font-size:12px;font-weight:700;">New workspace</span>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+      <div style="padding:11px 13px;border-bottom:1px solid var(--line);background:var(--card);z-index:3;">
         <div style="display:flex;align-items:center;gap:8px;"><span style="font-size:12px;font-weight:600;color:var(--ink2);">Record</span><span style="font-size:11px;color:var(--ink3);">{{ srcCount }}</span><span title="Nothing enters an answer or a document unrecorded — every read is here, auditable." style="font-size:8.5px;font-weight:700;letter-spacing:.04em;color:var(--grn);background:var(--grnbg);border-radius:5px;padding:1px 6px;">AUDITABLE</span>
           <button onclick="{{ toggleLeft }}" title="Hide panel" style="margin-left:auto;width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">‹</button>
         </div>
@@ -360,12 +403,6 @@
             </div>
           </sc-for>
         </sc-if>
-        <div style="display:flex;align-items:center;gap:6px;padding:8px 4px 4px;">
-          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);">Sources</span>
-          <sc-if value="{{ hasSources }}" hint-placeholder-val="{{ false }}">
-            <button onclick="{{ onOpenSites }}" title="Browse every source as a profile page" style="{{ sitesDirBtnStyle }}" style-hover="background:var(--accbg);color:var(--acc);border-color:var(--accline)"><span style="font-size:11px;line-height:1;">▦</span>All sites</button>
-          </sc-if>
-        </div>
         <sc-for list="{{ imports }}" as="im" hint-placeholder-count="0">
           <div style="{{ im.rowStyle }}">
             <div style="{{ im.dotStyle }}"><sc-if value="{{ im.ok }}" hint-placeholder-val="{{ true }}"><span style="{{ im.spinStyle }}"></span></sc-if><sc-if value="{{ im.isErr }}" hint-placeholder-val="{{ false }}">!</sc-if></div>
@@ -381,7 +418,39 @@
             </sc-if>
           </div>
         </sc-for>
-        <sc-for list="{{ sources }}" as="s" hint-placeholder-count="3">
+        <!-- ══ Tier 1 · In this workspace (pinned lens sources) ══ -->
+        <sc-if value="{{ hasLensSources }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:6px;padding:8px 4px 4px;">
+            <span style="width:6px;height:6px;border-radius:2px;background:var(--acc);"></span>
+            <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);">In this workspace</span>
+            <span style="margin-left:auto;font-size:10.5px;color:var(--ink3);">{{ lensCount }}</span>
+          </div>
+          <sc-for list="{{ lensSources }}" as="s" hint-placeholder-count="1">
+            <div style="{{ s.rowStyle }}" style-hover="background:#f7f8fa">
+              <div onclick="{{ s.onOpen }}" style="{{ s.dot }}">{{ s.glyph }}</div>
+              <div onclick="{{ s.onOpen }}" style="min-width:0;flex:1;cursor:pointer;">
+                <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.label }}</div>
+                <div style="font-size:10.5px;color:var(--ink3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;">{{ s.host }} · {{ s.count }} entities</div>
+              </div>
+              <sc-if value="{{ s.hasKids }}" hint-placeholder-val="{{ false }}">
+                <button onclick="{{ s.onToggleCollapse }}" title="{{ s.collapseTitle }}" style="{{ s.caretStyle }}" style-hover="background:#eef0f3;color:var(--ink)">{{ s.caret }}</button>
+              </sc-if>
+              <button onclick="{{ s.onRead }}" title="Read the page" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">↗</button>
+              <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
+              <button onclick="{{ s.onTogglePin }}" title="Remove from this workspace (stays in memory)" style="{{ s.unpinStyle }}" style-hover="border-color:var(--sig);color:var(--sig)">−</button>
+            </div>
+          </sc-for>
+        </sc-if>
+        <!-- ══ Tier 2 · Memory (everything read, shared across workspaces) ══ -->
+        <div style="display:flex;align-items:center;gap:6px;padding:12px 4px 4px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--grn);"></span>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--ink3);">Memory</span>
+          <span style="font-size:10.5px;color:var(--ink3);">{{ memoryCount }}</span>
+          <sc-if value="{{ hasSources }}" hint-placeholder-val="{{ false }}">
+            <button onclick="{{ onOpenSites }}" title="Browse every source as a profile page" style="{{ sitesDirBtnStyle }}" style-hover="background:var(--accbg);color:var(--acc);border-color:var(--accline)"><span style="font-size:11px;line-height:1;">▦</span>All sites</button>
+          </sc-if>
+        </div>
+        <sc-for list="{{ memorySources }}" as="s" hint-placeholder-count="3">
           <div style="{{ s.rowStyle }}" style-hover="background:#f7f8fa">
             <div onclick="{{ s.onOpen }}" style="{{ s.dot }}">{{ s.glyph }}</div>
             <div onclick="{{ s.onOpen }}" style="min-width:0;flex:1;cursor:pointer;">
@@ -394,6 +463,7 @@
             <button onclick="{{ s.onRead }}" title="Read the page" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">↗</button>
             <button onclick="{{ s.onWeave }}" title="The referent weave of this source — its recurring figures as threads, grouped into storylines" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;" style-hover="background:var(--accbg);color:var(--acc)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5c4 0 4 14 8 14s4-14 8-14"></path><path d="M4 12c4 0 4 7 8 7"></path><path d="M12 5c4 0 4 7 8 7"></path></svg></button>
             <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
+            <button onclick="{{ s.onTogglePin }}" title="Pin into this workspace" style="{{ s.pinStyle }}" style-hover="background:var(--acc);color:#fff">＋ Pin</button>
           </div>
         </sc-for>
         <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">Nothing recorded yet. Read a URL, import a book, or start a chat above.</div></sc-if>
@@ -2273,8 +2343,15 @@ class Component extends DCLogic {
   _hx(h){h=String(h||'').replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16);return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
   mixWhite(hex,amt){const c=this._hx(hex);const m=v=>Math.round(v+(255-v)*amt);return 'rgb('+m(c.r)+','+m(c.g)+','+m(c.b)+')';}
   hexA(hex,a){const c=this._hx(hex);return 'rgba('+c.r+','+c.g+','+c.b+','+a+')';}
-  curAccent(){return this.state.accent||(this.props&&this.props.accent)||'#5b34d6';}
-  setAccent(hex){try{localStorage.setItem('eo_accent',hex);}catch(e){}this._decoToken=null;this.setState({accent:hex});}
+  // The live accent is the ACTIVE lens's color — switching workspaces re-tints the
+  // whole app. Falls back to the saved accent (then the prop, then the default)
+  // while the lens module is still loading, so there is no boot flash.
+  curAccent(){return this.lensAccent()||this.state.accent||(this.props&&this.props.accent)||'#5b34d6';}
+  // Picking an accent recolors the ACTIVE workspace (each lens owns its color) and
+  // still saves eo_accent as the seed for any future fresh lens.
+  setAccent(hex){try{localStorage.setItem('eo_accent',hex);}catch(e){}this._decoToken=null;
+    const M=this._lensMod();if(M){this._lens=M.setColor(this.lensGet(),this.lensGet().active,hex,(Date.now?Date.now():0));this.lensSave();}
+    this.setState({accent:hex});}
   setHighlight(s){try{localStorage.setItem('eo_highlight',s);}catch(e){}this._decoToken=null;this.setState({highlightStyle:s});}
   setHoverPivot(v){try{localStorage.setItem('eo_hoverpivot',v);}catch(e){}this.setState({hoverPivot:v});}
   setClickAction(v){try{localStorage.setItem('eo_clickact',v);}catch(e){}this.setState({clickAction:v});}
@@ -10255,6 +10332,81 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     return this._ws;}
   wsSave(){const M=this._wsMod();if(M&&this._ws){try{localStorage.setItem('eo_workspace_v1',M.serialize(this._ws));}catch(e){}}}
   _wsApply(next){this._ws=next;this.wsSave();this.setState(s=>({wsRev:(s.wsRev||0)+1}));}
+
+  // ── THE LENS LAYER — named workspaces over the shared Record ──────────────
+  // A lens is a named slice of memory: it pins sources (never owns them), carries
+  // its own accent, and remembers how its panel was organized. The pure algebra
+  // lives in src/workspace/lens.js (window.EOWorkspaceLens); this half holds the
+  // live lens on this._lens, persists it, and drives the shell — the active
+  // lens's color tints the whole app, and its pin set is the "narrow to
+  // workspace" grounding scope. Everything degrades to one implicit lens until
+  // the module lands (curAccent then falls back to the saved accent).
+  _lensMod(){return (typeof window!=='undefined'&&window.EOWorkspaceLens)||null;}
+  lensGet(){const M=this._lensMod();
+    if(!this._lensLoaded&&M){
+      const raw=(()=>{try{return localStorage.getItem('eo_lens_v1');}catch(e){return null;}})();
+      try{this._lens=M.deserialize(raw);}catch(e){this._lens=M.emptyLens();}
+      // Migrate a pre-lens saved accent onto the seed workspace, once, so an
+      // existing reader's chosen color survives the move to per-workspace accents.
+      if(!raw&&this.state.accent)this._lens=M.setColor(this._lens,M.activeId(this._lens),this.state.accent);
+      this._lensLoaded=true;}
+    if(!this._lens)this._lens={active:'w0',order:['w0'],workspaces:{w0:{id:'w0',name:'Everything',color:this.state.accent||'#5b34d6',view:'source',pinned:[]}}};
+    return this._lens;}
+  lensSave(){const M=this._lensMod();if(M&&this._lens){try{localStorage.setItem('eo_lens_v1',M.serialize(this._lens));}catch(e){}}}
+  _lensApply(next){this._lens=next;this.lensSave();this._decoToken=null;this.setState(s=>({lensRev:(s.lensRev||0)+1}));}
+  activeLens(){const L=this.lensGet();return (L.workspaces&&L.workspaces[L.active])||null;}
+  lensAccent(){const w=this.activeLens();return (w&&w.color)||null;}
+  // The active lens's pinned refKeys, as a Set — the workspace grounding scope.
+  lensPinnedSet(){const M=this._lensMod();return M?new Set(M.pinnedOf(this.lensGet())):new Set();}
+  // ── lens mutations (thin wrappers over src/workspace/lens) ──
+  lensSwitch(id){const M=this._lensMod();if(!M)return;this._lens=M.setActive(this.lensGet(),id);this.lensSave();this._decoToken=null;this.setState(s=>({lensRev:(s.lensRev||0)+1,lensMenu:false}));}
+  lensNew(){const M=this._lensMod();if(!M)return;
+    const next=M.createWorkspace(this.lensGet(),{name:'New workspace',now:(Date.now?Date.now():0)});
+    const id=next.order[next.order.length-1];
+    this._lens=M.setActive(next,id);this.lensSave();this._decoToken=null;
+    this.setState(s=>({lensRev:(s.lensRev||0)+1,lensMenu:true,lensRenaming:id}));}
+  lensRenameInput(id,ev){const M=this._lensMod();if(!M)return;this._lensApply(M.renameWorkspace(this.lensGet(),id,ev&&ev.target?ev.target.value:'',(Date.now?Date.now():0)));}
+  lensRenameDone(){this.setState({lensRenaming:null});}
+  // Commit on Enter, cancel-out on Escape; other keys just edit the field. (Binding
+  // onRenameDone straight to onkeydown would close the input on the first keystroke.)
+  lensRenameKey(ev){if(!ev)return;if(ev.key==='Enter'||ev.key==='Escape'){if(ev.preventDefault)ev.preventDefault();if(ev.stopPropagation)ev.stopPropagation();this.lensRenameDone();}}
+  lensDelete(id){const M=this._lensMod();if(!M)return;const L=this.lensGet();if((L.order||[]).length<=1)return;const w=L.workspaces[id];
+    if(typeof confirm==='function'&&!confirm('Delete the workspace “'+((w&&w.name)||'')+'”? Its sources stay in memory — only this lens is removed.'))return;
+    this._lens=M.deleteWorkspace(L,id);this.lensSave();this._decoToken=null;
+    this.setState(s=>({lensRev:(s.lensRev||0)+1,lensRenaming:s.lensRenaming===id?null:s.lensRenaming}));}
+  lensSetView(view){const M=this._lensMod();if(!M)return;this._lensApply(M.setView(this.lensGet(),this.lensGet().active,view,(Date.now?Date.now():0)));this.setState({lensViewMenu:false});}
+  // Pin / unpin a refKey into the ACTIVE lens (toggle). Sources, chats, documents
+  // all pin by their stable refKey — the same key the folder model files by.
+  lensTogglePin(refKey){const M=this._lensMod();if(!M)return;this._lensApply(M.togglePin(this.lensGet(),this.lensGet().active,refKey,(Date.now?Date.now():0)));}
+  lensIsPinned(refKey){const M=this._lensMod();return M?M.isPinned(this.lensGet(),this.lensGet().active,refKey):false;}
+  // The switcher view-model: the active lens's chip + a dropdown of every lens
+  // (each row switch/rename/delete) and a "New workspace" action. Kept whole here
+  // so the view stays declarative. Degrades to a single inert chip with no module.
+  _lensVals(base){const M=this._lensMod();const L=this.lensGet();
+    const act=this.activeLens();const acc=this.curAccent();
+    const pinN=act?(act.pinned||[]).length:0;const memN=(this.master?this.master.pages.length:0);
+    base.wsName=this.truncLabel((act&&act.name)||'Everything',26);
+    base.wsSubLabel=pinN+' pinned · '+memN+' in memory';
+    base.wsChipStyle='width:20px;height:20px;border-radius:6px;flex:0 0 auto;background:'+this.mixWhite(acc,.86)+';color:'+acc+';display:flex;align-items:center;justify-content:center;font-size:11px;';
+    base.lensMenuOpen=!!this.state.lensMenu;
+    base.onLensMenu=()=>this.setState(s=>({lensMenu:!s.lensMenu,lensRenaming:null}));
+    base.onLensMenuClose=()=>this.setState({lensMenu:false,lensRenaming:null});
+    base.onNewWorkspace=()=>this.lensNew();
+    const list=M?M.listWorkspaces(L):[];
+    const canDelete=list.length>1;
+    base.wsMenuItems=list.map(w=>{const active=w.id===L.active,renaming=this.state.lensRenaming===w.id;
+      return {id:w.id,name:this.truncLabel(w.name||'Workspace',24),sub:(w.pinned||[]).length+' pinned',active,renaming,notRenaming:!renaming,
+        onClick:()=>this.lensSwitch(w.id),
+        onRenameInput:ev=>this.lensRenameInput(w.id,ev),
+        onRenameKey:ev=>this.lensRenameKey(ev),
+        onStopClick:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();},
+        onRenameDone:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.lensRenameDone();},
+        onStartRename:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.setState({lensRenaming:w.id});},
+        canDelete,onDelete:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.lensDelete(w.id);},
+        iconBg:this.mixWhite(w.color,.86),iconCl:w.color,
+        renameStyle:'flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--ink);background:var(--app);border:1px solid var(--accline);border-radius:6px;padding:3px 7px;outline:none;',
+        rowStyle:'display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;cursor:pointer;'+(active?'background:var(--accbg);':'')};});
+  }
   _parseRef(key){const s=String(key||'');const i=s.indexOf(':');return i<0?{kind:s,id:''}:{kind:s.slice(0,i),id:s.slice(i+1)};}
   // Every live item, as {key, ts} — the universe the smart views and "Unfiled"
   // draw from. Sources carry a read timestamp; chats a creation ts; documents none.
@@ -11975,6 +12127,9 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
         {v:'echo',label:'Echo · offline, no model'}].map(o=>{const sel=(this.state.backend||'webllm')===o.v;return {v:o.v,label:o.label,sel,onPick:()=>this.setBackend(o.v),
         style:'font-size:12px;font-weight:600;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'var(--line2)')+';background:'+(sel?'var(--accbg)':'var(--card)')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),
       sources:[],srcCount:0,srcEmpty:true,imports:this._importRows(),hasImports:(this.state.imports||[]).length>0,onSrcImport:()=>this.onImportClick(),
+      // Lens tiers default empty so the two-tier panel + switcher render on every
+      // path, including before anything is read (_lensVals overwrites these).
+      lensSources:[],memorySources:[],hasLensSources:false,hasMemorySources:false,lensCount:0,memoryCount:0,
       writtenDocs:this._writtenDocRows(),hasWrittenDocs:this._docsMap().size>0,
       // Corpus search box — see runCorpusSearch/_corpusResultRows. browseMode gates the
       // ordinary Chats/Sources/Documents lists off while a search is active, so the panel
@@ -12180,6 +12335,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       // (and persist across reloads) with an empty Record. Build the sidebar folder rows
       // and, when the explorer is open, take the centre before falling back to the landing.
       base.wsFolders=this._wsSidebarRows();base.hasWsFolders=base.wsFolders.length>0;
+      this._lensVals(base);   // the switcher renders even with an empty Record
       if(this.state.explorerView){base.explorerOn=true;base.explorer=this.explorerVals();return base;}
       if(!vu&&!base.chatOn&&!base.gutenOn){
         this.landingVals(base);
@@ -12231,16 +12387,34 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       else kids.forEach(c=>pushP(c,Math.min(depth+1,2)));};
     pagesByRecency.filter(p=>!inSet(p.parent)).forEach(p=>pushP(p,0));
     pagesByRecency.forEach(p=>{if(!seenP.has(p.url))pushP(p,0);});
+    const _pinnedSet=this.lensPinnedSet();
     base.sources=orderedP.map(({p,depth,kids,collapsed:col})=>{const c=this.hashColor(this.short(p.url)),isA=(vu===p.url)||(this.state.siteView===p.url),cnt=entInSrc.get(p.url)||0;
+      const isP=_pinnedSet.has('source:'+p.url);
       return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.openSite(p.url),onRead:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.goWeb(p.url);},onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},onWeave:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this._openWeave(p.url);},
         hasKids:kids>0,collapsed:col,caret:col?'▸':'▾',collapseTitle:(col?'Show':'Hide')+' the '+kids+' source'+(kids!==1?'s':'')+' found from this one',
         onToggleCollapse:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.toggleSrcCollapse(p.url);},
         caretStyle:'width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:11px;line-height:1;',
+        // Pin / unpin into the active workspace lens — a source lives in memory once,
+        // pinned into any number of lenses. − removes it from this lens; ＋ Pin adds it.
+        pinned:isP,notPinned:!isP,onTogglePin:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.lensTogglePin('source:'+p.url);},
+        unpinStyle:'flex:0 0 auto;width:22px;height:22px;border:1px solid var(--line2);background:var(--card);border-radius:6px;color:var(--ink3);font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;',
+        pinStyle:'flex:0 0 auto;display:inline-flex;align-items:center;gap:3px;height:22px;padding:0 9px;border:1px solid var(--accline);background:var(--accbg);border-radius:6px;color:var(--acc);font-size:10.5px;font-weight:700;cursor:pointer;',
         dot:'width:'+(depth?16:20)+'px;height:'+(depth?16:20)+'px;border-radius:6px;flex:0 0 auto;background:'+c+'1a;color:'+c+';display:flex;align-items:center;justify-content:center;font-size:'+(depth?8:9)+'px;font-weight:800;',
         glyph:depth?'↳':(p.via==='REAFFERENCE'?'⟲':this.short(p.url).slice(0,2).toUpperCase()),
         rowStyle:'display:flex;align-items:center;gap:10px;padding:'+(depth?'7px 11px':'9px 11px')+';border-radius:9px;margin-bottom:3px;margin-left:'+(depth*15)+'px;cursor:pointer;border:1px solid '+(isA?'var(--accline)':'transparent')+';background:'+(isA?'var(--accbg)':'transparent')+';'+(depth?'border-left:2px solid '+c+'55;border-radius:0 9px 9px 0;':'')};});
+    // Two tiers: what's pinned into THIS workspace, and the rest of memory (shared
+    // across every lens). A source can sit in both a child subtree and a tier, so
+    // the split is by pin state only; depth/indent is preserved within each tier.
+    base.lensSources=base.sources.filter(r=>r.pinned);
+    base.memorySources=base.sources.filter(r=>!r.pinned);
+    base.hasLensSources=base.lensSources.length>0;
+    base.hasMemorySources=base.memorySources.length>0;
+    base.lensCount=base.lensSources.length;
+    base.memoryCount=base.memorySources.length;
     base.srcCount=this.master.pages.length;base.srcEmpty=this.master.pages.length===0&&(this.state.imports||[]).length===0;
     base.hasSources=this.master.pages.length>0;
+    // ── the workspace switcher (active lens name/accent + the menu) ──
+    this._lensVals(base);
     base.wsFolders=this._wsSidebarRows();base.hasWsFolders=base.wsFolders.length>0;
     base.corpusCount=base.corpusResults.length;base.hasCorpusResults=base.corpusResults.length>0;
     base.corpusPending=base.corpusActive&&this.state.corpusResultsQuery!==(this.state.corpusQuery||'').trim();

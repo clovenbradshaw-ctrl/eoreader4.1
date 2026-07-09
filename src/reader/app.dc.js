@@ -143,8 +143,15 @@ class Component extends DCLogic {
   _hx(h){h=String(h||'').replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16);return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
   mixWhite(hex,amt){const c=this._hx(hex);const m=v=>Math.round(v+(255-v)*amt);return 'rgb('+m(c.r)+','+m(c.g)+','+m(c.b)+')';}
   hexA(hex,a){const c=this._hx(hex);return 'rgba('+c.r+','+c.g+','+c.b+','+a+')';}
-  curAccent(){return this.state.accent||(this.props&&this.props.accent)||'#5b34d6';}
-  setAccent(hex){try{localStorage.setItem('eo_accent',hex);}catch(e){}this._decoToken=null;this.setState({accent:hex});}
+  // The live accent is the ACTIVE lens's color — switching workspaces re-tints the
+  // whole app. Falls back to the saved accent (then the prop, then the default)
+  // while the lens module is still loading, so there is no boot flash.
+  curAccent(){return this.lensAccent()||this.state.accent||(this.props&&this.props.accent)||'#5b34d6';}
+  // Picking an accent recolors the ACTIVE workspace (each lens owns its color) and
+  // still saves eo_accent as the seed for any future fresh lens.
+  setAccent(hex){try{localStorage.setItem('eo_accent',hex);}catch(e){}this._decoToken=null;
+    const M=this._lensMod();if(M){this._lens=M.setColor(this.lensGet(),this.lensGet().active,hex,(Date.now?Date.now():0));this.lensSave();}
+    this.setState({accent:hex});}
   setHighlight(s){try{localStorage.setItem('eo_highlight',s);}catch(e){}this._decoToken=null;this.setState({highlightStyle:s});}
   setHoverPivot(v){try{localStorage.setItem('eo_hoverpivot',v);}catch(e){}this.setState({hoverPivot:v});}
   setClickAction(v){try{localStorage.setItem('eo_clickact',v);}catch(e){}this.setState({clickAction:v});}
@@ -8125,6 +8132,81 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     return this._ws;}
   wsSave(){const M=this._wsMod();if(M&&this._ws){try{localStorage.setItem('eo_workspace_v1',M.serialize(this._ws));}catch(e){}}}
   _wsApply(next){this._ws=next;this.wsSave();this.setState(s=>({wsRev:(s.wsRev||0)+1}));}
+
+  // ── THE LENS LAYER — named workspaces over the shared Record ──────────────
+  // A lens is a named slice of memory: it pins sources (never owns them), carries
+  // its own accent, and remembers how its panel was organized. The pure algebra
+  // lives in src/workspace/lens.js (window.EOWorkspaceLens); this half holds the
+  // live lens on this._lens, persists it, and drives the shell — the active
+  // lens's color tints the whole app, and its pin set is the "narrow to
+  // workspace" grounding scope. Everything degrades to one implicit lens until
+  // the module lands (curAccent then falls back to the saved accent).
+  _lensMod(){return (typeof window!=='undefined'&&window.EOWorkspaceLens)||null;}
+  lensGet(){const M=this._lensMod();
+    if(!this._lensLoaded&&M){
+      const raw=(()=>{try{return localStorage.getItem('eo_lens_v1');}catch(e){return null;}})();
+      try{this._lens=M.deserialize(raw);}catch(e){this._lens=M.emptyLens();}
+      // Migrate a pre-lens saved accent onto the seed workspace, once, so an
+      // existing reader's chosen color survives the move to per-workspace accents.
+      if(!raw&&this.state.accent)this._lens=M.setColor(this._lens,M.activeId(this._lens),this.state.accent);
+      this._lensLoaded=true;}
+    if(!this._lens)this._lens={active:'w0',order:['w0'],workspaces:{w0:{id:'w0',name:'Everything',color:this.state.accent||'#5b34d6',view:'source',pinned:[]}}};
+    return this._lens;}
+  lensSave(){const M=this._lensMod();if(M&&this._lens){try{localStorage.setItem('eo_lens_v1',M.serialize(this._lens));}catch(e){}}}
+  _lensApply(next){this._lens=next;this.lensSave();this._decoToken=null;this.setState(s=>({lensRev:(s.lensRev||0)+1}));}
+  activeLens(){const L=this.lensGet();return (L.workspaces&&L.workspaces[L.active])||null;}
+  lensAccent(){const w=this.activeLens();return (w&&w.color)||null;}
+  // The active lens's pinned refKeys, as a Set — the workspace grounding scope.
+  lensPinnedSet(){const M=this._lensMod();return M?new Set(M.pinnedOf(this.lensGet())):new Set();}
+  // ── lens mutations (thin wrappers over src/workspace/lens) ──
+  lensSwitch(id){const M=this._lensMod();if(!M)return;this._lens=M.setActive(this.lensGet(),id);this.lensSave();this._decoToken=null;this.setState(s=>({lensRev:(s.lensRev||0)+1,lensMenu:false}));}
+  lensNew(){const M=this._lensMod();if(!M)return;
+    const next=M.createWorkspace(this.lensGet(),{name:'New workspace',now:(Date.now?Date.now():0)});
+    const id=next.order[next.order.length-1];
+    this._lens=M.setActive(next,id);this.lensSave();this._decoToken=null;
+    this.setState(s=>({lensRev:(s.lensRev||0)+1,lensMenu:true,lensRenaming:id}));}
+  lensRenameInput(id,ev){const M=this._lensMod();if(!M)return;this._lensApply(M.renameWorkspace(this.lensGet(),id,ev&&ev.target?ev.target.value:'',(Date.now?Date.now():0)));}
+  lensRenameDone(){this.setState({lensRenaming:null});}
+  // Commit on Enter, cancel-out on Escape; other keys just edit the field. (Binding
+  // onRenameDone straight to onkeydown would close the input on the first keystroke.)
+  lensRenameKey(ev){if(!ev)return;if(ev.key==='Enter'||ev.key==='Escape'){if(ev.preventDefault)ev.preventDefault();if(ev.stopPropagation)ev.stopPropagation();this.lensRenameDone();}}
+  lensDelete(id){const M=this._lensMod();if(!M)return;const L=this.lensGet();if((L.order||[]).length<=1)return;const w=L.workspaces[id];
+    if(typeof confirm==='function'&&!confirm('Delete the workspace “'+((w&&w.name)||'')+'”? Its sources stay in memory — only this lens is removed.'))return;
+    this._lens=M.deleteWorkspace(L,id);this.lensSave();this._decoToken=null;
+    this.setState(s=>({lensRev:(s.lensRev||0)+1,lensRenaming:s.lensRenaming===id?null:s.lensRenaming}));}
+  lensSetView(view){const M=this._lensMod();if(!M)return;this._lensApply(M.setView(this.lensGet(),this.lensGet().active,view,(Date.now?Date.now():0)));this.setState({lensViewMenu:false});}
+  // Pin / unpin a refKey into the ACTIVE lens (toggle). Sources, chats, documents
+  // all pin by their stable refKey — the same key the folder model files by.
+  lensTogglePin(refKey){const M=this._lensMod();if(!M)return;this._lensApply(M.togglePin(this.lensGet(),this.lensGet().active,refKey,(Date.now?Date.now():0)));}
+  lensIsPinned(refKey){const M=this._lensMod();return M?M.isPinned(this.lensGet(),this.lensGet().active,refKey):false;}
+  // The switcher view-model: the active lens's chip + a dropdown of every lens
+  // (each row switch/rename/delete) and a "New workspace" action. Kept whole here
+  // so the view stays declarative. Degrades to a single inert chip with no module.
+  _lensVals(base){const M=this._lensMod();const L=this.lensGet();
+    const act=this.activeLens();const acc=this.curAccent();
+    const pinN=act?(act.pinned||[]).length:0;const memN=(this.master?this.master.pages.length:0);
+    base.wsName=this.truncLabel((act&&act.name)||'Everything',26);
+    base.wsSubLabel=pinN+' pinned · '+memN+' in memory';
+    base.wsChipStyle='width:20px;height:20px;border-radius:6px;flex:0 0 auto;background:'+this.mixWhite(acc,.86)+';color:'+acc+';display:flex;align-items:center;justify-content:center;font-size:11px;';
+    base.lensMenuOpen=!!this.state.lensMenu;
+    base.onLensMenu=()=>this.setState(s=>({lensMenu:!s.lensMenu,lensRenaming:null}));
+    base.onLensMenuClose=()=>this.setState({lensMenu:false,lensRenaming:null});
+    base.onNewWorkspace=()=>this.lensNew();
+    const list=M?M.listWorkspaces(L):[];
+    const canDelete=list.length>1;
+    base.wsMenuItems=list.map(w=>{const active=w.id===L.active,renaming=this.state.lensRenaming===w.id;
+      return {id:w.id,name:this.truncLabel(w.name||'Workspace',24),sub:(w.pinned||[]).length+' pinned',active,renaming,notRenaming:!renaming,
+        onClick:()=>this.lensSwitch(w.id),
+        onRenameInput:ev=>this.lensRenameInput(w.id,ev),
+        onRenameKey:ev=>this.lensRenameKey(ev),
+        onStopClick:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();},
+        onRenameDone:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.lensRenameDone();},
+        onStartRename:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.setState({lensRenaming:w.id});},
+        canDelete,onDelete:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.lensDelete(w.id);},
+        iconBg:this.mixWhite(w.color,.86),iconCl:w.color,
+        renameStyle:'flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--ink);background:var(--app);border:1px solid var(--accline);border-radius:6px;padding:3px 7px;outline:none;',
+        rowStyle:'display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;cursor:pointer;'+(active?'background:var(--accbg);':'')};});
+  }
   _parseRef(key){const s=String(key||'');const i=s.indexOf(':');return i<0?{kind:s,id:''}:{kind:s.slice(0,i),id:s.slice(i+1)};}
   // Every live item, as {key, ts} — the universe the smart views and "Unfiled"
   // draw from. Sources carry a read timestamp; chats a creation ts; documents none.
@@ -9845,6 +9927,9 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
         {v:'echo',label:'Echo · offline, no model'}].map(o=>{const sel=(this.state.backend||'webllm')===o.v;return {v:o.v,label:o.label,sel,onPick:()=>this.setBackend(o.v),
         style:'font-size:12px;font-weight:600;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'var(--line2)')+';background:'+(sel?'var(--accbg)':'var(--card)')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),
       sources:[],srcCount:0,srcEmpty:true,imports:this._importRows(),hasImports:(this.state.imports||[]).length>0,onSrcImport:()=>this.onImportClick(),
+      // Lens tiers default empty so the two-tier panel + switcher render on every
+      // path, including before anything is read (_lensVals overwrites these).
+      lensSources:[],memorySources:[],hasLensSources:false,hasMemorySources:false,lensCount:0,memoryCount:0,
       writtenDocs:this._writtenDocRows(),hasWrittenDocs:this._docsMap().size>0,
       // Corpus search box — see runCorpusSearch/_corpusResultRows. browseMode gates the
       // ordinary Chats/Sources/Documents lists off while a search is active, so the panel
@@ -10050,6 +10135,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       // (and persist across reloads) with an empty Record. Build the sidebar folder rows
       // and, when the explorer is open, take the centre before falling back to the landing.
       base.wsFolders=this._wsSidebarRows();base.hasWsFolders=base.wsFolders.length>0;
+      this._lensVals(base);   // the switcher renders even with an empty Record
       if(this.state.explorerView){base.explorerOn=true;base.explorer=this.explorerVals();return base;}
       if(!vu&&!base.chatOn&&!base.gutenOn){
         this.landingVals(base);
@@ -10101,16 +10187,34 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       else kids.forEach(c=>pushP(c,Math.min(depth+1,2)));};
     pagesByRecency.filter(p=>!inSet(p.parent)).forEach(p=>pushP(p,0));
     pagesByRecency.forEach(p=>{if(!seenP.has(p.url))pushP(p,0);});
+    const _pinnedSet=this.lensPinnedSet();
     base.sources=orderedP.map(({p,depth,kids,collapsed:col})=>{const c=this.hashColor(this.short(p.url)),isA=(vu===p.url)||(this.state.siteView===p.url),cnt=entInSrc.get(p.url)||0;
+      const isP=_pinnedSet.has('source:'+p.url);
       return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.openSite(p.url),onRead:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.goWeb(p.url);},onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},onWeave:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this._openWeave(p.url);},
         hasKids:kids>0,collapsed:col,caret:col?'▸':'▾',collapseTitle:(col?'Show':'Hide')+' the '+kids+' source'+(kids!==1?'s':'')+' found from this one',
         onToggleCollapse:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.toggleSrcCollapse(p.url);},
         caretStyle:'width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:11px;line-height:1;',
+        // Pin / unpin into the active workspace lens — a source lives in memory once,
+        // pinned into any number of lenses. − removes it from this lens; ＋ Pin adds it.
+        pinned:isP,notPinned:!isP,onTogglePin:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.lensTogglePin('source:'+p.url);},
+        unpinStyle:'flex:0 0 auto;width:22px;height:22px;border:1px solid var(--line2);background:var(--card);border-radius:6px;color:var(--ink3);font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;',
+        pinStyle:'flex:0 0 auto;display:inline-flex;align-items:center;gap:3px;height:22px;padding:0 9px;border:1px solid var(--accline);background:var(--accbg);border-radius:6px;color:var(--acc);font-size:10.5px;font-weight:700;cursor:pointer;',
         dot:'width:'+(depth?16:20)+'px;height:'+(depth?16:20)+'px;border-radius:6px;flex:0 0 auto;background:'+c+'1a;color:'+c+';display:flex;align-items:center;justify-content:center;font-size:'+(depth?8:9)+'px;font-weight:800;',
         glyph:depth?'↳':(p.via==='REAFFERENCE'?'⟲':this.short(p.url).slice(0,2).toUpperCase()),
         rowStyle:'display:flex;align-items:center;gap:10px;padding:'+(depth?'7px 11px':'9px 11px')+';border-radius:9px;margin-bottom:3px;margin-left:'+(depth*15)+'px;cursor:pointer;border:1px solid '+(isA?'var(--accline)':'transparent')+';background:'+(isA?'var(--accbg)':'transparent')+';'+(depth?'border-left:2px solid '+c+'55;border-radius:0 9px 9px 0;':'')};});
+    // Two tiers: what's pinned into THIS workspace, and the rest of memory (shared
+    // across every lens). A source can sit in both a child subtree and a tier, so
+    // the split is by pin state only; depth/indent is preserved within each tier.
+    base.lensSources=base.sources.filter(r=>r.pinned);
+    base.memorySources=base.sources.filter(r=>!r.pinned);
+    base.hasLensSources=base.lensSources.length>0;
+    base.hasMemorySources=base.memorySources.length>0;
+    base.lensCount=base.lensSources.length;
+    base.memoryCount=base.memorySources.length;
     base.srcCount=this.master.pages.length;base.srcEmpty=this.master.pages.length===0&&(this.state.imports||[]).length===0;
     base.hasSources=this.master.pages.length>0;
+    // ── the workspace switcher (active lens name/accent + the menu) ──
+    this._lensVals(base);
     base.wsFolders=this._wsSidebarRows();base.hasWsFolders=base.wsFolders.length>0;
     base.corpusCount=base.corpusResults.length;base.hasCorpusResults=base.corpusResults.length>0;
     base.corpusPending=base.corpusActive&&this.state.corpusResultsQuery!==(this.state.corpusQuery||'').trim();
