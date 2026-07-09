@@ -18,7 +18,7 @@ class Component extends DCLogic {
     this.READ_THEMES={light:{bg:'#ffffff',fg:'#23272e',fg2:'#9aa1ab',rule:'#eef0f3'},sepia:{bg:'#f4ecd9',fg:'#473f30',fg2:'#9a8e72',rule:'#e6dac0'},dark:{bg:'#14171c',fg:'#c8ccd3',fg2:'#71777f',rule:'#262a31'}};
     this.READ_FONTS={serif:'Georgia,"Iowan Old Style","Times New Roman",serif',sans:'-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif'};
     this._defaultRead={fs:19,lh:1.7,w:720,theme:'light',font:'serif'};
-    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null,savedViewMode=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');savedViewMode=localStorage.getItem('eo_viewmode');}catch(e){}
+    let savedAccent=null,savedHL=null,savedAudit=null,savedHoverPivot=null,savedClickAct=null,savedHoverDelay=null,savedLink=null,savedRead=null,savedViewMode=null,savedGrounding=null;try{savedAccent=localStorage.getItem('eo_accent');savedHL=localStorage.getItem('eo_highlight');savedAudit=localStorage.getItem('eo_audit');savedHoverPivot=localStorage.getItem('eo_hoverpivot');savedClickAct=localStorage.getItem('eo_clickact');savedHoverDelay=localStorage.getItem('eo_hoverdelay');savedLink=localStorage.getItem('eo_linkmode');savedRead=JSON.parse(localStorage.getItem('eo_readprefs')||'null');savedViewMode=localStorage.getItem('eo_viewmode');savedGrounding=localStorage.getItem('eo_default_grounding');}catch(e){}
     this._busy=false; this._svoRun=0; this._panelStack=[]; this._gzDrag=null; this._gzMoved=false;
     // Live model-generation tracking: every stall guard registers here so a single Stop can abort
     // whatever's decoding; `_stopGen` latches a user stop until the next turn starts.
@@ -74,7 +74,7 @@ class Component extends DCLogic {
       // Default is 'native' — render the real page as HTML first; switch to the stripped
       // reader view only on request (the toggle persists 'reader' for those who prefer it).
       viewMode:(savedViewMode==='reader'?'reader':'native'),
-      accent:savedAccent||null, highlightStyle:savedHL||'marker', settingsOpen:false, templatesOpen:false, promptFlowOpen:false,
+      accent:savedAccent||null, highlightStyle:savedHL||'marker', defaultGrounding:savedGrounding||'workspace', settingsOpen:false, templatesOpen:false, promptFlowOpen:false,
       hoverPivot:savedHoverPivot||'dwell', clickAction:savedClickAct||'ask', hoverDelay:Math.max(150,Math.min(2000,+savedHoverDelay||1100)),
       // THE COMPOSER CARRIES NO MODE STATE (design/chat-redesign/REVISIONS.md).
       // Register, depth, strategy and web reach are all EMERGENT — read off the
@@ -143,8 +143,15 @@ class Component extends DCLogic {
   _hx(h){h=String(h||'').replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16);return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};}
   mixWhite(hex,amt){const c=this._hx(hex);const m=v=>Math.round(v+(255-v)*amt);return 'rgb('+m(c.r)+','+m(c.g)+','+m(c.b)+')';}
   hexA(hex,a){const c=this._hx(hex);return 'rgba('+c.r+','+c.g+','+c.b+','+a+')';}
-  curAccent(){return this.state.accent||(this.props&&this.props.accent)||'#5b34d6';}
-  setAccent(hex){try{localStorage.setItem('eo_accent',hex);}catch(e){}this._decoToken=null;this.setState({accent:hex});}
+  // The live accent is the ACTIVE lens's color — switching workspaces re-tints the
+  // whole app. Falls back to the saved accent (then the prop, then the default)
+  // while the lens module is still loading, so there is no boot flash.
+  curAccent(){return this.lensAccent()||this.state.accent||(this.props&&this.props.accent)||'#5b34d6';}
+  // Picking an accent recolors the ACTIVE workspace (each lens owns its color) and
+  // still saves eo_accent as the seed for any future fresh lens.
+  setAccent(hex){try{localStorage.setItem('eo_accent',hex);}catch(e){}this._decoToken=null;
+    const M=this._lensMod();if(M){this._lens=M.setColor(this.lensGet(),this.lensGet().active,hex,(Date.now?Date.now():0));this.lensSave();}
+    this.setState({accent:hex});}
   setHighlight(s){try{localStorage.setItem('eo_highlight',s);}catch(e){}this._decoToken=null;this.setState({highlightStyle:s});}
   setHoverPivot(v){try{localStorage.setItem('eo_hoverpivot',v);}catch(e){}this.setState({hoverPivot:v});}
   setClickAction(v){try{localStorage.setItem('eo_clickact',v);}catch(e){}this.setState({clickAction:v});}
@@ -1144,8 +1151,16 @@ class Component extends DCLogic {
     // scope until you tag "everything" or pick sources — so a fresh chat is a blank slate,
     // not silently grounded in the whole library.
     const sources=scopeUrl?[scopeUrl]:[];
+    // A net-new chat opens in the default grounding (Settings → Default grounding):
+    // narrowed to the active workspace lens, widened to memory, or a blank net-new
+    // space. A chat opened FROM a source stays scoped to that source.
+    const dg=this.defaultGrounding();
+    const seed=scopeUrl?{scopeAll:false,scopeWs:false}
+      :dg==='memory'?{scopeAll:true,scopeWs:false}
+      :dg==='workspace'?{scopeAll:false,scopeWs:true}
+      :{scopeAll:false,scopeWs:false};
     this._chatTab(id);
-    this.setState(s=>({chats:[{id,title,sources,scopeAll:false,messages:[],ts:Date.now()},...s.chats],activeChat:id,viewUrl:null,selId:null,siteView:null,sitesDir:false,explorerView:null,chatInput:'',chatAddOpen:false,rightOpen:true,newTabOpen:false,histRev:(s.histRev||0)+1}));
+    this.setState(s=>({chats:[{id,title,sources,...seed,messages:[],ts:Date.now()},...s.chats],activeChat:id,viewUrl:null,selId:null,siteView:null,sitesDir:false,explorerView:null,chatInput:'',chatAddOpen:false,rightOpen:true,newTabOpen:false,histRev:(s.histRev||0)+1}));
     return id;
   }
   // The sources a chat is ABOUT, as a URL list. Tolerates the older single-`scope` shape
@@ -1154,16 +1169,31 @@ class Component extends DCLogic {
   // Does this chat range over EVERYTHING read? An explicit opt-in (the "Everything you've
   // read" tag) — never the mere absence of tagged sources.
   chatScopeAll(c){return !!(c&&c.scopeAll);}
-  // A NET-NEW space: nothing tagged and not ranged over everything. An isolated chat does
-  // NOT draw on what was read — it answers plainly (and the web, if on), never the library.
-  chatIsolated(c){return !this.chatScopeAll(c)&&this.chatSourcesOf(c).length===0;}
+  // Narrowed to the ACTIVE workspace lens: grounds in exactly the sources pinned
+  // into the current lens (the "Narrow to workspace" grounding scope).
+  chatScopeWs(c){return !!(c&&c.scopeWs);}
+  // A NET-NEW space: nothing tagged, not everything, not lens-narrowed. An isolated
+  // chat does NOT draw on what was read — it answers plainly (and the web, if on).
+  chatIsolated(c){return !this.chatScopeAll(c)&&!this.chatScopeWs(c)&&this.chatSourcesOf(c).length===0;}
+  // The active lens's pinned SOURCE urls that are live read pages — the grounding
+  // set for a workspace-narrowed chat. Chats/docs pinned into the lens don't ground.
+  _lensSourceUrls(){const M=this._lensMod();if(!M)return [];
+    const out=[];for(const k of M.pinnedOf(this.lensGet())){const {kind,id}=this._parseRef(k);
+      if(kind==='source'&&this.pageOf(id))out.push(id);}
+    return out;}
   // Resolve the grounding scope for an answer turn, folding in any freshly-gathered pages.
   //   {isolated:true}  → net-new space, ground nothing from reading.
   //   {sources:[]}     → range over everything (the "everything" tag).
-  //   {sources:[…]}    → the tagged/gathered sources only.
+  //   {sources:[…]}    → the tagged/gathered/lens-pinned sources only.
   _answerScope(cur,gathered){
     const g=(gathered&&gathered.length)?[...new Set(gathered.filter(Boolean))]:[];
     if(this.chatScopeAll(cur))return {isolated:false,sources:[]};
+    if(this.chatScopeWs(cur)){
+      const merged=[...new Set([...this._lensSourceUrls(),...g])];
+      // A workspace with nothing pinned grounds in nothing (not silently everything) —
+      // the chat prompts you to pin a source into this lens.
+      return merged.length?{isolated:false,sources:merged}:{isolated:true,sources:[]};
+    }
     const had=this.chatSourcesOf(cur);
     if(had.length||g.length)return {isolated:false,sources:[...new Set([...had,...g])]};
     return {isolated:true,sources:[]};
@@ -1180,7 +1210,19 @@ class Component extends DCLogic {
   // Tag / untag the "everything you've read" scope. Tagging everything supersedes (and clears)
   // any specific source chips; untagging drops back to a net-new space.
   setChatScopeAll(on){this.setState(s=>({chatAddOpen:false,chats:s.chats.map(c=>{
-    if(c.id!==s.activeChat)return c;return {...c,scopeAll:!!on,sources:on?[]:this.chatSourcesOf(c)};})}));}
+    if(c.id!==s.activeChat)return c;return {...c,scopeAll:!!on,scopeWs:false,sources:on?[]:this.chatSourcesOf(c)};})}));}
+  // The Widen ↔ Narrow grounding toggle. Narrow grounds the chat in the active lens's
+  // pins; Widen grounds it across all of memory. Each clears the tagged-source chips
+  // (grounding is a single choice: workspace, memory, or a hand-picked set).
+  setChatGrounding(scope){this.setState(s=>({chatAddOpen:false,chats:s.chats.map(c=>{
+    if(c.id!==s.activeChat)return c;
+    return scope==='workspace'?{...c,scopeWs:true,scopeAll:false,sources:[]}
+      :{...c,scopeAll:true,scopeWs:false,sources:[]};})}));}
+  // The default grounding a NET-NEW chat opens in (Settings → Default grounding):
+  // 'workspace' narrows to the active lens, 'memory' widens to everything, 'none'
+  // keeps the old blank-slate net-new behavior. Persisted across reloads.
+  defaultGrounding(){return this.state.defaultGrounding||'workspace';}
+  setDefaultGrounding(v){try{localStorage.setItem('eo_default_grounding',v);}catch(e){}this.setState({defaultGrounding:v});}
   toggleChatAdd(){this.setState(s=>({chatAddOpen:!s.chatAddOpen}));}
   // The sources you can still tag into this chat, as an indented tree: each primary page with
   // the branching pages found from it (research children) nested underneath — so you pick by
@@ -3832,6 +3874,7 @@ class Component extends DCLogic {
     try{
       if(!cur)return '';
       if(this.chatScopeAll(cur))return this.chatOrientation([]);
+      if(this.chatScopeWs(cur)){const u=this._lensSourceUrls();return u.length?this.chatOrientation(u):'';}
       const ss=this.chatSourcesOf(cur);
       return ss.length?this.chatOrientation(ss):'';
     }catch(e){return '';}
@@ -6165,7 +6208,9 @@ class Component extends DCLogic {
     //   everything → the explicit "Everything you've read" tag (a removable chip).
     //   specific  → one removable chip per tagged source.
     const ss=this.chatSourcesOf(cur);
-    const isEvery=this.chatScopeAll(cur), isIso=this.chatIsolated(cur);
+    const isEvery=this.chatScopeAll(cur), isWs=this.chatScopeWs(cur), isIso=this.chatIsolated(cur);
+    const wsSrcN=isWs?this._lensSourceUrls().length:0;
+    const wsName=this.truncLabel((this.activeLens()||{}).name||'workspace',20);
     const titleOf=u=>this.truncLabel(((this.pageOf(u)||{}).title)||this.short(u),26);
     const aboutChips=ss.map(u=>({label:titleOf(u),url:u,onOpen:()=>this.goWeb(u),
       onRemove:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.removeChatSource(u);},
@@ -6194,11 +6239,19 @@ class Component extends DCLogic {
       // Export this chat's full audit — every internal prompt, raw model output, step trail,
       // and source — as one JSON file (the "are we really chatting or grepping spans" answer).
       onExportAudit:()=>this.exportChatAudit(cur.id),
-      scopeLabel:isEvery?'everything you have read':(ss.length?(ss.length===1?titleOf(ss[0]):(ss.length+' sources')):'a net-new space'),
+      scopeLabel:isWs?('“'+wsName+'” · '+wsSrcN+' source'+(wsSrcN!==1?'s':'')):isEvery?'everything you have read':(ss.length?(ss.length===1?titleOf(ss[0]):(ss.length+' sources')):'a net-new space'),
       // The header subtitle spells out what the chat draws on, so isolation is legible.
-      subLabel:isIso?'A net-new space — tag sources to ground it in your reading'
+      subLabel:isWs?(wsSrcN?('Grounded in '+wsSrcN+' source'+(wsSrcN!==1?'s':'')+' — narrowed to “'+wsName+'”'):('Nothing pinned in “'+wsName+'” yet — pin a source, or widen to memory'))
+        :isIso?'A net-new space — tag sources to ground it in your reading'
         :isEvery?('Grounded across everything you’ve read'+(nSrc?(' · '+nSrc+' source'+(nSrc!==1?'s':'')):''))
         :('Grounded in '+(ss.length===1?('“'+titleOf(ss[0])+'”'):(ss.length+' sources'))),
+      // The Widen ↔ Narrow grounding toggle: a two-segment control in the About bar.
+      // Narrow grounds in the active lens's pins; Widen grounds in all of memory.
+      groundNarrowOn:isWs,groundWideOn:isEvery,
+      onGroundNarrow:()=>this.setChatGrounding('workspace'),onGroundWiden:()=>this.setChatGrounding('memory'),
+      groundNarrowStyle:'font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:6px;cursor:pointer;white-space:nowrap;'+(isWs?'background:var(--card);color:var(--acc);box-shadow:0 1px 2px rgba(0,0,0,.08);':'color:var(--ink3);'),
+      groundWideStyle:'font-size:10.5px;font-weight:600;padding:3px 9px;border-radius:6px;cursor:pointer;white-space:nowrap;'+(isEvery?'background:var(--card);color:var(--acc);box-shadow:0 1px 2px rgba(0,0,0,.08);':'color:var(--ink3);'),
+      wsNarrowLabel:'Narrow to “'+wsName+'”',
       about:aboutChips,hasAbout:aboutChips.length>0,
       // Distinct chips for the three states: the muted "net new" hint, the removable
       // "everything" tag, and the "+ tag everything" quick action shown when neither is set.
@@ -8125,6 +8178,81 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
     return this._ws;}
   wsSave(){const M=this._wsMod();if(M&&this._ws){try{localStorage.setItem('eo_workspace_v1',M.serialize(this._ws));}catch(e){}}}
   _wsApply(next){this._ws=next;this.wsSave();this.setState(s=>({wsRev:(s.wsRev||0)+1}));}
+
+  // ── THE LENS LAYER — named workspaces over the shared Record ──────────────
+  // A lens is a named slice of memory: it pins sources (never owns them), carries
+  // its own accent, and remembers how its panel was organized. The pure algebra
+  // lives in src/workspace/lens.js (window.EOWorkspaceLens); this half holds the
+  // live lens on this._lens, persists it, and drives the shell — the active
+  // lens's color tints the whole app, and its pin set is the "narrow to
+  // workspace" grounding scope. Everything degrades to one implicit lens until
+  // the module lands (curAccent then falls back to the saved accent).
+  _lensMod(){return (typeof window!=='undefined'&&window.EOWorkspaceLens)||null;}
+  lensGet(){const M=this._lensMod();
+    if(!this._lensLoaded&&M){
+      const raw=(()=>{try{return localStorage.getItem('eo_lens_v1');}catch(e){return null;}})();
+      try{this._lens=M.deserialize(raw);}catch(e){this._lens=M.emptyLens();}
+      // Migrate a pre-lens saved accent onto the seed workspace, once, so an
+      // existing reader's chosen color survives the move to per-workspace accents.
+      if(!raw&&this.state.accent)this._lens=M.setColor(this._lens,M.activeId(this._lens),this.state.accent);
+      this._lensLoaded=true;}
+    if(!this._lens)this._lens={active:'w0',order:['w0'],workspaces:{w0:{id:'w0',name:'Everything',color:this.state.accent||'#5b34d6',view:'source',pinned:[]}}};
+    return this._lens;}
+  lensSave(){const M=this._lensMod();if(M&&this._lens){try{localStorage.setItem('eo_lens_v1',M.serialize(this._lens));}catch(e){}}}
+  _lensApply(next){this._lens=next;this.lensSave();this._decoToken=null;this.setState(s=>({lensRev:(s.lensRev||0)+1}));}
+  activeLens(){const L=this.lensGet();return (L.workspaces&&L.workspaces[L.active])||null;}
+  lensAccent(){const w=this.activeLens();return (w&&w.color)||null;}
+  // The active lens's pinned refKeys, as a Set — the workspace grounding scope.
+  lensPinnedSet(){const M=this._lensMod();return M?new Set(M.pinnedOf(this.lensGet())):new Set();}
+  // ── lens mutations (thin wrappers over src/workspace/lens) ──
+  lensSwitch(id){const M=this._lensMod();if(!M)return;this._lens=M.setActive(this.lensGet(),id);this.lensSave();this._decoToken=null;this.setState(s=>({lensRev:(s.lensRev||0)+1,lensMenu:false}));}
+  lensNew(){const M=this._lensMod();if(!M)return;
+    const next=M.createWorkspace(this.lensGet(),{name:'New workspace',now:(Date.now?Date.now():0)});
+    const id=next.order[next.order.length-1];
+    this._lens=M.setActive(next,id);this.lensSave();this._decoToken=null;
+    this.setState(s=>({lensRev:(s.lensRev||0)+1,lensMenu:true,lensRenaming:id}));}
+  lensRenameInput(id,ev){const M=this._lensMod();if(!M)return;this._lensApply(M.renameWorkspace(this.lensGet(),id,ev&&ev.target?ev.target.value:'',(Date.now?Date.now():0)));}
+  lensRenameDone(){this.setState({lensRenaming:null});}
+  // Commit on Enter, cancel-out on Escape; other keys just edit the field. (Binding
+  // onRenameDone straight to onkeydown would close the input on the first keystroke.)
+  lensRenameKey(ev){if(!ev)return;if(ev.key==='Enter'||ev.key==='Escape'){if(ev.preventDefault)ev.preventDefault();if(ev.stopPropagation)ev.stopPropagation();this.lensRenameDone();}}
+  lensDelete(id){const M=this._lensMod();if(!M)return;const L=this.lensGet();if((L.order||[]).length<=1)return;const w=L.workspaces[id];
+    if(typeof confirm==='function'&&!confirm('Delete the workspace “'+((w&&w.name)||'')+'”? Its sources stay in memory — only this lens is removed.'))return;
+    this._lens=M.deleteWorkspace(L,id);this.lensSave();this._decoToken=null;
+    this.setState(s=>({lensRev:(s.lensRev||0)+1,lensRenaming:s.lensRenaming===id?null:s.lensRenaming}));}
+  lensSetView(view){const M=this._lensMod();if(!M)return;this._lensApply(M.setView(this.lensGet(),this.lensGet().active,view,(Date.now?Date.now():0)));this.setState({lensViewMenu:false});}
+  // Pin / unpin a refKey into the ACTIVE lens (toggle). Sources, chats, documents
+  // all pin by their stable refKey — the same key the folder model files by.
+  lensTogglePin(refKey){const M=this._lensMod();if(!M)return;this._lensApply(M.togglePin(this.lensGet(),this.lensGet().active,refKey,(Date.now?Date.now():0)));}
+  lensIsPinned(refKey){const M=this._lensMod();return M?M.isPinned(this.lensGet(),this.lensGet().active,refKey):false;}
+  // The switcher view-model: the active lens's chip + a dropdown of every lens
+  // (each row switch/rename/delete) and a "New workspace" action. Kept whole here
+  // so the view stays declarative. Degrades to a single inert chip with no module.
+  _lensVals(base){const M=this._lensMod();const L=this.lensGet();
+    const act=this.activeLens();const acc=this.curAccent();
+    const pinN=act?(act.pinned||[]).length:0;const memN=(this.master?this.master.pages.length:0);
+    base.wsName=this.truncLabel((act&&act.name)||'Everything',26);
+    base.wsSubLabel=pinN+' pinned · '+memN+' in memory';
+    base.wsChipStyle='width:20px;height:20px;border-radius:6px;flex:0 0 auto;background:'+this.mixWhite(acc,.86)+';color:'+acc+';display:flex;align-items:center;justify-content:center;font-size:11px;';
+    base.lensMenuOpen=!!this.state.lensMenu;
+    base.onLensMenu=()=>this.setState(s=>({lensMenu:!s.lensMenu,lensRenaming:null}));
+    base.onLensMenuClose=()=>this.setState({lensMenu:false,lensRenaming:null});
+    base.onNewWorkspace=()=>this.lensNew();
+    const list=M?M.listWorkspaces(L):[];
+    const canDelete=list.length>1;
+    base.wsMenuItems=list.map(w=>{const active=w.id===L.active,renaming=this.state.lensRenaming===w.id;
+      return {id:w.id,name:this.truncLabel(w.name||'Workspace',24),sub:(w.pinned||[]).length+' pinned',active,renaming,notRenaming:!renaming,
+        onClick:()=>this.lensSwitch(w.id),
+        onRenameInput:ev=>this.lensRenameInput(w.id,ev),
+        onRenameKey:ev=>this.lensRenameKey(ev),
+        onStopClick:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();},
+        onRenameDone:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.lensRenameDone();},
+        onStartRename:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.setState({lensRenaming:w.id});},
+        canDelete,onDelete:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.lensDelete(w.id);},
+        iconBg:this.mixWhite(w.color,.86),iconCl:w.color,
+        renameStyle:'flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--ink);background:var(--app);border:1px solid var(--accline);border-radius:6px;padding:3px 7px;outline:none;',
+        rowStyle:'display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:8px;cursor:pointer;'+(active?'background:var(--accbg);':'')};});
+  }
   _parseRef(key){const s=String(key||'');const i=s.indexOf(':');return i<0?{kind:s,id:''}:{kind:s.slice(0,i),id:s.slice(i+1)};}
   // Every live item, as {key, ts} — the universe the smart views and "Unfiled"
   // draw from. Sources carry a read timestamp; chats a creation ts; documents none.
@@ -9801,6 +9929,11 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
         style:'width:26px;height:26px;border-radius:7px;cursor:pointer;background:'+t.hex+';box-shadow:0 0 0 '+(t.hex.toLowerCase()===_acc.toLowerCase()?'2px var(--card),0 0 0 4px '+t.hex:'1px rgba(0,0,0,.12) inset')+';'})),
       hlOptions:['marker','underline','off'].map(k=>({k,label:k==='marker'?'Highlight':k==='underline'?'Underline':'Off',active:this.state.highlightStyle===k,onPick:()=>this.setHighlight(k),
         style:'flex:1;font-size:11.5px;font-weight:600;text-align:center;padding:6px 4px;border-radius:6px;cursor:pointer;'+(this.state.highlightStyle===k?'background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08);':'color:var(--ink3);')})),
+      // Default grounding for net-new chats: narrow to the active workspace, widen to
+      // all of memory, or start as a blank net-new space (the old behavior).
+      groundingOptions:[['workspace','Workspace'],['memory','Memory'],['none','Net-new']].map(([k,label])=>({k,label,active:this.defaultGrounding()===k,onPick:()=>this.setDefaultGrounding(k),
+        style:'flex:1;font-size:11.5px;font-weight:600;text-align:center;padding:6px 4px;border-radius:6px;cursor:pointer;'+(this.defaultGrounding()===k?'background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08);':'color:var(--ink3);')})),
+      groundingDesc:this.defaultGrounding()==='memory'?'New chats are grounded across everything you’ve read. Narrow any chat to the workspace from its header.':this.defaultGrounding()==='none'?'New chats start as a blank net-new space — nothing in scope until you tag sources.':'New chats are grounded in the active workspace’s pinned sources. Widen any chat to all of memory from its header.',
       hoverOptions:[['dwell','On dwell'],['hover','Instant'],['off','Off']].map(([k,label])=>({k,label,active:this.state.hoverPivot===k,onPick:()=>this.setHoverPivot(k),
         style:'flex:1;font-size:11.5px;font-weight:600;text-align:center;padding:6px 4px;border-radius:6px;cursor:pointer;'+(this.state.hoverPivot===k?'background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.08);':'color:var(--ink3);')})),
       hoverDesc:this.state.hoverPivot==='off'?'Hovering never moves the panel — use it only to peek the card. Click to open a profile.':this.state.hoverPivot==='hover'?'The panel follows your cursor immediately. Fastest, but moves a lot while reading.':'The panel pivots only after you rest on an entity for a moment. Glancing past won’t move it.',
@@ -9845,6 +9978,9 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
         {v:'echo',label:'Echo · offline, no model'}].map(o=>{const sel=(this.state.backend||'webllm')===o.v;return {v:o.v,label:o.label,sel,onPick:()=>this.setBackend(o.v),
         style:'font-size:12px;font-weight:600;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer;border:1px solid '+(sel?'var(--accline)':'var(--line2)')+';background:'+(sel?'var(--accbg)':'var(--card)')+';color:'+(sel?'var(--acc)':'var(--ink2)')+';'};}),
       sources:[],srcCount:0,srcEmpty:true,imports:this._importRows(),hasImports:(this.state.imports||[]).length>0,onSrcImport:()=>this.onImportClick(),
+      // Lens tiers default empty so the two-tier panel + switcher render on every
+      // path, including before anything is read (_lensVals overwrites these).
+      lensSources:[],memorySources:[],hasLensSources:false,hasMemorySources:false,lensCount:0,memoryCount:0,
       writtenDocs:this._writtenDocRows(),hasWrittenDocs:this._docsMap().size>0,
       // Corpus search box — see runCorpusSearch/_corpusResultRows. browseMode gates the
       // ordinary Chats/Sources/Documents lists off while a search is active, so the panel
@@ -10050,6 +10186,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       // (and persist across reloads) with an empty Record. Build the sidebar folder rows
       // and, when the explorer is open, take the centre before falling back to the landing.
       base.wsFolders=this._wsSidebarRows();base.hasWsFolders=base.wsFolders.length>0;
+      this._lensVals(base);   // the switcher renders even with an empty Record
       if(this.state.explorerView){base.explorerOn=true;base.explorer=this.explorerVals();return base;}
       if(!vu&&!base.chatOn&&!base.gutenOn){
         this.landingVals(base);
@@ -10101,16 +10238,34 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       else kids.forEach(c=>pushP(c,Math.min(depth+1,2)));};
     pagesByRecency.filter(p=>!inSet(p.parent)).forEach(p=>pushP(p,0));
     pagesByRecency.forEach(p=>{if(!seenP.has(p.url))pushP(p,0);});
+    const _pinnedSet=this.lensPinnedSet();
     base.sources=orderedP.map(({p,depth,kids,collapsed:col})=>{const c=this.hashColor(this.short(p.url)),isA=(vu===p.url)||(this.state.siteView===p.url),cnt=entInSrc.get(p.url)||0;
+      const isP=_pinnedSet.has('source:'+p.url);
       return {label:this.truncLabel(p.title,depth?38:42),host:this.short(p.url),url:p.url,count:cnt,active:isA,onOpen:()=>this.openSite(p.url),onRead:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.goWeb(p.url);},onChat:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.newChat(p.url);},onWeave:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this._openWeave(p.url);},
         hasKids:kids>0,collapsed:col,caret:col?'▸':'▾',collapseTitle:(col?'Show':'Hide')+' the '+kids+' source'+(kids!==1?'s':'')+' found from this one',
         onToggleCollapse:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.toggleSrcCollapse(p.url);},
         caretStyle:'width:22px;height:22px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:11px;line-height:1;',
+        // Pin / unpin into the active workspace lens — a source lives in memory once,
+        // pinned into any number of lenses. − removes it from this lens; ＋ Pin adds it.
+        pinned:isP,notPinned:!isP,onTogglePin:ev=>{if(ev&&ev.stopPropagation)ev.stopPropagation();this.lensTogglePin('source:'+p.url);},
+        unpinStyle:'flex:0 0 auto;width:22px;height:22px;border:1px solid var(--line2);background:var(--card);border-radius:6px;color:var(--ink3);font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;',
+        pinStyle:'flex:0 0 auto;display:inline-flex;align-items:center;gap:3px;height:22px;padding:0 9px;border:1px solid var(--accline);background:var(--accbg);border-radius:6px;color:var(--acc);font-size:10.5px;font-weight:700;cursor:pointer;',
         dot:'width:'+(depth?16:20)+'px;height:'+(depth?16:20)+'px;border-radius:6px;flex:0 0 auto;background:'+c+'1a;color:'+c+';display:flex;align-items:center;justify-content:center;font-size:'+(depth?8:9)+'px;font-weight:800;',
         glyph:depth?'↳':(p.via==='REAFFERENCE'?'⟲':this.short(p.url).slice(0,2).toUpperCase()),
         rowStyle:'display:flex;align-items:center;gap:10px;padding:'+(depth?'7px 11px':'9px 11px')+';border-radius:9px;margin-bottom:3px;margin-left:'+(depth*15)+'px;cursor:pointer;border:1px solid '+(isA?'var(--accline)':'transparent')+';background:'+(isA?'var(--accbg)':'transparent')+';'+(depth?'border-left:2px solid '+c+'55;border-radius:0 9px 9px 0;':'')};});
+    // Two tiers: what's pinned into THIS workspace, and the rest of memory (shared
+    // across every lens). A source can sit in both a child subtree and a tier, so
+    // the split is by pin state only; depth/indent is preserved within each tier.
+    base.lensSources=base.sources.filter(r=>r.pinned);
+    base.memorySources=base.sources.filter(r=>!r.pinned);
+    base.hasLensSources=base.lensSources.length>0;
+    base.hasMemorySources=base.memorySources.length>0;
+    base.lensCount=base.lensSources.length;
+    base.memoryCount=base.memorySources.length;
     base.srcCount=this.master.pages.length;base.srcEmpty=this.master.pages.length===0&&(this.state.imports||[]).length===0;
     base.hasSources=this.master.pages.length>0;
+    // ── the workspace switcher (active lens name/accent + the menu) ──
+    this._lensVals(base);
     base.wsFolders=this._wsSidebarRows();base.hasWsFolders=base.wsFolders.length>0;
     base.corpusCount=base.corpusResults.length;base.hasCorpusResults=base.corpusResults.length>0;
     base.corpusPending=base.corpusActive&&this.state.corpusResultsQuery!==(this.state.corpusQuery||'').trim();
