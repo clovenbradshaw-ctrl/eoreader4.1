@@ -374,6 +374,7 @@
         <button onclick="{{ onSrcImport }}" title="Import a file — text, PDF, audio or video, image, spreadsheet, or web page; it appears here instantly and reads as a source" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><i class="ph" style="font-size:14px;line-height:1;">&#xE61E;</i>Import a file</button>
         <button onclick="{{ onOpenDoc }}" title="Write a document grounded to the Record — every edit is a tracked change, checked against what you've read; ungrounded edits are flagged, never silently kept" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">✎</span>New document</button>
         <button onclick="{{ onOpenDeepResearch }}" title="Open the deep-research panel — ask a question, watch it read the web and pin every source, each claim grounded in a quote you can open" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">⌕</span>Deep research</button>
+        <button onclick="{{ onOpenMonologue }}" title="{{ monologueTitle }}" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">☾</span>Inner monologue<sc-if value="{{ deepCount }}" hint-placeholder-val="{{ 0 }}"><span style="margin-left:auto;font-size:10.5px;font-weight:700;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:20px;padding:1px 7px;">{{ deepCount }}</span></sc-if></button>
         <button onclick="{{ onOpenExplorer }}" title="Open the workspace — a file explorer over everything in the Record. Make folders, nest them, and file any source, chat, or document into as many as you like." style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">▦</span>Open workspace</button>
         <button onclick="{{ onOpenRelationships }}" title="Relationships — two databases linked by typed edges. A connection carries its own fields, folded from the same event log as everything else." style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">⇄</span>Relationships</button>
         <!-- Corpus search — one box, nothing to configure. Ranked lexical retrieval
@@ -2374,6 +2375,14 @@ class Component extends DCLogic {
     // every rebuild as real SYN events so they carry exactly as much weight as any
     // other identity event, just the heaviest kind (recordIdentityJudgment).
     this._identityJudgments=[];
+    // DEEP READING AT REST (fold/deep-reading.js) — when the app is not engaged in chat, the
+    // reading turns back on the corpus it holds, surfs to the place of most interest, folds it,
+    // and deposits a reflection (an enacted EVA at band void, reafferent — canWitness false). The
+    // reflections ride an append OVERLAY over the read doc, never master's own log, so nothing the
+    // reader can witness is touched. _deep caches {doc,reader}; _deepReflections is the accumulated
+    // stream; _lastActivity gates "not otherwise busy"; _monoSurface is the docked window when open.
+    this._deep=null; this._deepReflections=[]; this._deepSettled=false;
+    this._deepAnchor=0; this._lastActivity=0; this._deepTimer=null; this._monoSurface=null;
     this.state={ ready:false, engineErr:null, pages:[], selId:null, siteView:null, sitesDir:false,explorerView:null, docView:null, dataView:null, query:'', url:'', busy:false, feed:[],
       // Corpus search — the smartest-possible-grep surface (docs/corpus-search.md): a query
       // typed here retrieves ranked passages from EVERY source read, fusing three channels
@@ -2898,6 +2907,7 @@ class Component extends DCLogic {
     try{ this.SVO=await import(__res.eoSvo||'./svo-llm.js'); }catch(e){ this.SVO=null; }
     const llmAvail=!!(this.SVO && typeof window!=='undefined' && window.claude && typeof window.claude.complete==='function');
     this.setState({ready:true, llmAvail, llm:llmAvail});
+    this._deepIdleStart();   // begin the at-rest deep reading (runs only when not engaged in chat)
     // Start the chat model downloading immediately so it's ready by the time the first
     // question is asked (progress is throttled in ensureChatModel to keep typing smooth).
     if(this.state.backend!=='echo') this.ensureChatModel().catch(()=>{});
@@ -3335,6 +3345,7 @@ class Component extends DCLogic {
     this.incident=new Map();for(const e of this.graph.edges){for(const id of [e.from,e.to])this.incident.set(id,(this.incident.get(id)||0)+(e.weight||0));}
     if(this._graphDock)this._renderGraphDock();   // keep the docked panel live as sources change
     if(this._dagDock)this._renderDagDock();       // and the causal-DAG panel likewise
+    this._deepReset();                            // the corpus changed — re-read its places at rest
     if(this._tgDock)this._renderTgDock();         // and the tiered-graph panel
     // A source was added/removed/muted — the sentence list just changed under the semantic
     // index. Vectors are cached by TEXT (stable across the reshuffle), so this only ever
@@ -4653,6 +4664,163 @@ class Component extends DCLogic {
     if(this._dagDockRO){try{this._dagDockRO.disconnect();}catch(e){}this._dagDockRO=null;}
     if(this._dagSurface&&this._dagSurface.destroy){try{this._dagSurface.destroy();}catch(e){}this._dagSurface=null;}
     if(this._dagDock){this._dagDock.remove();this._dagDock=null;}
+  }
+  // ── DEEP READING AT REST (fold/deep-reading.js) ─────────────────────────────────────────────
+  // The other idle continuity: when the app is NOT engaged in chat, the reading turns back on the
+  // corpus it already holds — it surfs to the place of most interest, folds the content there, and
+  // deposits a reflection. Each reflection is an enacted EVA at band void, reafferent (canWitness
+  // false — the §8 firewall), so it enriches the reading but can never be mistaken for a witnessed
+  // fact. The reflections ride an APPEND OVERLAY over the read doc (this._logDoc), never master's
+  // own event log, so the record the reader can witness is provably untouched. The loop is
+  // self-terminating: it habituates to places it has read and quiesces (_deepSettled) until the
+  // corpus grows, so background reading never spins.
+  async _deepLib(){
+    if(this._deepLibP)return this._deepLibP;
+    this._deepLibP=(async()=>{
+      try{
+        const fold=await import(new URL('src/fold/index.js',document.baseURI).href);
+        const surfer=await import(new URL('src/surfer/index.js',document.baseURI).href);
+        return {fold,surfFold:surfer.surfFold};
+      }catch(e){return null;}
+    })();
+    return this._deepLibP;
+  }
+  async _monoLib(){
+    if(this._monoLibP)return this._monoLibP;
+    this._monoLibP=(async()=>{try{return await import(new URL('src/reader/monologue-surface.js',document.baseURI).href);}catch(e){return null;}})();
+    return this._monoLibP;
+  }
+  // Build (or reuse) the append-overlay doc + the governed deep reader over the corpus now held.
+  async _deepEnsure(){
+    if(this._deep&&this._deep.base===this._logDoc)return this._deep;
+    const lib=await this._deepLib(); if(!lib||!lib.fold||!lib.surfFold)return null;
+    const base=this._logDoc; if(!base||!base.sentences||!base.sentences.length)return null;
+    const extra=[];   // the reflections, layered over base without mutating master's log
+    const log={
+      append:(e)=>{extra.push(e);return e;},
+      snapshot:()=>base.log.snapshot().concat(extra),
+      get events(){return base.log.snapshot().concat(extra);},
+      get length(){return base.log.snapshot().length+extra.length;},
+    };
+    const doc={log,units:base.units,sentences:base.sentences,
+      get tokensBySentence(){return base.tokensBySentence;},
+      docId:(this.master&&this.master.title)||'reading'};
+    const reader=lib.fold.createDeepReader({doc,surf:lib.surfFold});
+    this._deep={base,doc,reader,extra}; this._deepAnchor=0;
+    return this._deep;
+  }
+  // The corpus changed — drop the cached reader/overlay so the new places get read at rest, and
+  // clear the panel's stream if it is open.
+  _deepReset(){
+    this._deep=null; this._deepReflections=[]; this._deepSettled=false; this._deepAnchor=0;
+    if(this._monoSurface&&this._monoSurface.refresh){try{this._monoSurface.refresh(this._logDoc||{});}catch(e){}}
+  }
+  // ONE idle pass — arrive() is the wake-on-idle entry (it runs governed passes until it quiesces).
+  // Called by the idle loop when not engaged, and by the panel's "Reflect now" (manual=true).
+  async _deepTick(manual){
+    if(this._deepRunning)return; this._deepRunning=true;
+    try{
+      if(this._busy&&!manual)return;                 // a turn is generating — engaged
+      if(this._deepSettled&&!manual)return;          // nothing fresh until the corpus grows
+      let D; try{D=await this._deepEnsure();}catch(e){D=null;}
+      if(!D)return;
+      const n=(D.doc.sentences||[]).length; if(!n)return;
+      let res; try{res=D.reader.arrive({anchor:this._deepAnchor});}catch(e){return;}
+      const fresh=(res&&res.reflections)||[];
+      if(fresh.length){
+        this._deepReflections.push(...fresh);
+        this._deepAnchor=Math.min(n-1,fresh[fresh.length-1].peak+1);
+        this._deepSettled=false;
+      }else{
+        this._deepAnchor=this._deepAnchor+8;
+      }
+      if(this._deepAnchor>=n-1&&!fresh.length)this._deepSettled=true;
+      // The panel owns the reveal and the posture while it streams (isSettled tells it when the
+      // reading has quiesced); the host just hands it the fresh state.
+      if(this._monoSurface){try{this._monoSurface.refresh(D.doc);}catch(e){}}
+      if(this.state.deepCount!==this._deepReflections.length)this.setState({deepCount:this._deepReflections.length});
+    }finally{this._deepRunning=false;}
+  }
+  // The merged corpus identifies figures by opaque id; the significance summary a reflection voices
+  // can carry one. Resolve any id the current graph knows to its readable label, so the inner note
+  // reads as prose. Unknown tokens pass through untouched.
+  _deepCleanLabels(s){
+    if(!s)return String(s??'');
+    // Only id-shaped tokens (a letter then alnum, containing a digit) are candidates — real words
+    // are left alone. labelOf consults the hashId→label index, so a figure the reading named by id
+    // resolves to its label; an id with no known label is dropped to a neutral "something" rather
+    // than shown raw, so the inner note always reads as prose.
+    return String(s).replace(/\b[a-z][a-z0-9]{4,}\b/g,(tok)=>{
+      if(!/[0-9]/.test(tok))return tok;
+      let lab=null; try{lab=this.labelOf?this.labelOf(tok):null;}catch(e){}
+      if(lab&&lab!==tok)return lab;
+      return /^[a-z][0-9]/.test(tok)?'something':tok;
+    });
+  }
+  _markActivity(){this._lastActivity=Date.now();}
+  // The idle governor: a light interval that fires a deep pass only when NOT engaged in chat —
+  // no turn generating, and the user quiet for a beat. Real user activity (a keystroke, a tap)
+  // resets the clock, so deep reading never competes with an active reader; it fills the lulls.
+  _deepIdleStart(){
+    if(this._deepTimer||typeof window==='undefined')return;
+    this._lastActivity=Date.now();
+    this._deepBump=()=>this._markActivity();
+    window.addEventListener('keydown',this._deepBump,{passive:true});
+    window.addEventListener('pointerdown',this._deepBump,{passive:true});
+    const IDLE_MS=12000;
+    this._deepTimer=setInterval(()=>{
+      try{
+        if(this._busy){this._deepWasBusy=true;return;}            // engaged — a turn is decoding
+        if(this._deepWasBusy){this._deepWasBusy=false;this._markActivity();return;}  // just finished — a grace beat
+        if(this._deepSettled)return;                              // quiesced until the corpus grows
+        if(Date.now()-this._lastActivity<IDLE_MS)return;          // the user is active
+        if(!this._logDoc||!this._logDoc.sentences||!this._logDoc.sentences.length)return;
+        this._deepTick(false);
+      }catch(e){}
+    },4000);
+  }
+  // ── THE PANEL — the inner monologue, docked over the right panel the same way THE SURFACE and
+  // the Graph panel are (plain DOM outside the DC tree, sized to the panel, surviving re-renders).
+  // It is a WINDOW onto the at-rest reading: reflections keep depositing whether or not it is open;
+  // opening it reveals the stream so far and every one to come.
+  async onOpenMonologue(){
+    if(this._monoDock){this._monoDock.style.display='';this._positionMonoDock();if(this._monoSurface)this._monoSurface.refresh(this._deep?this._deep.doc:this._logDoc);return;}
+    const lib=await this._monoLib(); if(!lib||!lib.mountMonologueSurface){alert('The inner-monologue surface failed to load.');return;}
+    if(!this.state.rightShow)this.setState({rightShow:true});
+    const dock=document.createElement('div');
+    dock.style.cssText='position:fixed;z-index:20;background:#0f1115;border-left:1px solid var(--line,#e5e7eb);overflow:hidden;';
+    document.body.appendChild(dock);
+    this._monoDock=dock; this._positionMonoDock();
+    this._monoDockReposition=()=>this._positionMonoDock();
+    window.addEventListener('resize',this._monoDockReposition,{passive:true});
+    if(typeof ResizeObserver!=='undefined'){this._monoDockRO=new ResizeObserver(this._monoDockReposition);const panel=document.getElementById('eo-panel-scroll');if(panel)this._monoDockRO.observe(panel);this._monoDockRO.observe(document.body);}
+    let D=null; try{D=await this._deepEnsure();}catch(e){}
+    this._monoSurface=lib.mountMonologueSurface(dock,{
+      driven:true,
+      title:'Inner monologue — at rest',
+      doc:D?D.doc:(this._logDoc||null),
+      getReflections:()=>this._deepReflections,
+      getTrail:()=>(this._deep&&this._deep.reader)?this._deep.reader.trail:[],
+      labelClean:(s)=>this._deepCleanLabels(s),
+      isSettled:()=>this._deepSettled,
+      onManualTick:()=>this._deepTick(true),
+      onClose:()=>this.closeMonologuePanel(),
+    });
+    this._monoSurface.setPosture(this._deepSettled?'settled':'resting');
+  }
+  _positionMonoDock(){
+    const dock=this._monoDock;if(!dock)return;
+    const panel=document.getElementById('eo-panel-scroll');
+    const r=(panel&&panel.offsetParent!==null)?panel.getBoundingClientRect():null;
+    if(r&&r.width>60){dock.style.top=r.top+'px';dock.style.left=r.left+'px';dock.style.right='auto';dock.style.width=r.width+'px';dock.style.height=r.height+'px';}
+    else{const pw=Math.min(this.state.panelW||380,Math.round((window.innerWidth||420)*0.94));dock.style.top='0';dock.style.right='0';dock.style.left='auto';dock.style.width=pw+'px';dock.style.height='100%';}
+  }
+  closeMonologuePanel(){
+    if(this._monoDockReposition){window.removeEventListener('resize',this._monoDockReposition);this._monoDockReposition=null;}
+    if(this._monoDockRO){try{this._monoDockRO.disconnect();}catch(e){}this._monoDockRO=null;}
+    if(this._monoSurface&&this._monoSurface.destroy){try{this._monoSurface.destroy();}catch(e){}this._monoSurface=null;}
+    if(this._monoDock){this._monoDock.remove();this._monoDock=null;}
+    // the at-rest reading continues without the window — reflections keep depositing on the overlay.
   }
   // Build the per-source corpus from master.pages (each imported source keeps its own
   // sentences), pick the source now in view as cursor 1's document, and hand both to the
@@ -12502,6 +12670,9 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       // data-prov attribute reads the constant below).
       provMode:'hover',
       onOpenDeepResearch:()=>this.onOpenDeepResearch(),
+      onOpenMonologue:()=>this.onOpenMonologue(),
+      deepCount:this.state.deepCount||0,
+      monologueTitle:(this.state.deepCount>0)?('Inner monologue — '+this.state.deepCount+' reflection'+(this.state.deepCount===1?'':'s')+' the reading had at rest'):'Inner monologue — what the reading reflects when you are not chatting',
       onOpenDoc:()=>this.onOpenDoc(),
       surfaceTitle:this.state.drHasLog?'Open the live research surface \u2014 the report keeps populating as you research in chat':'Open the research surface \u2014 run grounded deep research in a live panel',
       surfaceStyle:'margin-left:auto;flex:0 0 auto;font-size:11px;font-weight:600;border:none;background:transparent;cursor:pointer;white-space:nowrap;padding:2px 0 2px 9px;'+(this.state.drHasLog?'color:var(--acc);':'color:var(--ink3);'),

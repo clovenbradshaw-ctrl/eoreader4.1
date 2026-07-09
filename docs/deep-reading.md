@@ -97,6 +97,35 @@ it is testable and any product surface (the app's idle tick) is pure presentatio
 state. "Not otherwise busy" is the **caller's** signal (only it knows a turn is not in flight);
 the engine exposes `arrive()` as the wake-on-idle entry, never a self-poll.
 
+## In the app — deep reading when not engaged in chat
+
+The reader app (`src/reader/app.dc.js`) runs this at rest. An idle governor (`_deepIdleStart`) fires
+a governed pass (`_deepTick` → `reader.arrive`) only when the app is **not engaged in chat** — no
+turn decoding (`_busy`) and the user quiet for a beat (a keystroke or tap resets the clock). The
+reflections ride an **append overlay** over the read doc (`_deepEnsure`), never master's own event
+log, so the record the reader can witness is untouched; the loop **habituates and quiesces**
+(`_deepSettled`) so background reading never spins, and wakes again when the corpus grows. The
+`☾ Inner monologue` button in the left rail opens the docked panel (`onOpenMonologue`) — the driven
+`mountMonologueSurface` in view mode, a window onto the same at-rest state (reflections keep
+depositing whether or not it is open). A count badge on the button shows how many thoughts the
+reading has had while you weren't looking.
+
+## The surface — the inner monologue, at rest
+
+`inner-monologue.html` (mounting `src/reader/monologue-surface.js`, the `mountMonologueSurface`
+sibling of `mountReadingSurface`) is the product surface *over* this engine — pure presentation,
+framework-free, no model. Hold a document and the surface owns the **idle tick**: it is the
+caller's "not otherwise busy" signal, so pressing **Idle tick** (or **Let it rest** for the
+governed timer) fires `reader.arrive()`. Each fresh reflection streams in as an inner note —
+its place (§cursor), the figure it is about, its **verdict** (confirm | strain), and a
+surprise-vs-band bar showing it beat the reach's own band — with the **folded content it read**
+one click away, the peak span highlighted. A right rail shows the **graph** growing: the count
+of `eo:Reflection` nodes deposited (band void, reafferent), the firewall guarantee (*facts
+witnessed: 0*), the spine of every place the surf considered (reflected vs below-band), and the
+`eo:Reflection` nodes themselves read back off the log. When the walk has covered the document
+and no fresh place beats the band, the posture settles to **at rest** — the loop
+self-terminating on screen exactly as it does in the engine.
+
 ## Measured
 
 On the opening scene of Kafka's *Metamorphosis* (18 sentences, 11 depicted facts over 4
@@ -117,6 +146,8 @@ witness is provably untouched.
 | concern | file |
 |---|---|
 | the engine + the governed loop | `src/fold/deep-reading.js` |
+| the surface (the inner monologue) | `src/reader/monologue-surface.js`, `inner-monologue.html` |
+| the in-app idle wiring + panel | `src/reader/app.dc.js` (`_deepIdleStart`, `_deepTick`, `onOpenMonologue`) |
 | the reflection as a graph node | `src/fold/substrate.js` (`eo:Reflection`, `readReflections`) |
 | the fold it reads | `src/fold/integral.js` (`foldNote`) |
 | the place of most interest | `src/surfer/surf.js` (`surfFold`), `src/surfer/salience.js` |
