@@ -6758,7 +6758,11 @@ class Component extends DCLogic {
       // kind=essay), for the paraphrased essay ask no regex floor catches.
       {const rd=read||meta;
       if(grounded&&amode!=='creative'&&(this._turnForceWalk||this._paragraphDemand(q)||this._wantsLongform(q,rd)||(rd&&rd.route==='compose'&&rd.kind==='essay'))){
-        return await this._walkReply(id,q,sources,{model,guard,finish,ground,meta,read,prev,forced:this._turnForceWalk});
+        const eo={model,guard,finish,ground,meta,read,prev,forced:this._turnForceWalk};
+        // A NAMED essay/report runs the real essay organ (a planned, sectioned piece); the softer
+        // longform cues, and the manual Long-form button, stay on the flat multi-paragraph walk.
+        if(!this._turnForceWalk&&this._essayIntent(q,rd))return await this._essayReply(id,q,sources,eo);
+        return await this._walkReply(id,q,sources,eo);
       }}
       let messages;
       // The reader answers as a research LIBRARIAN — sources foregrounded, attributed, quoted —
@@ -7156,11 +7160,16 @@ class Component extends DCLogic {
     // the reading holds no more sentences that NAME the subject — the reading is spent for this
     // ask — not that one query went dry.
     const subject=this._walkSubjectTerms(ask,q,o.prev);
-    const fallbackPool=this._walkFallbackPool(subject,sources);   // ONE corpus scan per walk
+    // SUBJECT SCOPE — keep a long walk from DRIFTING onto a namesake that merely shares the subject
+    // word (the "dolphins" run grounded on the NOVEL "Island of the Blue Dolphins" and a vegetarian
+    // tract once the corpus had pooled every page saying "dolphins"). Null → keep all sources, so a
+    // clean corpus (the desktop run's encyclopedia pages) is byte-identical; it narrows drift only.
+    const eSrc=this._essaySources(subject,sources)||sources;
+    const fallbackPool=this._walkFallbackPool(subject,eSrc);   // ONE corpus scan per walk
     const refold=async ({prior,accepted,index,seen})=>{
       try{
         const focus=(index>0&&prior)?(this.norm(prior).split(/\s+/).slice(-40).join(' ')+' '+q):this._groundingQuery(q,o.prev,null);
-        let g; try{ g=this.groundNotes(focus,sources); }catch(e){ g=null; }
+        let g; try{ g=this.groundNotes(focus,eSrc); }catch(e){ g=null; }
         // The candidate pool. groundNotes returns spans ranked by SIMILARITY to the
         // focus (prior tail + question) — the span most LIKE what was just said. When
         // the surprise flag is on we gather a WIDER pool (the pool surprise re-ranks
@@ -7255,6 +7264,213 @@ class Component extends DCLogic {
     o.finish({text:this._withOfficeNote(text,sources)+shortNote,doc:true,docTitle:dTitle,sources:used,passages,groundKind:'matched',
       related:this.relatedDocs(q,sources),register:'grounded',reflection:this._reflect(text)});
     if(!o.shown)this._pivotChatPanel(q+' '+text);
+  }
+  // _essayIntent — a NAMED long piece ("an essay", "a report", "500 words", the metacognition's
+  // own compose·essay verdict). These run the real essay organ (below), not the flat walk: a
+  // named artifact wants a developed, sectioned piece, so it gets one. The soft longform cues
+  // (a "develop" length read, a bare paragraph count) stay on the walk. The manual Long-form
+  // button (_turnForceWalk) is honored as the WALK it names, never silently upgraded to the organ.
+  _essayIntent(ask,rd){ return this._explicitLongform(ask)||!!(rd&&rd.route==='compose'&&rd.kind==='essay'); }
+  // ── THE ESSAY ORGAN: a NAMED essay/report runs the real long-form composer ──────────────────
+  // (docs/longform-generation.md.) Not the flat walk — one flowing section that drinks a single
+  // fold dry after a paragraph or two and stops "saturated" — but the commitments-before-prose
+  // organ: a planned SPINE of section intents, each EXPLORED for candidate claims, CONSOLIDATED
+  // by binding to spans and vetoing the unbound, then RENDERED one grounded prose pass from the
+  // survivors. Structure is discovered, not padded: the intents are the research FACETS (the
+  // same discourse-aware angle planner the walk opens from), so "an essay about dolphins" becomes
+  // origins / behavior / conservation / … — and because each section retrieves its OWN spans, the
+  // piece DEVELOPS instead of re-serving the top-6 similar lines every beat. Length stays emergent
+  // (a section renders from what its evidence supports, no more), so a thin reading still stops
+  // honestly rather than fabricating — but a real reading now yields a real, sectioned essay.
+  //   o = { model, guard, finish, ground, meta, read, prev, ask?, forced? }
+  async _essayReply(id,q,sources,o){
+    if(!this._ME)this._ME=await import((typeof window!=='undefined'&&window.__resources&&window.__resources.eoModel)||'./model-entry.js');
+    if(!this._ME.runEssay)return this._walkReply(id,q,sources,o);   // older engine bundle — degrade to the walk
+    const ask=o.ask||q;
+    const dTitle=this._docTitle(ask);                      // the essay's subject, imperative frame stripped
+    const rd=o.read||o.meta||null;
+    const untag=t=>String(t||'').replace(/\s*\[s(?:\d+|L[\d.]+)\]/g,'');
+    const EKIND=this._ME.EKIND||{ENTER:'enter',ACCEPT:'accept'};
+
+    // PLAN — the spine of section intents, drawn from the research facets (the discourse-aware
+    // angle planner). Thesis = the subject; the intents ARE the sections. A neutral battery backs
+    // it up so a spine always exists offline / with no model / on a refusal.
+    const cur=this.activeChatObj();
+    let intents=[];
+    try{ intents=await this._planFacets(dTitle,{derived:false},cur); }catch(e){ intents=[]; }
+    intents=(intents||[]).map(s=>this.norm(String(s||''))).filter(Boolean);
+    if(intents.length<2){
+      const base=intents.slice(),subjKey=dTitle.toLowerCase();
+      for(const f of ['overview','history','characteristics','significance','open questions']){
+        if(base.length>=5)break;const nq=this.norm(this._nextQuery(dTitle,f));
+        if(nq&&nq.toLowerCase()!==subjKey&&!base.some(x=>x.toLowerCase()===nq.toLowerCase()))base.push(nq);
+      }
+      intents=base;
+    }
+    intents=intents.slice(0,6);
+    const sections=intents.map((intent,i)=>({id:'sec:'+i,intent}));
+    const spine={thesis:dTitle,sections};
+    const bySection=new Map(sections.map(s=>[s.id,s]));
+    const headingFor=(sid)=>{const sec=bySection.get(sid);return sec?this._essayHeading(sec.intent,dTitle):'';};
+
+    // SUBJECT SCOPE — an essay must not DRIFT onto a namesake (the "dolphins" run grounded a
+    // long-form essay on the NOVEL "Island of the Blue Dolphins" and a vegetarianism tract, because
+    // the research had pooled every page that merely says "dolphins": the NFL team, the rugby club,
+    // the novel). So scope the whole piece to the sources that use the subject as its DOMINANT
+    // (common-noun) sense and drop the proper-noun-only namesakes. Null → keep all (a proper-noun
+    // subject, or nothing clean to filter), so this never over-narrows a legitimate essay.
+    const subject=this._walkSubjectTerms(ask,q,o.prev);
+    const eSrc=this._essaySources(subject,sources)||sources;
+    // SPANS — the subject-gated corpus pool (ONE scan) is the bind floor shared across every
+    // section; each section additionally retrieves its own supply by intent (below).
+    const pool=this._walkFallbackPool(subject,eSrc).map(s=>({idx:s.i,text:s.text,score:Math.min(0.8,0.5+0.1*(s.sub||0))}));
+    if(!pool.length){
+      o.finish({text:'I looked for enough about “'+dTitle+'” in what you’ve read to build a full essay, but the reading doesn’t hold enough to develop it section by section — so I’ll stop here rather than pad it with things you didn’t read.',groundKind:'model',register:'grounded'});
+      return;
+    }
+
+    // retrieve — each section's OWN supply, ranked by its intent over the gathered reading and
+    // topped up from the subject pool when the pointed query runs thin. This is what lets the
+    // piece DEVELOP: different sections drink different spans instead of one shared fold.
+    const retrieve=async(section)=>{
+      let g; try{ g=this.groundNotes(section.intent,eSrc); }catch(e){ g=null; }
+      const out=[],seen=new Set();
+      for(const s of ((g&&g.spans)||[])){
+        const i=s.i;if(!Number.isInteger(i)||seen.has(i))continue;
+        if(this._spanChrome(String(s.text||'')))continue;
+        seen.add(i);out.push({idx:i,text:s.text,score:s.score||0});if(out.length>=12)break;
+      }
+      if(out.length<6)for(const s of pool){if(seen.has(s.idx))continue;seen.add(s.idx);out.push(s);if(out.length>=8)break;}
+      return out;
+    };
+
+    // STREAM — the accepted sections plus the section currently decoding, painted token by token
+    // into the document card (the same rAF-batched paint the walk uses). ENTER names the heading;
+    // ACCEPT flushes the bound prose; the partial shows the in-flight draft up to its last sentence.
+    let accBlocks=[],curHeading='',partial='',raf=0;
+    const _sentenceSafe=(t)=>{const s=String(t||'');if(!s)return '';const b=s.match(/^[\s\S]*[.!?…][)\]"'”’]*(?=\s|$)/);return b?b[0].trim():'';};
+    const bodyNow=()=>{const live=_sentenceSafe(partial);const head=curHeading?('## '+curHeading):'';const tail=[head,live].filter(Boolean).join('\n\n');return accBlocks.concat(tail?[tail]:[]).join('\n\n');};
+    const paint=()=>{raf=0;this._captureStick();const body=bodyNow();this.setState(s=>({chats:s.chats.map(c=>{if(c.id!==id)return c;const m=c.messages.slice(),li=m.length-1;if(li>=0&&m[li].role==='asst'&&m[li].pending)m[li]={...m[li],doc:true,docTitle:dTitle,text:body,think:this._composeTick(body)};return {...c,messages:m};})}),()=>this._scrollChat());};
+    const schedule=()=>{if(!raf)raf=(typeof requestAnimationFrame!=='undefined')?requestAnimationFrame(paint):setTimeout(paint,32);};
+    this._setThink(id,this._composeOpen(true,o.ground));
+
+    let call=0;
+    const streamModel={name:(o.model&&o.model.name)||this.state.backend||'model',
+      phrase:(messages,opts)=>{partial='';const n=++call;return this._ME.streamPhrase(o.model,messages,{...opts,temperature:0.4,onToken:(p)=>{const s=String(p||'');if(!s)return;o.guard.feed();partial+=s;schedule();},signal:o.guard.signal}).then(raw=>{const t=String(raw||'');this._auditRec(id,'essay-section-raw',{output:t,note:'model call '+n+' · '+t.length+' chars'});return raw;});}};
+
+    const onEvent=(e)=>{
+      if(!e||!e.kind)return;
+      if(e.kind===EKIND.ENTER){curHeading=headingFor(e.sectionId);partial='';schedule();return;}
+      if(e.kind===EKIND.ACCEPT){const h=headingFor(e.sectionId);const lead=(e.seam&&e.seam.modality==='text'&&e.seam.text)?(this.norm(e.seam.text)+' '):'';const prose=untag(e.prose||'');if(prose)accBlocks.push([h?('## '+h):'',lead+prose].filter(Boolean).join('\n\n'));curHeading='';partial='';schedule();return;}
+    };
+
+    this._auditRec(id,'answer-prompt',{prompt:'[essay] spine of '+sections.length+' sections — '+intents.join(' · ')+'. Each explored → bound → vetoed → rendered from its commitments, one prose pass per section.'});
+
+    let res;
+    try{
+      res=await this._ME.runEssay({spine,spans:pool,retrieve,model:streamModel,onEvent,signal:o.guard.signal,
+        knobs:{supplyWidth:14,sectionCeiling:320}});
+    }catch(e){ o.guard.clear(); if((e&&e.stopped)||this._stopGen)return; res=null; }
+    o.guard.clear();
+
+    // The organ failed (model stalled, import error) — settle honestly with whatever streamed.
+    if(!res||!res.report){
+      this.setState({modelStatus:''});
+      const streamed=accBlocks.join('\n\n');
+      if(streamed){ o.finish({text:this._withOfficeNote(streamed,sources),doc:true,docTitle:dTitle,groundKind:'matched',related:this.relatedDocs(q,sources),register:'grounded',reflection:this._reflect(streamed)}); }
+      else{ const fb=this.answerQuestion(q,sources); o.finish({text:fb.text||'I couldn’t build this essay out from what you’ve read.',groundKind:fb.refs&&fb.refs.length?'matched':'model',register:'grounded'}); }
+      return;
+    }
+
+    // Assemble the final essay from the log projection — accepted sections in render order, each
+    // behind its heading (and its phrased seam, when the form set one).
+    const report=res.report;
+    const accepted=(report.order||[]).map(sid=>(report.sections||[]).find(s=>s&&s.id===sid&&s.state==='accepted')).filter(Boolean);
+    const bodyParts=accepted.map(s=>{
+      const h=headingFor(s.id)||this._titleCase(this.norm(s.intent||'').split(/\s+/).slice(0,6).join(' '));
+      const lead=(s.seam&&s.seam.modality==='text'&&s.seam.text)?(this.norm(s.seam.text)+' '):'';
+      const prose=untag(s.prose||'');
+      return prose?[h?('## '+h):'',lead+prose].filter(Boolean).join('\n\n'):'';
+    }).filter(Boolean);
+    const text=bodyParts.join('\n\n');
+
+    if(!text){
+      o.finish({text:'I planned an essay on “'+dTitle+'” across '+sections.length+' sections, but the reading didn’t ground enough to develop any of them — so I’ll stop rather than pad it with things you didn’t read.',groundKind:'model',register:'grounded'});
+      return;
+    }
+
+    // Citations: the essay's commitments cite global sentence indices (spanRefs 's123'); map each
+    // back to its sentence + source, exactly as the walk builds passages from res.sources.
+    const idxs=[...new Set((report.ledger||[]).flatMap(c=>(c.spanRefs||[]).map(r=>parseInt(String(r).replace(/^s/,''),10))))].filter(n=>Number.isInteger(n)&&this.master&&this.master.sentences[n]!=null);
+    const passages=idxs.map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})).filter(p=>p.text);
+    const used=[...new Set(passages.map(p=>p.u).filter(Boolean))];
+    const secCount=accepted.length;
+    const shortNote=(secCount<sections.length)
+      ? '\n\nThat is '+secCount+' grounded section'+(secCount!==1?'s':'')+' of the '+sections.length+' I planned — the reading ran out of new ground for the rest, so I stopped rather than pad them.'
+      : '';
+    this._auditRec(id,'answer-raw',{output:text,note:'essay · '+secCount+'/'+sections.length+' sections'+(report.verify?(' · commitments '+report.verify.commitments):'')});
+    o.finish({text:this._withOfficeNote(text,sources)+shortNote,doc:true,docTitle:dTitle,sources:used,passages,groundKind:'matched',
+      related:this.relatedDocs(q,sources),register:'grounded',reflection:this._reflect(text)});
+    this._pivotChatPanel(q+' '+text);
+  }
+  // _essayHeading — a short section heading from a facet intent: drop a leading article and the
+  // echoed subject tail, title-case the first few content words. "the history of dolphins" →
+  // "History", "dolphin behavior and communication" → "Dolphin behavior and communication".
+  _essayHeading(intent,subject){
+    let s=this.norm(String(intent||'')).trim();
+    const subjTerms=new Set(this.norm(String(subject||'')).toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>3));
+    s=s.replace(/^(?:the|a|an)\s+/i,'');
+    // Drop a trailing "of/about/… <subject>" tail only when it echoes the subject — so the heading
+    // names the ANGLE ("History"), not the topic again ("History of dolphins").
+    s=s.replace(/\s+(?:of|about|on|for|in|regarding|concerning)\s+.+$/i,(m)=>{
+      let hasSubj=false;for(const w of m.toLowerCase().split(/[^a-z0-9]+/))if(subjTerms.has(w))hasSubj=true;return hasSubj?'':m;});
+    const words=s.split(/\s+/).filter(Boolean).slice(0,7);
+    if(!words.length)return this._titleCase(this.norm(String(intent||'')).split(/\s+/).slice(0,4).join(' '))||'The reading';
+    return this._titleCase(words.join(' ')).replace(/[.,;:!?]+$/,'');
+  }
+  // _essaySources — the on-subject source set for a long-form essay, so the piece does not drift
+  // onto a NAMESAKE that merely shares the subject word. The reader's research pools many pages for
+  // "dolphins" — the animal, the NFL team (Miami Dolphins), the rugby club (Dolphins NRL), the novel
+  // (Island of the Blue Dolphins) — and a grounded essay over the union grounds on whichever page
+  // ranks, which is how a "long-form essay about dolphins" came back about a children's novel.
+  //
+  // The discriminator is the subject's own GRAMMAR, read off the reading, no topic model: the animal
+  // is a COMMON noun ("dolphins are marine mammals", lowercase in prose); the team/club/title is a
+  // PROPER noun ("the Dolphins won", always Capitalized). So: tally, per source, how the subject term
+  // is used — lowercase (common) vs Capitalized mid-sentence (proper). When the subject reads as a
+  // common noun corpus-wide, keep the sources that USE it as one and drop the proper-noun-only pages.
+  // A proper-noun subject (mostly Capitalized everywhere — "the Roman Empire") skips the case test and
+  // keeps every page that actually discusses it. Returns the on-subject URLs, or null to keep all
+  // (a proper-noun subject, or nothing clean to separate) — it narrows drift, it never over-narrows.
+  _essaySources(subject,sources){
+    if(!subject||!subject.size||!this.master||!this.master.sentences||!this.master.sentences.length)return null;
+    const scope=(Array.isArray(sources)&&sources.length)?new Set(sources):null;
+    const by=new Map();   // url → { sent, total, low, cap }
+    for(let i=0;i<this.master.sentences.length;i++){
+      const u=this.master.sentenceSource[i];if(!u)continue;if(scope&&!scope.has(u))continue;
+      const raw=String(this.master.sentences[i]||'');
+      let rec=by.get(u);if(!rec){rec={sent:0,total:0,low:0,cap:0};by.set(u,rec);}
+      rec.total++;
+      const toks=raw.split(/[^A-Za-z0-9]+/);let named=false;
+      for(let k=0;k<toks.length;k++){const w=toks[k];if(!w||!subject.has(w.toLowerCase()))continue;named=true;
+        // A mid-sentence capital is a proper-noun signal; a sentence-initial capital is ambiguous, so
+        // it counts as the common (lowercase) sense rather than falsely marking the page a namesake.
+        if(/^[A-Z]/.test(w)&&k>0)rec.cap++;else rec.low++;
+      }
+      if(named)rec.sent++;
+    }
+    if(!by.size)return null;
+    let gLow=0,gCap=0;for(const r of by.values()){gLow+=r.low;gCap+=r.cap;}
+    const commonNoun=gLow>=gCap;   // the subject reads as a common noun across the reading
+    const keep=[];
+    for(const [u,r] of by){
+      if(r.sent<2)continue;                              // barely names the subject — not a source for it
+      if(commonNoun&&r.cap>0&&r.low<=r.cap)continue;     // uses the subject ONLY as a proper noun → namesake
+      keep.push({u,r});
+    }
+    if(!keep.length||keep.length===by.size)return null;  // nothing to separate → keep all (no over-narrowing)
+    keep.sort((a,b)=>((b.r.sent/Math.max(1,b.r.total))-(a.r.sent/Math.max(1,a.r.total)))||(b.r.sent-a.r.sent));
+    return keep.map(k=>k.u);
   }
   // _docTitle — a clean human title for the document card, the SUBJECT of the ask with its
   // imperative artifact frame stripped: "write me an essay about dolphins" → "Dolphins",
@@ -7610,7 +7826,12 @@ class Component extends DCLogic {
       // it to the bare subject ("They asked you: batman"), so cue on `orig` first.
       const ask=orig||q;
       if(grounded&&amode!=='creative'&&(this._turnForceWalk||this._paragraphDemand(ask)||this._wantsLongform(ask,meta)||(meta&&meta.route==='compose'&&meta.kind==='essay'))){
-        return await this._walkReply(id,q,sources,{model,guard,finish,ground,meta,read:meta,prev:_prev,ask,forced:this._turnForceWalk});
+        const eo={model,guard,finish,ground,meta,read:meta,prev:_prev,ask,forced:this._turnForceWalk};
+        // The path "write me an essay about X" actually takes with the web on (compose·essay →
+        // web-as-brain → research → HERE): a named essay/report runs the real essay organ; the
+        // softer longform cues, and the manual Long-form button, stay on the flat walk.
+        if(!this._turnForceWalk&&this._essayIntent(ask,meta))return await this._essayReply(id,q,sources,eo);
+        return await this._walkReply(id,q,sources,eo);
       }
       let messages;
       // The research/web chat path: same librarian register (+ sectioned shape on a broad question),
