@@ -81,10 +81,12 @@ const CSS = `
 .eotl-fab .eotl-fdot{width:7px;height:7px;border-radius:50%;background:#2ea043;box-shadow:0 0 6px #2ea043;}
 .eotl-badge{background:#182634;border-radius:20px;padding:1px 7px;color:#9db3d0;font-size:11px;min-width:14px;text-align:center;}
 /* Phone (the reader's <760px tier has a bottom nav row + chat composer along the
-   bottom): collapse to a dot+badge handle hugging the right edge, raised clear of
-   both, instead of a text pill that would cover the Ask button or the nav tabs. */
+   bottom, and the chat launcher FAB on the right): collapse to a dot+badge handle on
+   the LEFT edge instead of a text pill, so it never covers the launcher or the nav. */
 @media (max-width:759px){
-  .eotl-fab{right:0;bottom:calc(118px + env(safe-area-inset-bottom));border-radius:10px 0 0 10px;padding:8px 9px;}
+  /* Left edge, clear of the chat launcher on the right; raised above the tallest bottom
+     cluster (nav row + chat composer) + safe area so it never covers the composer. */
+  .eotl-fab{right:auto;left:0;bottom:calc(118px + env(safe-area-inset-bottom));border-radius:0 10px 10px 0;padding:8px 9px;opacity:.82;}
   .eotl-fab .eotl-fab-lbl{display:none;}
   .eotl-root{padding-bottom:env(safe-area-inset-bottom);}
 }

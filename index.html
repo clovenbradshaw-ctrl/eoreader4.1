@@ -117,6 +117,7 @@
     @keyframes eoslide{from{transform:translateX(18px);opacity:0}to{transform:translateX(0);opacity:1}}
     @keyframes eopop{from{transform:translateY(5px);opacity:0}to{transform:translateY(0);opacity:1}}
     @keyframes eoswap{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+    @keyframes eofan{from{opacity:0;transform:translateY(12px) scale(.94)}to{opacity:1;transform:none}}
     @keyframes eoflow{0%{transform:translateX(-110%)}100%{transform:translateX(420%)}}
     /* "Ask about this page" FAB — collapsed to a small, faded ✦ icon by default; expands to the full pill on hover/focus.
        Collapsed, the box is content-sized: its width tracks the ✦ glyph's advance (< the 15px font-size) while its
@@ -137,6 +138,13 @@
     @media (hover:none){
       .eo-askfab{opacity:.92;}
     }
+    /* Source rows in the Record panel — the per-row actions (read · weave · chat · pin) were
+       always shown, so in the narrow panel they crushed the title to two letters. Hold them
+       collapsed so the title owns the width, and reveal on row hover or keyboard focus. On
+       touch (no hover) keep them shown — the phone Sources pane is full-width anyway. */
+    .eo-srcact{display:flex;align-items:center;gap:2px;flex:0 0 auto;max-width:0;opacity:0;overflow:hidden;transition:max-width .16s ease,opacity .12s ease;}
+    .eo-srcrow:hover .eo-srcact,.eo-srcrow:focus-within .eo-srcact{max-width:180px;opacity:1;}
+    @media (hover:none){.eo-srcact{max-width:180px;opacity:1;}}
     ::-webkit-scrollbar{width:10px;height:10px}
     ::-webkit-scrollbar-thumb{background:#d4d8de;border-radius:6px;border:2px solid #fff}
     ::-webkit-scrollbar-track{background:transparent}
@@ -372,11 +380,18 @@
       <div style="padding:8px 9px;">
         <button onclick="{{ onNewChat }}" title="Start a net-new chat — tag sources or everything you've read from inside it" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="background:var(--card)"><span style="font-size:14px;line-height:1;">✦</span>New chat</button>
         <button onclick="{{ onSrcImport }}" title="Import a file — text, PDF, audio or video, image, spreadsheet, or web page; it appears here instantly and reads as a source" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><i class="ph" style="font-size:14px;line-height:1;">&#xE61E;</i>Import a file</button>
-        <button onclick="{{ onOpenDoc }}" title="Write a document grounded to the Record — every edit is a tracked change, checked against what you've read; ungrounded edits are flagged, never silently kept" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">✎</span>New document</button>
-        <button onclick="{{ onOpenDeepResearch }}" title="Open the deep-research panel — ask a question, watch it read the web and pin every source, each claim grounded in a quote you can open" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">⌕</span>Deep research</button>
-        <button onclick="{{ onOpenMonologue }}" title="{{ monologueTitle }}" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">☾</span>Inner monologue<sc-if value="{{ deepCount }}" hint-placeholder-val="{{ 0 }}"><span style="margin-left:auto;font-size:10.5px;font-weight:700;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:20px;padding:1px 7px;">{{ deepCount }}</span></sc-if></button>
-        <button onclick="{{ onOpenExplorer }}" title="Open the workspace — a file explorer over everything in the Record. Make folders, nest them, and file any source, chat, or document into as many as you like." style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">▦</span>Open workspace</button>
-        <button onclick="{{ onOpenRelationships }}" title="Relationships — two databases linked by typed edges. A connection carries its own fields, folded from the same event log as everything else." style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">⇄</span>Relationships</button>
+        <!-- Secondary tools collapsed behind a "More" disclosure — the panel leads with just
+             New chat + Import; document, research, monologue, workspace and relationships
+             expand on demand (toolsOpen). The monologue's activity count rides the toggle so
+             it stays visible while collapsed. -->
+        <button onclick="{{ onToggleTools }}" title="More tools — document, research, workspace, relationships" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:15px;line-height:1;">⋯</span>More<span style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;"><sc-if value="{{ deepCount }}" hint-placeholder-val="{{ 0 }}"><span title="{{ monologueTitle }}" style="font-size:10.5px;font-weight:700;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:20px;padding:1px 7px;">☾ {{ deepCount }}</span></sc-if><span style="font-size:11px;color:var(--ink3);">{{ toolsCaret }}</span></span></button>
+        <sc-if value="{{ toolsOpen }}" hint-placeholder-val="{{ false }}">
+          <button onclick="{{ onOpenDoc }}" title="Write a document grounded to the Record — every edit is a tracked change, checked against what you've read; ungrounded edits are flagged, never silently kept" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;animation:eopop .12s ease-out;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">✎</span>New document</button>
+          <button onclick="{{ onOpenDeepResearch }}" title="Open the deep-research panel — ask a question, watch it read the web and pin every source, each claim grounded in a quote you can open" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;animation:eopop .12s ease-out;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">⌕</span>Deep research</button>
+          <button onclick="{{ onOpenMonologue }}" title="{{ monologueTitle }}" style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;animation:eopop .12s ease-out;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">☾</span>Inner monologue<sc-if value="{{ deepCount }}" hint-placeholder-val="{{ 0 }}"><span style="margin-left:auto;font-size:10.5px;font-weight:700;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:20px;padding:1px 7px;">{{ deepCount }}</span></sc-if></button>
+          <button onclick="{{ onOpenExplorer }}" title="Open the workspace — a file explorer over everything in the Record. Make folders, nest them, and file any source, chat, or document into as many as you like." style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;animation:eopop .12s ease-out;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">▦</span>Open workspace</button>
+          <button onclick="{{ onOpenRelationships }}" title="Relationships — two databases linked by typed edges. A connection carries its own fields, folded from the same event log as everything else." style="display:flex;align-items:center;gap:8px;width:100%;font-size:12.5px;font-weight:600;color:var(--ink2);background:var(--app);border:1px solid var(--line2);border-radius:9px;padding:9px 11px;cursor:pointer;margin-bottom:6px;animation:eopop .12s ease-out;" style-hover="border-color:var(--accline);color:var(--acc)"><span style="font-size:14px;line-height:1;">⇄</span>Relationships</button>
+        </sc-if>
         <!-- Corpus search — one box, nothing to configure. Ranked lexical retrieval
              (token overlap + fuzzy spelling) over every source read so far runs
              instantly; a meaning channel and a channel learned from your own past
@@ -438,7 +453,7 @@
             <span style="margin-left:auto;font-size:10.5px;color:var(--ink3);">{{ lensCount }}</span>
           </div>
           <sc-for list="{{ lensSources }}" as="s" hint-placeholder-count="1">
-            <div style="{{ s.rowStyle }}" style-hover="background:#f7f8fa">
+            <div class="eo-srcrow" style="{{ s.rowStyle }}" style-hover="background:#f7f8fa">
               <div onclick="{{ s.onOpen }}" style="{{ s.dot }}">{{ s.glyph }}</div>
               <div onclick="{{ s.onOpen }}" style="min-width:0;flex:1;cursor:pointer;">
                 <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.label }}</div>
@@ -447,9 +462,11 @@
               <sc-if value="{{ s.hasKids }}" hint-placeholder-val="{{ false }}">
                 <button onclick="{{ s.onToggleCollapse }}" title="{{ s.collapseTitle }}" style="{{ s.caretStyle }}" style-hover="background:#eef0f3;color:var(--ink)">{{ s.caret }}</button>
               </sc-if>
-              <button onclick="{{ s.onRead }}" title="Read the page" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">↗</button>
-              <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
-              <button onclick="{{ s.onTogglePin }}" title="Remove from this workspace (stays in memory)" style="{{ s.unpinStyle }}" style-hover="border-color:var(--sig);color:var(--sig)">−</button>
+              <div class="eo-srcact">
+                <button onclick="{{ s.onRead }}" title="Read the page" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">↗</button>
+                <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
+                <button onclick="{{ s.onTogglePin }}" title="Remove from this workspace (stays in memory)" style="{{ s.unpinStyle }}" style-hover="border-color:var(--sig);color:var(--sig)">−</button>
+              </div>
             </div>
           </sc-for>
         </sc-if>
@@ -463,7 +480,7 @@
           </sc-if>
         </div>
         <sc-for list="{{ memorySources }}" as="s" hint-placeholder-count="3">
-          <div style="{{ s.rowStyle }}" style-hover="background:#f7f8fa">
+          <div class="eo-srcrow" style="{{ s.rowStyle }}" style-hover="background:#f7f8fa">
             <div onclick="{{ s.onOpen }}" style="{{ s.dot }}">{{ s.glyph }}</div>
             <div onclick="{{ s.onOpen }}" style="min-width:0;flex:1;cursor:pointer;">
               <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.label }}</div>
@@ -472,10 +489,12 @@
             <sc-if value="{{ s.hasKids }}" hint-placeholder-val="{{ false }}">
               <button onclick="{{ s.onToggleCollapse }}" title="{{ s.collapseTitle }}" style="{{ s.caretStyle }}" style-hover="background:#eef0f3;color:var(--ink)">{{ s.caret }}</button>
             </sc-if>
-            <button onclick="{{ s.onRead }}" title="Read the page" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">↗</button>
-            <button onclick="{{ s.onWeave }}" title="The referent weave of this source — its recurring figures as threads, grouped into storylines" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;" style-hover="background:var(--accbg);color:var(--acc)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5c4 0 4 14 8 14s4-14 8-14"></path><path d="M4 12c4 0 4 7 8 7"></path><path d="M12 5c4 0 4 7 8 7"></path></svg></button>
-            <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
-            <button onclick="{{ s.onTogglePin }}" title="Pin into this workspace" style="{{ s.pinStyle }}" style-hover="background:var(--acc);color:#fff">＋ Pin</button>
+            <div class="eo-srcact">
+              <button onclick="{{ s.onRead }}" title="Read the page" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">↗</button>
+              <button onclick="{{ s.onWeave }}" title="The referent weave of this source — its recurring figures as threads, grouped into storylines" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;" style-hover="background:var(--accbg);color:var(--acc)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5c4 0 4 14 8 14s4-14 8-14"></path><path d="M4 12c4 0 4 7 8 7"></path><path d="M12 5c4 0 4 7 8 7"></path></svg></button>
+              <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
+              <button onclick="{{ s.onTogglePin }}" title="Pin into this workspace" style="{{ s.pinStyle }}" style-hover="background:var(--acc);color:#fff">＋ Pin</button>
+            </div>
           </div>
         </sc-for>
         <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">Nothing recorded yet. Read a URL, import a book, or start a chat above.</div></sc-if>
@@ -559,21 +578,33 @@
                 <span onclick="{{ chat.onGroundNarrow }}" title="Narrow this chat's grounding to the sources pinned in the active workspace" style="{{ chat.groundNarrowStyle }}">{{ chat.wsNarrowLabel }}</span>
                 <span onclick="{{ chat.onGroundWiden }}" title="Widen this chat's grounding to everything you've read" style="{{ chat.groundWideStyle }}">Widen to memory</span>
               </div>
-              <sc-for list="{{ chat.about }}" as="ab" hint-placeholder-count="1">
-                <span style="{{ ab.chipStyle }}"><span onclick="{{ ab.onOpen }}" title="Open this source" style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ ab.label }}</span><button onclick="{{ ab.onRemove }}" title="Remove from this chat" style="{{ ab.xStyle }}" style-hover="background:var(--accline)">✕</button></span>
-              </sc-for>
-              <sc-if value="{{ chat.scopeEverythingOn }}" hint-placeholder-val="{{ false }}">
-                <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:7px;padding:3px 4px 3px 9px;">{{ chat.everyLabel }}<button onclick="{{ chat.onUntagEverything }}" title="Stop ranging over everything" style="border:none;background:transparent;color:var(--acc);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;border-radius:4px;" style-hover="background:var(--accline)">✕</button></span>
-              </sc-if>
-              <sc-if value="{{ chat.aboutIsolated }}" hint-placeholder-val="{{ false }}">
-                <span style="display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--ink3);background:var(--app);border:1px solid var(--line2);border-radius:7px;padding:3px 9px;">Just this chat — nothing tagged</span>
-              </sc-if>
-              <sc-if value="{{ chat.tagEveryOn }}" hint-placeholder-val="{{ false }}">
-                <button onclick="{{ chat.onTagEverything }}" title="Ground this chat in everything you’ve read" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:7px;padding:3px 9px;cursor:pointer;" style-hover="background:var(--card)">✦ Everything</button>
-              </sc-if>
-              <button onclick="{{ chat.onToggleAdd }}" title="Tag a source to chat with" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--ink2);background:var(--app);border:1px dashed var(--line2);border-radius:7px;padding:3px 9px;cursor:pointer;" style-hover="border-color:var(--accline);color:var(--acc)">+ Add source</button>
+              <!-- Scope collapsed to one compact summary line; the disclosure below edits it. -->
+              <button onclick="{{ chat.onToggleAdd }}" title="Choose what this chat is grounded in" style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:var(--app);border:1px solid var(--line2);border-radius:8px;padding:5px 10px;cursor:pointer;text-align:left;" style-hover="border-color:var(--accline)">
+                <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-weight:600;color:var(--ink);">{{ chat.scopeLabel }}</span>
+                <span style="flex:0 0 auto;font-size:11px;color:var(--ink3);">▾</span>
+              </button>
               <sc-if value="{{ chat.addOpen }}" hint-placeholder-val="{{ false }}">
-                <div style="position:absolute;top:100%;left:18px;right:18px;z-index:30;margin-top:4px;background:var(--card);border:1px solid var(--line2);border-radius:11px;box-shadow:0 10px 30px rgba(20,24,30,.16);padding:6px;max-height:260px;overflow-y:auto;">
+                <div style="position:absolute;top:100%;left:18px;right:18px;z-index:30;margin-top:4px;background:var(--card);border:1px solid var(--line2);border-radius:11px;box-shadow:0 10px 30px rgba(20,24,30,.16);padding:6px;max-height:min(60vh,340px);overflow-y:auto;">
+                  <sc-if value="{{ chat.hasAbout }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding:2px 11px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);">In this chat</div>
+                    <sc-for list="{{ chat.about }}" as="ab" hint-placeholder-count="1">
+                      <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;border-radius:8px;" style-hover="background:var(--accbg)">
+                        <span onclick="{{ ab.onOpen }}" title="Open this source" style="flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--acc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;">{{ ab.label }}</span>
+                        <button onclick="{{ ab.onRemove }}" title="Remove from this chat" style="flex:0 0 auto;border:none;background:transparent;color:var(--ink3);cursor:pointer;font-size:11px;font-weight:600;border-radius:5px;padding:3px 7px;" style-hover="background:var(--line);color:var(--ink)">Remove</button>
+                      </div>
+                    </sc-for>
+                    <div style="height:1px;background:var(--line);margin:5px 8px 6px;"></div>
+                  </sc-if>
+                  <sc-if value="{{ chat.scopeEverythingOn }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;border-radius:8px;">
+                      <span style="flex:1;min-width:0;font-size:12.5px;font-weight:700;color:var(--acc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">✦ {{ chat.everyLabel }}</span>
+                      <button onclick="{{ chat.onUntagEverything }}" title="Stop ranging over everything" style="flex:0 0 auto;border:none;background:transparent;color:var(--ink3);cursor:pointer;font-size:11px;font-weight:600;border-radius:5px;padding:3px 7px;" style-hover="background:var(--line);color:var(--ink)">Remove</button>
+                    </div>
+                    <div style="height:1px;background:var(--line);margin:5px 8px 6px;"></div>
+                  </sc-if>
+                  <sc-if value="{{ chat.aboutIsolated }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding:8px 11px 10px;font-size:11.5px;color:var(--ink3);line-height:1.5;">Just this chat — nothing from your reading is in scope yet. Tag a source below, or ground it in everything.</div>
+                  </sc-if>
                   <div onclick="{{ chat.onImport }}" style="display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;cursor:pointer;" style-hover="background:var(--accbg)">
                     <i class="ph" style="font-size:15px;line-height:1;color:var(--acc);flex:0 0 auto;">&#xE61E;</i>
                     <div style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;">
@@ -1582,22 +1613,36 @@
               <button onclick="{{ onCloseChat }}" title="Close chat" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:15px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">✕</button>
           </div>
           <div style="padding:0 18px 10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;position:relative;">
-            <span style="font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-right:2px;">About</span>
-            <sc-for list="{{ chat.about }}" as="ab" hint-placeholder-count="1">
-              <span style="{{ ab.chipStyle }}"><span onclick="{{ ab.onOpen }}" title="Open this source" style="cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ ab.label }}</span><button onclick="{{ ab.onRemove }}" title="Remove from this chat" style="{{ ab.xStyle }}" style-hover="background:var(--accline)">✕</button></span>
-            </sc-for>
-            <sc-if value="{{ chat.scopeEverythingOn }}" hint-placeholder-val="{{ false }}">
-              <span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:7px;padding:3px 4px 3px 9px;">{{ chat.everyLabel }}<button onclick="{{ chat.onUntagEverything }}" title="Stop ranging over everything" style="border:none;background:transparent;color:var(--acc);cursor:pointer;font-size:13px;line-height:1;padding:0 2px;border-radius:4px;" style-hover="background:var(--accline)">✕</button></span>
-            </sc-if>
-            <sc-if value="{{ chat.aboutIsolated }}" hint-placeholder-val="{{ false }}">
-              <span style="display:inline-flex;align-items:center;font-size:11px;font-weight:600;color:var(--ink3);background:var(--app);border:1px solid var(--line2);border-radius:7px;padding:3px 9px;">Just this chat — nothing tagged</span>
-            </sc-if>
-            <sc-if value="{{ chat.tagEveryOn }}" hint-placeholder-val="{{ false }}">
-              <button onclick="{{ chat.onTagEverything }}" title="Ground this chat in everything you’ve read" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--acc);background:var(--accbg);border:1px solid var(--accline);border-radius:7px;padding:3px 9px;cursor:pointer;" style-hover="background:var(--card)">✦ Everything</button>
-            </sc-if>
-            <button onclick="{{ chat.onToggleAdd }}" title="Tag a source to chat with" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--ink2);background:var(--app);border:1px dashed var(--line2);border-radius:7px;padding:3px 9px;cursor:pointer;" style-hover="border-color:var(--accline);color:var(--acc)">+ Add source</button>
+            <!-- Scope is a single compact summary line, not a wrapping chip field: it names
+                 what the chat is grounded in and opens the disclosure below to change it. -->
+            <button onclick="{{ chat.onToggleAdd }}" title="Choose what this chat is grounded in" style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:var(--app);border:1px solid var(--line2);border-radius:8px;padding:5px 10px;cursor:pointer;text-align:left;" style-hover="border-color:var(--accline)">
+              <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);flex:0 0 auto;">About</span>
+              <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12px;font-weight:600;color:var(--ink);">{{ chat.scopeLabel }}</span>
+              <span style="flex:0 0 auto;font-size:11px;color:var(--ink3);">▾</span>
+            </button>
             <sc-if value="{{ chat.addOpen }}" hint-placeholder-val="{{ false }}">
-              <div style="position:absolute;top:100%;left:18px;right:18px;z-index:30;margin-top:4px;background:var(--card);border:1px solid var(--line2);border-radius:11px;box-shadow:0 10px 30px rgba(20,24,30,.16);padding:6px;max-height:260px;overflow-y:auto;">
+              <div style="position:absolute;top:100%;left:18px;right:18px;z-index:30;margin-top:4px;background:var(--card);border:1px solid var(--line2);border-radius:11px;box-shadow:0 10px 30px rgba(20,24,30,.16);padding:6px;max-height:min(60vh,340px);overflow-y:auto;">
+                <!-- What's tagged now — each removable — then the ways to add more. -->
+                <sc-if value="{{ chat.hasAbout }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:2px 11px 5px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);">In this chat</div>
+                  <sc-for list="{{ chat.about }}" as="ab" hint-placeholder-count="1">
+                    <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;border-radius:8px;" style-hover="background:var(--accbg)">
+                      <span onclick="{{ ab.onOpen }}" title="Open this source" style="flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--acc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;">{{ ab.label }}</span>
+                      <button onclick="{{ ab.onRemove }}" title="Remove from this chat" style="flex:0 0 auto;border:none;background:transparent;color:var(--ink3);cursor:pointer;font-size:11px;font-weight:600;border-radius:5px;padding:3px 7px;" style-hover="background:var(--line);color:var(--ink)">Remove</button>
+                    </div>
+                  </sc-for>
+                  <div style="height:1px;background:var(--line);margin:5px 8px 6px;"></div>
+                </sc-if>
+                <sc-if value="{{ chat.scopeEverythingOn }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;border-radius:8px;">
+                    <span style="flex:1;min-width:0;font-size:12.5px;font-weight:700;color:var(--acc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">✦ {{ chat.everyLabel }}</span>
+                    <button onclick="{{ chat.onUntagEverything }}" title="Stop ranging over everything" style="flex:0 0 auto;border:none;background:transparent;color:var(--ink3);cursor:pointer;font-size:11px;font-weight:600;border-radius:5px;padding:3px 7px;" style-hover="background:var(--line);color:var(--ink)">Remove</button>
+                  </div>
+                  <div style="height:1px;background:var(--line);margin:5px 8px 6px;"></div>
+                </sc-if>
+                <sc-if value="{{ chat.aboutIsolated }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:8px 11px 10px;font-size:11.5px;color:var(--ink3);line-height:1.5;">Just this chat — nothing from your reading is in scope yet. Tag a source below, or ground it in everything.</div>
+                </sc-if>
                 <div onclick="{{ chat.onImport }}" style="display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:8px;cursor:pointer;" style-hover="background:var(--accbg)">
                   <i class="ph" style="font-size:15px;line-height:1;color:var(--acc);flex:0 0 auto;">&#xE61E;</i>
                   <div style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;">
@@ -2135,6 +2180,34 @@
       <button onclick="{{ nt.onPick }}" style="{{ nt.style }}">{{ nt.label }}</button>
     </sc-for>
   </nav>
+
+  <!-- Phone chat launcher — the always-present fast path to chat. A floating ✦ that
+       hovers above the bottom nav in every pane and fans up a disclosure menu (continue
+       the open chat · start a net-new one · scope one to the page). See askLauncherOn in
+       app.dc.js; hidden on the chat pane and behind any modal. -->
+  <sc-if value="{{ askLauncherOn }}" hint-placeholder-val="{{ false }}">
+    <sc-if value="{{ askMenuOpen }}" hint-placeholder-val="{{ false }}">
+      <div onclick="{{ onCloseAskMenu }}" style="position:fixed;inset:0;z-index:38;background:rgba(20,24,30,.16);"></div>
+    </sc-if>
+    <div style="position:fixed;right:16px;bottom:calc(66px + env(safe-area-inset-bottom));z-index:39;display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
+      <sc-if value="{{ askMenuOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
+          <sc-for list="{{ askMenuItems }}" as="am" hint-placeholder-count="3">
+            <div style="{{ am.wrapStyle }}">
+              <button onclick="{{ am.onPick }}" style="{{ am.style }}">
+                <span style="{{ am.iconStyle }}">{{ am.icon }}</span>
+                <span style="display:flex;flex-direction:column;align-items:flex-start;">
+                  <span style="{{ am.labelStyle }}">{{ am.label }}</span>
+                  <span style="{{ am.subStyle }}">{{ am.sub }}</span>
+                </span>
+              </button>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+      <button onclick="{{ onToggleAskMenu }}" title="Chat" aria-label="Chat" style="{{ askFabStyle }}">{{ askFabIcon }}</button>
+    </div>
+  </sc-if>
 
   <sc-if value="{{ memOpen }}" hint-placeholder-val="{{ false }}">
     <div onclick="{{ onCloseMem }}" style="position:fixed;inset:0;background:rgba(20,24,30,.34);z-index:60;display:flex;align-items:center;justify-content:center;padding:32px;">
@@ -3593,6 +3666,19 @@ class Component extends DCLogic {
   }
   // The discoverable "chat with this page": scope a chat to whatever is open.
   askThisPage(){const u=this.state.viewUrl;this.newChat(u||null);}
+  // ── Phone chat launcher (the always-present fast path to chat) ──────────────
+  // A single floating ✦ that lives above the bottom nav in every phone pane, so
+  // the chat is one tap away from Sources, Reading, or Spine — not buried in a
+  // text tab. Tapping it fans up a small disclosure menu (layers): continue the
+  // open chat, start a net-new one, or scope one to the page you're reading.
+  toggleAskMenu(){this.setState(s=>({askMenuOpen:!s.askMenuOpen}));}
+  closeAskMenu(){if(this.state.askMenuOpen)this.setState({askMenuOpen:false});}
+  // Land the user in the chat surface. On phone the chat pane owns the composer,
+  // so switch to it; off phone the chat opens as its own column/overlay already.
+  _gotoChat(){if(this.phone())this.setPane('chat');}
+  askLaunchContinue(){this.closeAskMenu();if(!this.activeChatObj())this.newChat(null);this._gotoChat();}
+  askLaunchNew(){this.closeAskMenu();this.newChat(null);this._gotoChat();}
+  askLaunchPage(){const u=this.state.viewUrl;this.closeAskMenu();this.newChat(u||null);this._gotoChat();}
   openChat(id){this._chatTab(id);this.setState(s=>({activeChat:id,viewUrl:null,selId:null,hoverEnt:null,chatAddOpen:false,rightOpen:true,newTabOpen:false,histRev:(s.histRev||0)+1}));}
   // Closing a chat closes its tab (the chip goes too); the neighbour tab takes over.
   closeChat(){this._ensureTabs();const t=this._liveTab();if(t&&t.kind==='chat')this.closeTab(t.id);else this.setState({activeChat:null,chatAddOpen:false});}
@@ -5244,6 +5330,8 @@ class Component extends DCLogic {
     });
   }
   onOpenDoc(){ return this.openDoc(null); }   // the "New document" affordance
+  // The Record panel's "More" disclosure — hold the secondary tools collapsed.
+  toggleTools(){this.setState(s=>({toolsOpen:!s.toolsOpen}));}
   async openDoc(id){
     const docs=this._docsMap();
     if(!id||!docs.has(id)){
@@ -12671,6 +12759,9 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       provMode:'hover',
       onOpenDeepResearch:()=>this.onOpenDeepResearch(),
       onOpenMonologue:()=>this.onOpenMonologue(),
+      // The Record panel's secondary tools live behind a "More" disclosure so the
+      // panel leads with just New chat + Import; the rest expand on demand.
+      toolsOpen:!!this.state.toolsOpen,onToggleTools:()=>this.toggleTools(),toolsCaret:this.state.toolsOpen?'▴':'▾',
       deepCount:this.state.deepCount||0,
       monologueTitle:(this.state.deepCount>0)?('Inner monologue — '+this.state.deepCount+' reflection'+(this.state.deepCount===1?'':'s')+' the reading had at rest'):'Inner monologue — what the reading reflects when you are not chatting',
       onOpenDoc:()=>this.onOpenDoc(),
@@ -12801,6 +12892,37 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
       base.appRows=isPhone?'auto auto 1fr auto':'auto auto 1fr';
       // padding-bottom keeps the tabs above the iPhone home indicator (viewport-fit=cover).
       base.navStyle='display:'+(isPhone?'flex':'none')+';background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);';
+      // ── The phone chat launcher (fast path to chat, present in every pane) ──
+      // A floating ✦ over the bottom nav that fans up a small disclosure menu.
+      // Desktop/tablet already carry several obvious chat entries (top-bar Chat,
+      // the left panel's New chat, the Research preset), so this is phone-only —
+      // it fills the one tier where chat was buried in a text tab. Hidden on the
+      // chat pane itself (you're already there) and while any modal is open.
+      const vu2=this.state.viewUrl, hasPage=!!vu2&&!/^search:/i.test(vu2);
+      const modalUp=!!(this.state.memOpen||this.state.templatesOpen||this.state.promptFlowOpen||this.state.weaveOpen||this.state.settingsOpen||this.state.newTabOpen);
+      base.askLauncherOn=isPhone && pane!=='chat' && !modalUp;
+      base.askMenuOpen=!!this.state.askMenuOpen && base.askLauncherOn;
+      base.onToggleAskMenu=()=>this.toggleAskMenu();
+      base.onCloseAskMenu=()=>this.closeAskMenu();
+      base.askFabIcon=base.askMenuOpen?'×':'✦';
+      // Accent circle; rotates/darkens into a close affordance when the menu is fanned open.
+      base.askFabStyle='width:54px;height:54px;border-radius:50%;border:none;display:inline-flex;align-items:center;justify-content:center;font-size:'+(base.askMenuOpen?'26px':'22px')+';color:#fff;background:var(--acc);box-shadow:0 8px 22px rgba(20,24,30,.28);cursor:pointer;line-height:1;transition:transform .2s ease,background .2s ease;'+(base.askMenuOpen?'transform:rotate(90deg);':'');
+      // Disclosure options — nearest the thumb (last, bottom of the fanned stack) is the
+      // primary action; the page-scoped ask only appears when a page is open. Each layer
+      // eases in with a staggered delay so the menu reads as fanning open, not popping.
+      const hasChat=!!this.activeChatObj();
+      const _amItem=(icon,label,sub,onPick)=>({icon,label,sub,onPick,
+        style:'display:inline-flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line2);border-radius:13px;padding:9px 14px 9px 11px;box-shadow:0 6px 20px rgba(20,24,30,.16);cursor:pointer;text-align:left;',
+        iconStyle:'width:30px;height:30px;flex:0 0 auto;border-radius:9px;background:var(--accbg);color:var(--acc);display:inline-flex;align-items:center;justify-content:center;font-size:15px;line-height:1;',
+        labelStyle:'font-weight:700;font-size:13px;color:var(--ink);line-height:1.2;',
+        subStyle:'font-size:10.5px;color:var(--ink3);line-height:1.2;margin-top:1px;'});
+      const _am=[];
+      if(hasPage)_am.push(_amItem('✦','Ask about this page','Chat scoped to what you’re reading',()=>this.askLaunchPage()));
+      _am.push(_amItem('✚','New chat','A fresh, net-new space',()=>this.askLaunchNew()));
+      if(hasChat)_am.push(_amItem('→','Continue chat','Back to the open conversation',()=>this.askLaunchContinue()));
+      // Stagger: the item nearest the FAB (last) animates first, so the fan unrolls upward.
+      const _n=_am.length;
+      base.askMenuItems=_am.map((it,i)=>({...it,wrapStyle:'animation:eofan .17s ease both;animation-delay:'+((_n-1-i)*45)+'ms;'}));
     }
     base.activity=this.activityVals();
     this.chatVals(base);
@@ -12823,7 +12945,7 @@ document.getElementById('cap').innerHTML='A big text is a <b>dense parallel weav
           btnStyle:'flex:0 0 auto;font-size:12px;font-weight:600;color:#fff;background:'+(reading?'#9aa1ab':'var(--acc)')+';border:none;border-radius:9px;padding:8px 14px;cursor:'+(reading?'default':'pointer')+';'};})};
 
     const vu=this.state.viewUrl;
-    base.askPageOn=!!vu&&!/^search:/i.test(vu)&&!base.chatOn;   // the discoverable "Ask about this page" FAB
+    base.askPageOn=!!vu&&!/^search:/i.test(vu)&&!base.chatOn&&!this.phone();   // the discoverable "Ask about this page" FAB (desktop/tablet; phone uses the chat launcher)
     // Reading toolbar. Over a stripped book (isBook) it carries the full e-reader typography
     // controls; over a NATIVE read page it carries just the contents nav, flagged passages,
     // and the Reader/Page mode toggle. Both render the same Contents + ❖ marks.
