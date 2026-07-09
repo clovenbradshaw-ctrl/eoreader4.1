@@ -4893,8 +4893,22 @@ class Component extends DCLogic {
     // reading can't ground — the exact thing to go read), then the metacognition's novel leads —
     // each sharpened with the anchor into a standalone query, so a bare term never matches a
     // namesake. The metacognition deposits mass on the frontier; it never formulates the queries.
+    // LEADS ARE ONLY TRUSTWORTHY ON A RESEARCH ROUTE (the dolphins-disambiguation audit). leadsOf
+    // returns the novel content terms of the read's OWN paragraph, and only when the paragraph is
+    // naming what must be found out are those terms the subject's substance. On a compose/ground
+    // turn ("write an essay about dolphins", "…about this") the paragraph is prose ABOUT the request
+    // — "The user is requesting … which implies …", "essentially … the content I previously wrote" —
+    // so its "novel" terms are speech-act framing (requesting, implies, essentially, previously,
+    // content). Sharpened into facet queries ("dolphin previously", "dolphin essentially") they
+    // dragged the walk onto namesakes — Ecco the Dolphin, the Eurocopter Dolphin, the Miami Dolphins
+    // — that the semantic reprieve then KEPT (dolphin ≈ dolphin regardless of sense), and the essay
+    // grounded on the wrong "dolphins". So fold leads in only when the read settled on `research`;
+    // the facet planner already supplies the subject-keeping angles for every other route, and the
+    // MISSING ANCHORS above (reader-computed from the reading, not the read's prose) still seed
+    // unconditionally. This never suppresses a genuine research lead — that turn routes to research.
     if(pre&&pre.meta&&!seed.focus&&!lookup){
-      const want=[...(((pre.meta.anchorGap||{}).missing)||[]),...((pre.meta.leads)||[])];
+      const leads=(pre.meta.route==='research')?((pre.meta.leads)||[]):[];
+      const want=[...(((pre.meta.anchorGap||{}).missing)||[]),...leads];
       for(const w of want){const q=this._nextQuery(useAnchor,this.norm(w));
         if(q&&extraSeeds.length<5&&!extraSeeds.some(x=>String(x).toLowerCase()===q.toLowerCase()))extraSeeds.unshift(q);}
     }
@@ -5041,9 +5055,12 @@ class Component extends DCLogic {
     if(!this._ME)this._ME=await import((typeof window!=='undefined'&&window.__resources&&window.__resources.eoModel)||'./model-entry.js');
     const seed=(o.seed||[]).filter(p=>p&&p.text);
     const ask=o.ask||q;
-    // The document card's title — the subject of the ask with its imperative frame stripped
-    // ("write me an essay about dolphins" → "Dolphins"). Rides on the pending + settled message.
-    const dTitle=this._docTitle(ask);
+    // The document card's title — the DISCOURSE-RESOLVED subject `q`, imperative frame stripped
+    // ("write me an essay about dolphins" → "Dolphins"). NOT the raw `ask`: on the research path the
+    // walk reformulates the turn to the clean subject (q="dolphin") while ask stays the literal
+    // original ("write an essay about this"), which _docTitle can only strip to "This". `ask` is kept
+    // solely to read the length demand off the original turn (below).
+    const dTitle=this._docTitle(q);
     const demand=this._paragraphDemand(ask)||((o.read||o.meta)&&(o.read||o.meta).lengthDemand==='develop'?6:5);
     // renderBound tags an accepted claim with its cite ([s123], or the walk's synthesized
     // [sL2.1]); provenance already rides in `sources`/passages, so the tags never reach the
@@ -5209,7 +5226,17 @@ class Component extends DCLogic {
     if(!this._ME)this._ME=await import((typeof window!=='undefined'&&window.__resources&&window.__resources.eoModel)||'./model-entry.js');
     if(!this._ME.runEssay)return this._walkReply(id,q,sources,o);   // older engine bundle — degrade to the walk
     const ask=o.ask||q;
-    const dTitle=this._docTitle(ask);                      // the essay's subject, imperative frame stripped
+    // The essay's SUBJECT comes from the discourse-RESOLVED query `q`, not the raw `ask`. `ask` is
+    // carried only to read the longform INTENT off the original turn (_paragraphDemand / _essayIntent
+    // below); it is NOT the subject. On the research path the walk reformulates the turn to the clean
+    // subject ("write an essay about this" → q="dolphin") while ask stays the literal original — so
+    // titling and planning off ask gave dTitle="This", and _planFacets("This") handed the small model
+    // an empty subject it filled with hallucinated angles ("the nature of existence", "literature and
+    // philosophy"), which then reported "no mention of existential themes" over dolphin taxonomy (the
+    // dolphins-disambiguation audit). `q` is the frame-stripped subject on every caller (the direct
+    // path passes the raw turn, which _docTitle frame-strips the same as before), so this is a no-op
+    // there and the fix only where q and ask diverge.
+    const dTitle=this._docTitle(q);                        // the essay's subject, imperative frame stripped
     const rd=o.read||o.meta||null;
     const untag=t=>String(t||'').replace(/\s*\[s(?:\d+|L[\d.]+)\]/g,'');
     const EKIND=this._ME.EKIND||{ENTER:'enter',ACCEPT:'accept'};
