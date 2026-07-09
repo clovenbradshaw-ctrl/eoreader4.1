@@ -6411,10 +6411,14 @@ class Component extends DCLogic {
     // no-brainer web turn. Gated before every coverage check: no reading covers tomorrow's
     // weather, and incidental term overlap with the sources must never keep this offline.
     if(this._isLiveFact(q))return true;
+    // A bare pleasantry / acknowledgement names no subject — don't go research "thanks" or "hi".
+    // GATED BEFORE the meta-research line below: _isMetaResearch fires whenever no contentful word
+    // survives (its intended catch is a follow-up like "do more research to answer this"), and a
+    // bare greeting has none either — so in the old order "hi"/"ok" were mistaken for a research
+    // request and sent on a full web walk. The pleasantry guard has to win first.
+    if(/^(?:thanks?|thank you|thx|ty|ok|okay|k|cool|nice|great|awesome|got it|sounds good|sure|yep|yes|no|yeah|nope|lol|haha|hi|hey|hello|yo|sup|np|no problem|cheers|bye|goodbye|good (?:morning|night))[\s.!?]*$/i.test(q))return false;
     if(this._researchIntent(q)||this._isMetaResearch(q)||this._asksToResearchMore(q))return true;   // asked for research / "more" / "go deeper"
     if(this._isSummaryQ(q))return false;                    // "summarize this" → from the doc you have
-    // A bare pleasantry / acknowledgement names no subject — don't go research "thanks".
-    if(/^(?:thanks?|thank you|thx|ty|ok|okay|k|cool|nice|great|awesome|got it|sounds good|sure|yep|yes|no|yeah|nope|lol|haha|hi|hey|hello|yo|sup|np|no problem|cheers|bye|goodbye|good (?:morning|night))[\s.!?]*$/i.test(q))return false;
     if(!this._researchTerms(q).length)return false;         // nothing contentful to chase
     // THE ZERO-MASS ANCHOR: one anchor covered, another absent → the missing half must be read,
     // not confabulated (the "difference between it and harry potter" case).
@@ -7719,7 +7723,17 @@ class Component extends DCLogic {
       this.setState({modelStatus:''});
       const streamed=accBlocks.join('\n\n');
       if(streamed){ o.finish({text:this._withOfficeNote(streamed,sources),doc:true,docTitle:dTitle,groundKind:'matched',related:this.relatedDocs(q,sources),register:'grounded',reflection:this._reflect(streamed)}); }
-      else{ const fb=this.answerQuestion(q,sources); o.finish({text:fb.text||'I couldn’t build this essay out from what you’ve read.',groundKind:fb.refs&&fb.refs.length?'matched':'model',register:'grounded'}); }
+      else{
+        // NOTHING streamed and the organ produced no report — the chat model didn't generate (a stall,
+        // an OOM/device-lost on a heavy WebGPU decode, or an import fault). answerQuestion stitches the
+        // matched reading directly, which is NOT model-written prose — so LABEL it as the fallback it is
+        // (modelNote), rather than badge raw stitched spans as a finished grounded essay. This is the
+        // "I'm not getting real model responses / the long-form button returns raw source fragments" case.
+        const fb=this.answerQuestion(q,sources); const relevant=!!(fb.refs&&fb.refs.length);
+        o.finish({text:fb.text||'I couldn’t build this essay out from what you’ve read — the chat model didn’t generate.',groundKind:relevant?'matched':'model',register:'grounded',
+          modelNote:relevant?'Stitched straight from your reading — the chat model didn’t generate, so this isn’t model-written prose. Try again once it has loaded.':undefined,
+          sources:relevant?fb.sources:[],passages:relevant?(fb.refs||[]).map(i=>({text:this.norm(this.master.sentences[i]),u:this.master.sentenceSource[i],i})):[]});
+      }
       return;
     }
 
@@ -7867,6 +7881,16 @@ class Component extends DCLogic {
     if(!raw)return 'Document';
     // Drop a leading "write/compose/… [me] [a/an] [essay/report/…] about/on/of ___" frame.
     let s=raw.replace(/^\s*(?:please\s+|can\s+you\s+|could\s+you\s+|i(?:'d| would)\s+like\s+you\s+to\s+|i\s+want\s+you\s+to\s+)*(?:write|compose|draft|create|make|generate|produce|give|prepare|put\s+together)\b[\s\S]*?\b(?:about|on|regarding|concerning|covering|of|for)\s+/i,'');
+    if(s===raw){
+      // A DESIRE / REQUEST frame with NO imperative verb — "i want a longform essay about ___",
+      // "i'd like an essay on ___", "give me a report about ___", "can i get a piece on ___". The
+      // artifact noun (essay/report/…), optionally led by an adjective (longform/detailed/…), plus
+      // about/on/of names the subject after it — same as the imperative frame above. Without this,
+      // "i want a longform essay about dolphins" kept the WHOLE sentence as the subject, so every
+      // facet ("… overview/history/…") searched for the sentence and the essay drifted onto
+      // essay-writing samples instead of the animal.
+      s=raw.replace(/^\s*(?:please\s+)?(?:i\s+(?:want|need|would\s+like)|i(?:'d| would)\s+like|i(?:'m| am)\s+looking\s+for|can\s+i\s+(?:get|have)|could\s+i\s+(?:get|have)|give\s+me)\s+(?:me\s+)?(?:a|an|the|some)?\s*(?:[\w-]+\s+){0,3}?(?:essays?|reports?|pieces?|articles?|overviews?|accounts?|guides?|breakdowns?|treatis(?:e|es)|write[\s-]?ups?|summar(?:y|ies)|analys[ie]s|briefs?|papers?|monographs?|dissertations?)\s+(?:about|on|of|regarding|concerning|covering|for)\s+/i,'');
+    }
     if(s===raw){
       // No "about ___" frame — strip just a leading verb + article/artifact filler if present.
       s=raw.replace(/^\s*(?:please\s+)?(?:write|compose|draft|create|make|generate|produce|give|prepare|tell\s+me\s+about|explain|describe|summar(?:ize|ise))\b\s*(?:me\s+)?(?:a|an|the|some)?\s*(?:essays?|reports?|pieces?|articles?|overviews?|summar(?:y|ies)|notes?|letters?|analys[ie]s|briefs?)?\s*(?:about|on|of)?\s*/i,'');
