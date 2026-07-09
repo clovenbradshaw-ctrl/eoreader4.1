@@ -33,6 +33,13 @@
     @media (hover:none){
       .eo-askfab{opacity:.92;}
     }
+    /* Source rows in the Record panel — the per-row actions (read · weave · chat · pin) were
+       always shown, so in the narrow panel they crushed the title to two letters. Hold them
+       collapsed so the title owns the width, and reveal on row hover or keyboard focus. On
+       touch (no hover) keep them shown — the phone Sources pane is full-width anyway. */
+    .eo-srcact{display:flex;align-items:center;gap:2px;flex:0 0 auto;max-width:0;opacity:0;overflow:hidden;transition:max-width .16s ease,opacity .12s ease;}
+    .eo-srcrow:hover .eo-srcact,.eo-srcrow:focus-within .eo-srcact{max-width:180px;opacity:1;}
+    @media (hover:none){.eo-srcact{max-width:180px;opacity:1;}}
     ::-webkit-scrollbar{width:10px;height:10px}
     ::-webkit-scrollbar-thumb{background:#d4d8de;border-radius:6px;border:2px solid #fff}
     ::-webkit-scrollbar-track{background:transparent}
@@ -334,7 +341,7 @@
             <span style="margin-left:auto;font-size:10.5px;color:var(--ink3);">{{ lensCount }}</span>
           </div>
           <sc-for list="{{ lensSources }}" as="s" hint-placeholder-count="1">
-            <div style="{{ s.rowStyle }}" style-hover="background:#f7f8fa">
+            <div class="eo-srcrow" style="{{ s.rowStyle }}" style-hover="background:#f7f8fa">
               <div onclick="{{ s.onOpen }}" style="{{ s.dot }}">{{ s.glyph }}</div>
               <div onclick="{{ s.onOpen }}" style="min-width:0;flex:1;cursor:pointer;">
                 <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.label }}</div>
@@ -343,9 +350,11 @@
               <sc-if value="{{ s.hasKids }}" hint-placeholder-val="{{ false }}">
                 <button onclick="{{ s.onToggleCollapse }}" title="{{ s.collapseTitle }}" style="{{ s.caretStyle }}" style-hover="background:#eef0f3;color:var(--ink)">{{ s.caret }}</button>
               </sc-if>
-              <button onclick="{{ s.onRead }}" title="Read the page" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">↗</button>
-              <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
-              <button onclick="{{ s.onTogglePin }}" title="Remove from this workspace (stays in memory)" style="{{ s.unpinStyle }}" style-hover="border-color:var(--sig);color:var(--sig)">−</button>
+              <div class="eo-srcact">
+                <button onclick="{{ s.onRead }}" title="Read the page" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">↗</button>
+                <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
+                <button onclick="{{ s.onTogglePin }}" title="Remove from this workspace (stays in memory)" style="{{ s.unpinStyle }}" style-hover="border-color:var(--sig);color:var(--sig)">−</button>
+              </div>
             </div>
           </sc-for>
         </sc-if>
@@ -359,7 +368,7 @@
           </sc-if>
         </div>
         <sc-for list="{{ memorySources }}" as="s" hint-placeholder-count="3">
-          <div style="{{ s.rowStyle }}" style-hover="background:#f7f8fa">
+          <div class="eo-srcrow" style="{{ s.rowStyle }}" style-hover="background:#f7f8fa">
             <div onclick="{{ s.onOpen }}" style="{{ s.dot }}">{{ s.glyph }}</div>
             <div onclick="{{ s.onOpen }}" style="min-width:0;flex:1;cursor:pointer;">
               <div style="font-size:12.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.label }}</div>
@@ -368,10 +377,12 @@
             <sc-if value="{{ s.hasKids }}" hint-placeholder-val="{{ false }}">
               <button onclick="{{ s.onToggleCollapse }}" title="{{ s.collapseTitle }}" style="{{ s.caretStyle }}" style-hover="background:#eef0f3;color:var(--ink)">{{ s.caret }}</button>
             </sc-if>
-            <button onclick="{{ s.onRead }}" title="Read the page" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">↗</button>
-            <button onclick="{{ s.onWeave }}" title="The referent weave of this source — its recurring figures as threads, grouped into storylines" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;" style-hover="background:var(--accbg);color:var(--acc)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5c4 0 4 14 8 14s4-14 8-14"></path><path d="M4 12c4 0 4 7 8 7"></path><path d="M12 5c4 0 4 7 8 7"></path></svg></button>
-            <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
-            <button onclick="{{ s.onTogglePin }}" title="Pin into this workspace" style="{{ s.pinStyle }}" style-hover="background:var(--acc);color:#fff">＋ Pin</button>
+            <div class="eo-srcact">
+              <button onclick="{{ s.onRead }}" title="Read the page" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:12px;line-height:1;" style-hover="background:#eef0f3;color:var(--ink)">↗</button>
+              <button onclick="{{ s.onWeave }}" title="The referent weave of this source — its recurring figures as threads, grouped into storylines" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;" style-hover="background:var(--accbg);color:var(--acc)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5c4 0 4 14 8 14s4-14 8-14"></path><path d="M4 12c4 0 4 7 8 7"></path><path d="M12 5c4 0 4 7 8 7"></path></svg></button>
+              <button onclick="{{ s.onChat }}" title="Chat about this source" style="width:24px;height:24px;flex:0 0 auto;border:none;background:transparent;color:var(--ink3);border-radius:6px;cursor:pointer;font-size:13px;line-height:1;" style-hover="background:var(--accbg);color:var(--acc)">✦</button>
+              <button onclick="{{ s.onTogglePin }}" title="Pin into this workspace" style="{{ s.pinStyle }}" style-hover="background:var(--acc);color:#fff">＋ Pin</button>
+            </div>
           </div>
         </sc-for>
         <sc-if value="{{ srcEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 8px;color:var(--ink3);font-size:11.5px;line-height:1.5;">Nothing recorded yet. Read a URL, import a book, or start a chat above.</div></sc-if>
