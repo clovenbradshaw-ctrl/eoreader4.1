@@ -1,0 +1,125 @@
+# Deep reading — the reflection at the place of most interest
+
+> When the model is not otherwise busy, the reading turns back on the document it already
+> holds: it surfs to the place of most interest, folds it, and has a reflection about it. The
+> reflection is added to the graph — but with the epistemics and the ontology made exact, so
+> it enriches the reading without ever being mistaken for a witnessed fact.
+
+This is the `deepReading` / `createDeepReader` engine in the `fold` holon
+(`src/fold/deep-reading.js`). It is the second half of the continuity `idle.js` began.
+
+## Two idle continuities, one firewall
+
+`idle.js` (SPEC §15) argued that the chatbot posture — inert until prompted — is a gate held
+shut, not the machine's nature: the surfer rides a field whether or not a question was asked,
+and the §8 type law makes self-continuity safe. `idle.js` walks the **open set** (the voids)
+against freshly ingested exafference — it waits for the world to close a standing question.
+
+Deep reading is the other continuity. Instead of waiting on a void, the reading turns back on
+the **document it already holds**: it measures where its own field is steepest and reflects
+there. Both are legitimate for the same reason — every idle act is reafferent, and reafference
+cannot witness (the firewall is the type, not a flag).
+
+## The three moves
+
+| move | what | from |
+|---|---|---|
+| **place of most interest** | the surfer's peak — where the reading's own field is steepest (Bayesian surprise), re-weighted by salience toward the live thread when one is active | `surfer/surf.js`, `surfer/salience.js` |
+| **the fold** | `foldNote` at that peak — existence + structure + significance, every line carrying its source index | `fold/integral.js` |
+| **the reflection** | the reading's own act of **evaluating** that fold against its frame; model-free by default (thinking needs no model), a model voice when one is injected | `write/think.js`, an injected `reflect` |
+
+Nothing is authored. The peak is read off the physics; the fold integrates the reading there;
+the reflection is the significance read voiced as an inner note (or a model's, when idle-compute
+is spent on it).
+
+## The epistemics — why it is safe to add to the graph
+
+A reflection is **reafference** — the reading's own output, `fromEnactor`. By the §8 type law
+(`core/provenance.js`) `canWitness(prov) === false`: it can organize attention and continuity,
+but it **cannot witness anything as world**. It rides the graph at band **void** — held open,
+an interpretation, never asserted as a firm fact — and `grounded:false`. Only a human's witness
+act could ever promote it (`idle.js`'s `confirm`). So the loop can reflect freely without
+laundering self-talk into record.
+
+The loop is also **self-terminating** (`idle.js` I3): it reflects only where the place beats the
+reach's own band (the significance is real, not the flat), **habituates** to places it has
+already read (never re-reflects — the cure for rumination), and quiesces when no fresh place
+beats the band. It never spins.
+
+## The ontology — which of the nine operators a reflection is
+
+**EVA** — Relate × Interpretation, *evaluate* (`core/operators.js`). A reflection is the reading
+judging a particular (the folded place) against its established terms — exactly the enacted
+loop's EVA (`significance-loop.md`), so it carries the same **verdict** (confirm | strain) and
+**surprise**. It is tagged `register:'enacted'` (`enact/register.js`) — the reading's own act,
+never a depicted perception.
+
+`projectGraph` deliberately skips EVA (*"EVA, REC: live in the rules ledger, not in this
+projection"*), so a reflection can **never** be mistaken for a depicted edge or fact. It surfaces
+instead as a first-class **`eo:Reflection`** node in the reading substrate
+(`fold/substrate.js`), beside the `eo:Tension` (a held EVA) and `eo:Reframing` (a located REC)
+that already live there — carried at band void, witness `reafferent`, so the firewall is
+explicit on the graph node itself.
+
+## The event
+
+`buildReflection` deposits one append-only event:
+
+```
+{ op: 'EVA', register: 'enacted', reflection: true, layer: 'reflection',
+  cursor, sentIdx: cursor,        // the place of most interest — grounds/replays here
+  focus, particular, verdict, surprise, body, sources,
+  band: 'void', grounded: false,  // held open — an interpretation, never firm
+  prov: fromEnactor('deep-reading'), door: 'enactor' }   // reafferent — canWitness === false
+```
+
+## The API
+
+```js
+import { deepReading, createDeepReader, readReflections } from '../fold/index.js';
+import { surfFold } from '../surfer/index.js';
+
+// one pass — surf to the place of most interest, fold it, reflect, append to the graph
+const r = deepReading(doc, { surf: surfFold /*, reflect, thread */ });
+//  → { peak, focus, verdict, surprise, body, sources, event, canWitness:false }
+
+// the governed idle loop — the caller signals "not otherwise busy" via arrive()
+const reader = createDeepReader({ doc, surf: surfFold });
+const { reflections, quiesced } = reader.arrive({ anchor: 0 });
+reader.canGround(reflections[0]);   // false — a reflection cannot ground itself (the firewall)
+
+// read the reflections back off the log (they surface as eo:Reflection substrate nodes)
+readReflections(doc);
+```
+
+`surf` and `reflect` are **injected** — the engine is deterministic, timer-free and DOM-free, so
+it is testable and any product surface (the app's idle tick) is pure presentation over this
+state. "Not otherwise busy" is the **caller's** signal (only it knows a turn is not in flight);
+the engine exposes `arrive()` as the wake-on-idle entry, never a self-poll.
+
+## Measured
+
+On the opening scene of Kafka's *Metamorphosis* (18 sentences, 11 depicted facts over 4
+figures), one idle pass surfaced three reflections at the reading's own surprise peaks
+(sentences 13, 16, 17 — each a `strain` verdict), self-terminated after four passes, and:
+
+- added **three** `eo:Reflection` nodes to the graph where idle had been silence;
+- added **zero** depicted facts — `projectGraph` was byte-identical before and after (11 edges,
+  4 figures);
+- every reflection reafferent (`canWitness === false`), held void, and never projected as an
+  edge.
+
+The reading gets richer at exactly the places it found most interesting, and the record it can
+witness is provably untouched.
+
+## Where it lives
+
+| concern | file |
+|---|---|
+| the engine + the governed loop | `src/fold/deep-reading.js` |
+| the reflection as a graph node | `src/fold/substrate.js` (`eo:Reflection`, `readReflections`) |
+| the fold it reads | `src/fold/integral.js` (`foldNote`) |
+| the place of most interest | `src/surfer/surf.js` (`surfFold`), `src/surfer/salience.js` |
+| the firewall it rides | `src/core/provenance.js` (§8, `canWitness`) |
+| the operator it is | `src/core/operators.js` (EVA), `src/enact/register.js` |
+| tests | `tests/deep-reading.test.js` |
