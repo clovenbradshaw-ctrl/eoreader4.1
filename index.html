@@ -2413,6 +2413,12 @@
 class Component extends DCLogic {
   constructor(props){
     super(props);
+    // Per-character reveal (the typewriter): the answer streams into m.text as fast as tokens
+    // decode; the bubble REVEALS it one character at a time on a steady rAF clock, catching up
+    // so a fast burst never lags. _reveal maps chatId:msgIndex → chars shown. prefers-reduced-
+    // motion turns it off (whole text at once). See _ensureType / _advanceType / chatVals.
+    this._reveal={}; this._typeRaf=null; this._typeLast=0;
+    try{this._rmq=(typeof window!=='undefined'&&window.matchMedia)?window.matchMedia('(prefers-reduced-motion: reduce)'):null;}catch(e){this._rmq=null;}
     this.PROXY='https://n8n.intelechia.com/webhook';
     this.MAX_PASSAGE=600;   // a real prose sentence rarely exceeds this; beyond it is a list/table/directory segmentation artifact, never a passage to quote
     this.STOP=new Set('the a an of to in on at for and or but with by from as is are was were be been being this that these those it its their his her our your they we you i he she him them us me year years some most many few what who whom which when where how why than then so if not no nor only also just very more less new over under into out up down off above below'.split(' '));
@@ -6535,6 +6541,47 @@ class Component extends DCLogic {
   // prefill gap) it keeps the bare label, so the status line never reads empty.
   _composeTick(acc){const w=(String(acc||'').match(/\S+/g)||[]).length;
     return w?('Writing the answer… · '+w+' word'+(w!==1?'s':'')):'Composing the answer…';}
+  // ── the typewriter: reveal the streamed answer one character at a time ──────────────────
+  _reduceMotion(){try{return !!(this._rmq&&this._rmq.matches);}catch(e){return false;}}
+  // Cut `text` to `n` chars without splitting a ⟦cN⟧ citation sentinel (the only source token
+  // that would render as garbage mid-cut; unbalanced **bold** / `code` / [links] just show their
+  // markers for a frame, which reads as ordinary markdown typing).
+  _safeReveal(text,n){
+    if(n>=text.length)return text;
+    let m=n;const open=text.lastIndexOf('⟦',m-1);
+    if(open>=0){const close=text.indexOf('⟧',open);if(close>=m)m=open;}
+    return text.slice(0,m);
+  }
+  // Chars to advance this frame: a floor (~60/s) so it always reads as typing, scaling with the
+  // backlog so a big decode burst catches up within a few frames (cap ~1200/s). Time-based.
+  _revealStep(backlog,dt){return Math.max(1,Math.round(Math.max(60,Math.min(1200,backlog*16))*dt/1000));}
+  // Advance every assistant message's reveal toward its full m.text length. Walks all chats so a
+  // message that settles while another chat is open still finishes typing. Returns true while any
+  // is still catching up.
+  _advanceType(dt){
+    let active=false;
+    for(const c of (this.state.chats||[])){
+      (c.messages||[]).forEach((m,mi)=>{
+        if(m.role!=='asst')return;
+        const full=String(m.text||'').length,key=c.id+':'+mi;
+        let s=this._reveal[key];if(s===undefined)s=m.pending?0:full;
+        if(s<full){s=Math.min(full,s+this._revealStep(full-s,dt));active=true;}
+        this._reveal[key]=s;
+      });
+    }
+    return active;
+  }
+  _ensureType(){
+    if(this._typeRaf||this._reduceMotion())return;
+    const step=(ts)=>{
+      this._typeRaf=null;
+      const dt=this._typeLast?Math.min(120,ts-this._typeLast):16;this._typeLast=ts;
+      const active=this._advanceType(dt);
+      this.setState({_rev:(this.state._rev||0)+1});
+      if(active)this._typeRaf=requestAnimationFrame(step);else this._typeLast=0;
+    };
+    this._typeRaf=requestAnimationFrame(step);
+  }
   // STALL GUARD — the chat model loads on first use and decodes on the CPU, and EITHER step can
   // hang outright: a weights download that stops mid-stream, or a decode that never emits a first
   // token. Both leave a promise that neither resolves nor rejects, so `await ensureChatModel()` /
@@ -9145,7 +9192,23 @@ class Component extends DCLogic {
       // sources it drew on) clickable inline — the reading view's entity-click, in the chat bubble.
       // Only on settled answers, so streaming stays cheap and the spans don't churn token by token.
       const entLink=(isMd&&!m.pending)?this._answerEntLinker(m.entities,m.sources):null;
-      const bodyHtml=hasSvg?m.svg:(isMd?this._md((rcites?rcites.text:(ann?ann.text:m.text)),liveReg||(rcites?rcites.reg:(ann&&ann.reg)),ann&&ann.sreg,entLink):'');
+      // Per-character reveal: while the answer is still typing in, render only the safe-cut prefix
+      // of m.text (no post-hoc annotation on partial text); once caught up — a beat past settle if
+      // need be — flip to the fully-annotated/research view. Seeded on first sight: a pending
+      // message types from 0, a settled one first seen (restored history) shows whole.
+      const tvKey=cur.id+':'+mi;
+      const tvBase=String(m.text||'');
+      let tvOn=false, tvShown=tvBase.length;
+      if(isMd&&!hasSvg&&!this._reduceMotion()){
+        let rs=this._reveal[tvKey];
+        if(rs===undefined){rs=m.pending?0:tvBase.length;this._reveal[tvKey]=rs;}
+        tvShown=Math.min(rs,tvBase.length);
+        tvOn=tvShown<tvBase.length;
+        if(tvOn)this._ensureType();
+      }
+      const bodyHtml=hasSvg?m.svg:(isMd?(tvOn
+          ?this._md(this._safeReveal(tvBase,tvShown),liveReg,null,null)
+          :this._md((rcites?rcites.text:(ann?ann.text:m.text)),liveReg||(rcites?rcites.reg:(ann&&ann.reg)),ann&&ann.sreg,entLink)):'');
       // The numbered REFERENCES the inline footnotes point at — each previewing the verbatim source
       // line (the librarian apparatus, shown by default). When the binder found no inline match we
       // still list the passages the answer drew on, so the source text is always in view.
