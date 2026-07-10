@@ -1,3 +1,4 @@
+// EO: CON·SEG·SIG(Field,Network → Field, Binding,Dissecting,Tracing) — fuse + reserve + trim
 // Hybrid: lexical first (fast, mechanical), semantic to fill if available.
 // Dedup by sentence index, then FUSE the two channels by concordance.
 //

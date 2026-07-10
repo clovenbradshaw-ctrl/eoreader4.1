@@ -1,3 +1,4 @@
+// EO: DEF·EVA(Field,Lens → Lens, Unraveling,Tracing) — significance arc, phase bias
 // shape — the significance arc, not a canon (spec-planner.md §8).
 //
 // The temptation is a canon of response shapes — comparison goes two-sided,

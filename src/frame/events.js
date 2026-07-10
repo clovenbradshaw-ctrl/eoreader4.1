@@ -1,3 +1,4 @@
+// EO: NUL(Void → Field, Tending) — append-only event log (TaskEvent kinds + bind)
 // frame/events.js — the append-only event log of the interior holon
 // (docs/frame-holon.md): the spine `src/tasks/` proved on the generation axis,
 // factored out so the discourse and prediction axes name the same structure.

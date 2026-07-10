@@ -1,3 +1,4 @@
+// EO: SIG·INS(Void → Entity,Field, Making,Tending) — file import router (organs)
 // Unified file import for the reader — one router, lazy extractors, onto the organs.
 //
 // The reader used to import plain text only (readAsText). This lets it import what the

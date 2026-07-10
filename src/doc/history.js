@@ -1,3 +1,4 @@
+// EO: SEG·SYN(Field → Network, Unraveling,Composing) — version-history timeline (audit)
 // doc/history.js — the edit log read as a version timeline.
 //
 // The log is already the whole history; this projection reads it the way Google

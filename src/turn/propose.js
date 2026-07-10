@@ -1,3 +1,4 @@
+// EO: EVA·DEF(Lens,Void → Lens, Binding,Dissecting) — web-search proposer
 // The web-search PROPOSER — the model proposes, it never fetches (docs/web-search.md).
 //
 // When a turn measures a gap the document cannot close — a void, an answer bound to nothing,

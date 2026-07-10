@@ -1,3 +1,4 @@
+// EO: EVA(Atmosphere,Lens,Field → Field,Lens, Tending,Binding) — reweight + flag, gated
 // The two integration points (spec §9), implemented as PURE functions and held
 // behind the gate. They are deliberately NOT yet spliced into the live retrieve
 // or veto path: the spec's build discipline (§12) says the cheap read-only

@@ -1,3 +1,4 @@
+// EO: SEG·SYN·EVA(Field,Network → Network,Field, Unraveling,Composing,Binding) — autopoietic holons by Born rule
 // Autopoietic holons by the Born rule — detected, not imposed.
 //
 // `detectGrain` (levels.js) chunks on the author's chapter headings: an IMPOSED grain. But a

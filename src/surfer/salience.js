@@ -1,3 +1,4 @@
+// EO: SIG·EVA(Field,Link,Atmosphere → Field,Link, Tending,Binding) — Born salience vs the thread
 // Salience by the Born rule, measured against the activated conversation thread.
 //
 // The surfer rides a field and arrests where structure beats the noise null (surf.js). But

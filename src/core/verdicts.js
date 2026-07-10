@@ -1,3 +1,4 @@
+// EO: NUL(Lens → Lens, Clearing) — verdict vocabulary
 // The four-way verdict vocabulary — a pure enum, the genome's leaf.
 //
 // It lives in core, not in factcheck, because two holons now read it: the

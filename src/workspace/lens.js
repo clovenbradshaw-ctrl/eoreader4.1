@@ -1,3 +1,4 @@
+// EO: CON·INS·DEF(Entity,Lens → Lens,Link, Binding,Making,Dissecting) — pinned-source lens layer
 // workspace/lens.js — the LENS layer over the everything-workspace.
 //
 // A "lens" is a named workspace laid over the shared Record: it does not own

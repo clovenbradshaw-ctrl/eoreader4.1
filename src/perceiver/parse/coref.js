@@ -1,3 +1,4 @@
+// EO: SIG·SYN(Entity → Field,Link, Tending,Making) — coref field (referent traces)
 // Referent resolution as physics, not decision — now a two-channel field.
 //
 // A pronoun does not *pick* an antecedent. Each mentioned entity leaves a

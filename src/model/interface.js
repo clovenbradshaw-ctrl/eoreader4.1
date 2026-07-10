@@ -1,3 +1,4 @@
+// EO: INS(Kind → Entity, Making) — backend registry + createModel
 // The model interface.
 //
 // A backend is a factory: createBackend(opts) → {

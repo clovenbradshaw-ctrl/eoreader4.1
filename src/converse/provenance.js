@@ -1,3 +1,4 @@
+// EO: SIG·EVA(Entity,Atmosphere → Atmosphere,Lens, Tending,Binding) — conversational provenance / talker deposition
 // Conversational provenance — the talker's output as a recorded phenomenon.
 //
 // The talker said this, at this cursor, in this turn. That happened, and it is

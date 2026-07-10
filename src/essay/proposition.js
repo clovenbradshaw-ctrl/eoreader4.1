@@ -1,3 +1,4 @@
+// EO: INS·EVA·SIG(Field,Entity → Entity,Lens, Making,Binding) — typed proposition payload
 // essay/proposition.js — the commitment, pushed below language.
 //
 // Omnimodal output proves the commitment was never text: the first time a

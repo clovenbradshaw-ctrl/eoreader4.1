@@ -1,3 +1,4 @@
+// EO: SYN·EVA(Lens,Field → Field,Lens, Composing,Tracing) — band-pull / ablation-delta
 // Element analysis by band-pull — the band-level realisation of ablation-delta.
 //
 // The ablation-delta spec classifies a delta VECTOR (W − W-minus-element) against

@@ -1,3 +1,4 @@
+// EO: NUL·SIG(Void,Entity → Void,Atmosphere, Tending,Binding,Clearing) — EOT operation ledger (append-only)
 // The EOT ledger — the running terminal of the machine, read out in EOT.
 //
 // docs/eot-ledger.md. The audit holon already keeps the per-turn trail

@@ -1,3 +1,4 @@
+// EO: NUL(Kind → Kind, Clearing) — audit record schema/version
 // The audit record schema. One JSON object per turn.
 //
 // {

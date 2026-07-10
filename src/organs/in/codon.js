@@ -1,3 +1,4 @@
+// EO: INS·CON(Void → Entity,Link,Field, Making,Binding) — codon adapter (DNA/RNA frame)
 // The codon adapter — meaning from a raw DNA/RNA reading frame, with NO genetics.
 //
 // The frequency adapter removed music theory and handed the engine bare Hz; octave

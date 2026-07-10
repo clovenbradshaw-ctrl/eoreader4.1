@@ -1,3 +1,4 @@
+// EO: SEG·DEF(Field,Link → Field,Lens, Dissecting,Making) — section headings by field-shift
 // sectionAnswer — mechanically impose section headings on a flat prose answer, by watching the
 // ENTITY FIELD shift across its sentences. This is the same move detectStructure (app.dc.js) makes
 // on a read document — a field-shift boundary detector with a mechanically-derived label — applied

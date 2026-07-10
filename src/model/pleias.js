@@ -1,3 +1,4 @@
+// EO: INS·SEG·SYN(Field → Entity, Making,Dissecting) — Pleias RAG backends
 // Pleias backends — the ethical, source-grounded talkers.
 //
 // WHY Pleias. Every other small talker in this project is trained on web crawl;

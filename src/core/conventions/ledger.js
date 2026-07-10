@@ -1,3 +1,4 @@
+// EO: DEF·EVA·REC(Field → Kind,Paradigm, Dissecting,Binding,Composing) — the conventions ledger
 // The conventions ledger — the CORE's learning layer (reshape §5).
 //
 // This is the home for the language-specific stuff, and it lives in the core, not

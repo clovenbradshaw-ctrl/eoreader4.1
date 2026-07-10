@@ -1,3 +1,4 @@
+// EO: NUL(Network → Void, Clearing) — tiered graph SVG renderer
 // mountTieredGraph — the pivotable tiered graph surface. Entities as nodes
 // across the three helix tiers — existence (the source and the figures INSed
 // from it), structure (the bonds between them), significance (the claims

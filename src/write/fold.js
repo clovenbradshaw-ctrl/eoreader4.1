@@ -1,3 +1,4 @@
+// EO: INS·SIG·NUL(Entity → Entity,Void, Making,Binding,Tending) — frontier + integral; the running state (§2)
 // write/fold.js — the fold: frontier + integral. (SPEC §2)
 //
 // The fold is the substrate's running state. Two parts:

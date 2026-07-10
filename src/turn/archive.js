@@ -1,3 +1,4 @@
+// EO: NUL·SIG(Entity → Entity, Clearing,Tending) — leased store + shredder
 // The archive — where a parsed-but-not-salient research reading is STORED, not lost — and the
 // shredder that eventually destroys it.
 //

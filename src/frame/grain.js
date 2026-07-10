@@ -1,3 +1,4 @@
+// EO: DEF·EVA(Network,Paradigm → Lens,Kind, Dissecting,Binding) — the cube reading + confab guard
 // frame/grain.js — the holon tree, read onto the EO cube. Factored out of
 // tasks/grain.js (which re-exports it unchanged) because nothing in it is a text
 // or task fact: it reads BUILT NODES — children, declared grain — and the cube.

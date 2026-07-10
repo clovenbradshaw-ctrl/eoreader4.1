@@ -1,3 +1,4 @@
+// EO: REC(Field → Kind, Composing) — attribution-verb induction (Pass 0)
 // Pass 0 — attribution-verb induction.
 //
 // Before the reading loop reads a word, it learns how *this* document

@@ -1,3 +1,4 @@
+// EO: EVA(Network → Network,Lens, Tracing) — the four complexities
 // The four complexities — what makes a causal question hard, and where the engine lives.
 //
 // The difficulty of "does X cause Y" is not the effect size (that is a counterfactual, out

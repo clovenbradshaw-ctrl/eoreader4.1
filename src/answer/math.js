@@ -1,3 +1,4 @@
+// EO: EVA·DEF(Void → Lens, Binding,Dissecting) — the math answerer (math.js)
 // The math answerer — math.js, wired in for responding to math problems.
 //
 // This is the one mechanical short-circuit the engine keeps live. The rest were

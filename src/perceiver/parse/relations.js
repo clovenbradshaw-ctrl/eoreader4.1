@@ -1,3 +1,4 @@
+// EO: CON·SIG·DEF(Field,Entity → Link,Lens, Binding,Tracing) — relation extraction (CON/SIG/DEF)
 // Relation extraction → CON (bond), SIG (attribution/speech), DEF (define).
 //
 // The contract is unchanged: never invent a node. Every endpoint of an edge

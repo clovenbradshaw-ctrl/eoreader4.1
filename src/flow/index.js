@@ -1,3 +1,4 @@
+// EO: EVA·SYN·SEG(Network,Paradigm,Field → Lens,Network,Field, Tracing,Composing,Dissecting) — flow witness; trajectory scorer
 // The flow holon — the FLOW WITNESS. (companion to write/witness.js §7)
 //
 // A book is a PATH through shape-space, not a point. This holon loads a distilled

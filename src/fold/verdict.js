@@ -1,3 +1,4 @@
+// EO: EVA·DEF(Network,Lens → Lens, Tracing,Binding) — living-or-dead + sayable-or-not
 // fold/verdict.js — THE TWO CROSS-CUTTING CLASSIFIERS: living-or-dead, sayable-or-not.
 //
 // docs/cognition-catalog.md is the map; this is the machine. Both classifiers are

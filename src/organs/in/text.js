@@ -1,3 +1,4 @@
+// EO: INS·SIG(Void → Entity,Field,Network, Making,Tending) — text ingest
 // Text ingestion. Reads the file, parses it, attaches a lazy sentence-
 // embedding cache. Anything beyond plain text (PDF, audio, OCR) belongs
 // in an adapter that turns its modality into text; the spine stays the same.

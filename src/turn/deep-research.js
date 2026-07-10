@@ -1,3 +1,4 @@
+// EO: SYN·EVA(Network,Field → Network, Composing,Tracing) — deep multi-branch research + report
 // Deep research — the curiosity walk, widened into a plan and deepened into a report.
 // (docs/deep-research.md; the deliberate, multi-branch sibling of the single walk in research.js.)
 //

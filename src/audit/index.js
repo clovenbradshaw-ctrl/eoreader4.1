@@ -1,3 +1,4 @@
+// EO: INS·NUL·SIG(Void,Entity,Kind,Atmosphere → Void,Entity,Kind,Atmosphere, Making,Tending,Binding,Clearing) — barrel
 // The audit holon: the structured trail of every turn.
 
 export { createAuditLog }  from './log.js';

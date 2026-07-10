@@ -1,3 +1,4 @@
+// EO: SEG(Void → Field, Dissecting) — SEG the murmur → candidate propositions
 // talker/segment.js — SEG over the murmur (§3).
 //
 // The model proposes tokens; the gate measures propositions; SEG finds the

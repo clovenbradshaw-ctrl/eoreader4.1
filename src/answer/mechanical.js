@@ -1,3 +1,4 @@
+// EO: EVA·DEF·NUL(Void,Field,Link,Network,Entity → Lens,Void, Binding,Dissecting,Clearing) — mechanical answerers (confirm/relation/who/smalltalk)
 // Mechanical answerers. Cheap, deterministic, no model load.
 // Each returns either {route, text, sources} or null.
 //

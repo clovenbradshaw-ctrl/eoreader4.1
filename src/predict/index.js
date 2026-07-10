@@ -1,3 +1,4 @@
+// EO: EVA·SYN·SEG(Network,Field → Lens,Atmosphere, Tracing,Composing) — barrel
 // The predict holon — the Cursor Predictor.
 //
 // A grounded, testable predictor over the next MOVE (an operator firing with a Site

@@ -1,3 +1,4 @@
+// EO: CON·SYN·SEG(Field,Link → Network,Link,Field, Binding,Composing,Dissecting) — virtual folder filing layer
 // workspace/index.js — the filing layer for the "everything workspace".
 //
 // A pure, DOM-free model of user-created FOLDERS and the membership of items

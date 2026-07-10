@@ -1,3 +1,4 @@
+// EO: EVA·REC·DEF(Field,Lens → Lens,Atmosphere, Making,Cultivating,Clearing) — update stance + confab guard
 // The Stance face — how the surfer MOVES ρ (Track F), and the confabulation guard
 // made quantitative.
 //

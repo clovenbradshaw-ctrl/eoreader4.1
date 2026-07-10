@@ -1,3 +1,4 @@
+// EO: SIG(Field → Atmosphere, Tending) — hash embedder
 // A hash-based embedder. Deterministic, zero-warmup. Used by tests and
 // as the default until the real embedder is warmed.
 //

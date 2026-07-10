@@ -1,3 +1,4 @@
+// EO: EVA·SIG·SYN·REC(Network,Field → Lens,Network, Binding,Tracing,Composing) — barrel
 // perceiver — the PERCEIVER faculty (add-on 2 §A): Existence · constitute. It
 // brings the reading into being, constituting structure from the unit stream — the
 // first of the cognition triad (perceiver → surfer → enactor), the one the surfer

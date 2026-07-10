@@ -1,3 +1,4 @@
+// EO: SIG·SEG(Field → Field, Tending,Dissecting) — forward token-set retrieval
 // Forward token-set retrieval. The hot path — sub-millisecond on docs
 // up to ~5k sentences. No async; no model; no embedder.
 //

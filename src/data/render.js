@@ -1,3 +1,4 @@
+// EO: NUL(Field → Void, Clearing) — table->HTML renderer
 // data/render.js — a table rendered as a table (the document-explorer mockup):
 // a clean grid with a row index, uppercase column heads, and a Raw view. Cells
 // carry data-row/data-col so a chat answer can light the exact cells it computed

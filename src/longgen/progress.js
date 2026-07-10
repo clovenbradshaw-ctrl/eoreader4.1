@@ -1,3 +1,4 @@
+// EO: EVA·SIG(Network,Field → Lens, Tracing,Binding) — progress fold, how far
 // progress — how far along the output is toward its skeleton, as a pure fold
 // (docs/paragraph-at-a-time.md). Message 1's "how far along," under the essay
 // doc's discipline: workspace-state, NEVER a percentage bar ("Progress is not a

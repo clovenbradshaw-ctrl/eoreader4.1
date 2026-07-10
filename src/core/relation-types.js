@@ -1,3 +1,4 @@
+// EO: DEF·EVA(Kind,Link → Kind,Lens, Dissecting,Binding) — relation typing bridge
 // The typing bridge. Open-vocabulary extraction (parse/relations.js) emits
 // surface descriptor nouns on the `via` of a kinship/social CON edge — sister,
 // mother, captain, friend. Those are STRINGS; they carry no algebra. This maps

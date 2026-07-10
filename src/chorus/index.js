@@ -1,3 +1,4 @@
+// EO: NUL·SEG·SIG·CON·EVA·INS(Field,Kind,Network → Field,Network,Entity,Lens, Tending,Clearing,Making) — barrel
 // The chorus holon — rendering the reader's folds as a weighted polyphony across
 // holonic levels and across the three faces, governed by a Born measure over the
 // 27-cell ground, with the vox demoted to a leaf (docs/chorus.md).

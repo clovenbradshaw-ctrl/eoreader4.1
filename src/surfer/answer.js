@@ -1,3 +1,4 @@
+// EO: SYN·SIG(Network,Field → Network,Void, Composing,Binding) — surf reading → answer object
 // surfToAnswer — assemble the surf's reading of a question into a structured, saveable result.
 //
 // The honest contract (the firewall, evaluation.js): the surf is the modeler + the surfer,

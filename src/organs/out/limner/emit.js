@@ -1,3 +1,4 @@
+// EO: INS(Lens → Void, Making) — INS — emit the view event
 // organs/out/limner/emit.js — INS: instantiate the view in the event log.
 //
 // LIMNER emits exactly ONE event per successful render (docs/limner.md §2, §7):

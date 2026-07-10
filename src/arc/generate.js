@@ -1,3 +1,4 @@
+// EO: INS(Field → Entity, Making) — generate one section
 // generateSection — one section's draft, floored and ceilinged by its evidence.
 //
 // The section is generated as a gated sub-turn: the section's `subClaim` (a

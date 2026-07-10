@@ -1,3 +1,4 @@
+// EO: SYN·CON·EVA·DEF(Field,Network,Link → Network,Link,Lens, Composing,Binding,Making) — runEssay — section loop / writer
 // essay/driver.js — runEssay: the section loop, the ONLY writer of the
 // EssayEvent log (docs/longform-generation.md).
 //

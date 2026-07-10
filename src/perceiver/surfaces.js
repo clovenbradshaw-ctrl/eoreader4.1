@@ -1,3 +1,4 @@
+// EO: SIG·NUL(Network,Field → Lens,Void, Binding,Clearing) — 3 reading surfaces + note render
 // The three levels of reading — three surfaces a mechanical "consciousness"
 // queries behind the scenes, each able to ground the talker (the model).
 //

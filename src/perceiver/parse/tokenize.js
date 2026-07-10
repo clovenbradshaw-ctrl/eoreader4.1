@@ -1,3 +1,4 @@
+// EO: SEG(Void → Field, Clearing) — the single tokenizer
 // The single tokenizer. Everything in the system that needs tokens goes
 // through here. Drift between the index and retrieval is impossible.
 

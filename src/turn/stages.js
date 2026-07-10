@@ -1,3 +1,4 @@
+// EO: SEG·INS·EVA(Field,Network → Entity,Lens,Network, Dissecting,Making,Binding) — the named pipeline stages
 // The named, pure stages of a turn. Each takes a context, returns a context.
 // The pipeline composes them; a stage returning {terminate:true} short-
 // circuits the rest.

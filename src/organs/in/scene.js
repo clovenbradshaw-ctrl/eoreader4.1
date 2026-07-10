@@ -1,3 +1,4 @@
+// EO: CON·SYN(Void → Link,Field, Binding,Composing) — scene composer (vision, pure)
 // The scene composer — a vision model's structured output, made into the DETECTIONS
 // the image organ already eats. This is the pure half of the vision organ; the model
 // wiring (Florence-2 via Transformers.js) lives in src/reader/eo/vision.js and is

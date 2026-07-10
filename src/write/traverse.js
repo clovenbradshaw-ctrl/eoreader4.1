@@ -1,3 +1,4 @@
+// EO: SEG·CON·SYN(Network → Field,Link, Composing,Tracing,Unraveling) — concept -> traverse -> words
 // Concept → traversal → words. The generation direction, from the top.
 //
 // You do not write word-first. You hold the concept IMAGISTICALLY — the activated

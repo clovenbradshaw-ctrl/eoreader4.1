@@ -1,3 +1,4 @@
+// EO: SEG(Field → Field,Link, Dissecting) — clause grain layer
 // The clause layer — the embedding grain SURF was designed for but never got.
 //
 // Every place meaning enters the reader (retrieval, the deep frame axis, the

@@ -1,3 +1,4 @@
+// EO: NUL·SEG·DEF·CON·EVA·INS·SYN(Void,Field,Link,Network → Entity,Field,Link,Network,Lens,Void, Clearing,Dissecting,Unraveling,Binding,Tracing,Making,Composing) — barrel
 // doc/index.js — EO change tracking: a written document as a grounded projection
 // over an append-only edit log.
 //

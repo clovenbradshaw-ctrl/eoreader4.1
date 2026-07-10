@@ -1,3 +1,4 @@
+// EO: DEF(Field → Lens,Atmosphere, Dissecting) — dialectical CON stance
 // The dialectical CON stance — accidental · essential · generative.
 //
 // CON (the bond at Relate × Structure) is the operator that ties this to that. On a

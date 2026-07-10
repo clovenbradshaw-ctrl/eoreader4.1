@@ -1,3 +1,4 @@
+// EO: SYN·CON·DEF(Network,Field → Field,Network, Composing,Tracing,Making) — the composition walk; renderer at the very end
 // write/composition.js — the composition walk: the write loop with the renderer at the very end.
 //
 // streamAnswer (answer.js) is the writer's beat loop pointed at the TEXT talker. This is the

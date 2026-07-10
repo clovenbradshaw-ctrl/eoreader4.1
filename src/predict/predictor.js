@@ -1,3 +1,4 @@
+// EO: EVA·SYN(Network,Atmosphere → Lens,Void, Tracing,Composing) — fuse priors to posterior
 // The predictor — fuse the three priors into a posterior over the next move.
 //
 // The next move's probability comes from three sources (§2 of the spec), over

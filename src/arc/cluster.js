@@ -1,3 +1,4 @@
+// EO: SIG·SYN(Field → Network, Tending,Composing) — supply: bindable spans, clusters
 // SUPPLY — the evidence budget (§5.2).
 //
 // After retrieval we have ranked spans `{idx, score, text}`. The bindable ones

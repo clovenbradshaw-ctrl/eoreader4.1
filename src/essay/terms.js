@@ -1,3 +1,4 @@
+// EO: EVA·SIG(Field,Link → Lens, Binding,Tending) — term-overlap / polarity checks
 // essay/terms.js — the mechanical term reading the gates and ledgers share.
 //
 // Contradiction and repetition checks must be MEASUREMENTS, not model calls —

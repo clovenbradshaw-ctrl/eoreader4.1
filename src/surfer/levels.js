@@ -1,3 +1,4 @@
+// EO: SEG·SYN·EVA(Field,Network → Network,Field, Unraveling,Composing,Tracing) — multi-grain coarse spine
 // Multi-grain encoding — the accumulation layer (the spec's "reading that accumulates").
 //
 // The total read (perceiver/parse) produces a graph at SENTENCE grain: a graded edge per

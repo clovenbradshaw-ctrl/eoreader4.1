@@ -1,3 +1,4 @@
+// EO: SYN·SIG·CON(Network → Network,Field, Composing,Tracing,Binding) — the brief as RDF-star + EO annotations
 // The brief as RDF-star — triples the LLM already knows, annotated with the EO richness.
 //
 // A flat x→relation→y triple is a standard an LLM has seen a million times (RDF/Turtle/OWL),

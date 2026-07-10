@@ -1,3 +1,4 @@
+// EO: SYN·CON(Field → Network, Composing,Tracing) — projectFrameStack — the read/fold
 // frame/project.js — projectFrameStack: a pure fold of the event log into the
 // nested tree PLUS the active path (docs/frame-holon.md).
 //

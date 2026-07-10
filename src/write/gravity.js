@@ -1,3 +1,4 @@
+// EO: SYN·EVA·DEF(Network,Field → Network,Field,Lens, Composing,Tracing,Making) — weight of the turn; the arc broadcast
 // write/gravity.js — the weight of the turn: the surf's discarded dynamics, broadcast.
 // (docs/weight-of-the-turn.md)
 //

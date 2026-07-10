@@ -1,3 +1,4 @@
+// EO: SYN·REC(Field,Network → Lens, Composing,Making) — decision as relaxation
 // relax — the decision as a network relaxing into an attractor, not a readout consulted
 // (docs/decision-as-relaxation.md). Measuring, reading, and deciding are one event: the
 // field's occupancy IS the input current, and the settling IS the choice. There is no step

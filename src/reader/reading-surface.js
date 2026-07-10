@@ -1,3 +1,4 @@
+// EO: NUL(Field → Void, Clearing) — reading-JSONL DOM surface
 // reader/reading-surface.js — a surface to SEE the reading of any document, as JSONL.
 //
 // The engine reads every ingested document through its whole predictive stack (ingest/read.js:

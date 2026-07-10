@@ -1,3 +1,4 @@
+// EO: NUL(Network → Void, Clearing) — inverse renderer: log -> EOT surface
 // EOT emission — the inverse of the ingester (docs/eot-surface-syntax.md, ingest/eot.js).
 //
 // The ingester lowers EOT surface → canonical EO tuples → the live engine log. This module

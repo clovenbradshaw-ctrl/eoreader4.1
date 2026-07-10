@@ -1,3 +1,4 @@
+// EO: INS·SYN·SIG(Field → Entity,Field, Making,Tending) — barrel
 // The model holon: swappable LLM backends + the embedder + the grounded prompt.
 //
 // Built-in backends are registered as a side-effect of importing this index.

@@ -1,3 +1,4 @@
+// EO: SEG·EVA·SYN(Field → Field,Network, Dissecting,Tracing,Composing) — block-by-block revision core
 // doc/revise.js — revising a standing document, block by block.
 //
 // The reader ships a long answer as one text; when the user asks to edit it —

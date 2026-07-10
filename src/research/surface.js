@@ -1,3 +1,4 @@
+// EO: NUL·SIG(Void,Network → Void, Clearing,Tending) — mountResearchSurface — the DOM UI
 // research/surface.js — the deep-research surface, mountable anywhere.
 //
 // The main app mounts it in the right panel (reader/app.dc.js →

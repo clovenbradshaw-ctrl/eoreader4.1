@@ -1,3 +1,4 @@
+// EO: EVA·SIG(Link,Entity → Atmosphere, Binding,Tending) — the one monitor
 // enactor/monitor.js — the ONE monitor (add-on 3 §3, §4).
 //
 // THE HEADLINE: each output organ does NOT get its own feedback mechanism. There

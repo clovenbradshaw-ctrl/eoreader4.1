@@ -1,3 +1,4 @@
+// EO: EVA·SYN(Field,Network,Lens → Lens,Network, Binding,Composing) — proposition DEF-claim veto (P2)
 // The proposition channel — the claim-grain veto for DEF predications (the P2
 // channel the edge-grounding veto left open).
 //

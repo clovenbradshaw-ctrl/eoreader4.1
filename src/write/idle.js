@@ -1,3 +1,4 @@
+// EO: INS·EVA·REC(Void,Field → Entity,Void, Cultivating,Tending,Composing) — the governed idle loop (§15)
 // write/idle.js — the governed idle loop. (SPEC §15)
 //
 // The chatbot posture — inert until prompted — is a gate held shut, not the

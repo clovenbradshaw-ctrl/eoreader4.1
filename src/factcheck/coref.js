@@ -1,3 +1,4 @@
+// EO: CON·EVA·SYN(Entity,Field → Link,Atmosphere, Binding,Making) — coref-as-proposal
 // Coreference as proposal — the talker's coref strength cashed in honestly.
 //
 // The talker is good at coreference: it binds "the trooper," "Sgt. Topps," "the

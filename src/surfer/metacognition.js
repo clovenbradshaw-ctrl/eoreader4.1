@@ -1,3 +1,4 @@
+// EO: EVA·NUL(Field → Lens,Void, Binding,Clearing) — meaningfulness + visible trace
 // Metacognition — the machine testing the MEANINGFULNESS of any content with the Born rule,
 // and making the reading VISIBLE as it happens.
 //

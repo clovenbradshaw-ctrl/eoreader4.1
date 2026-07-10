@@ -1,3 +1,4 @@
+// EO: SEG·EVA(Field,Link → Link, Dissecting) — argument-span SEG (S/V/O)
 // Proposition addressing — the argument-span reading and the element positioning.
 //
 // TWO SENSES OF SPAN (§1). A *retrieval* span is a whole sentence pulled by the

@@ -1,3 +1,4 @@
+// EO: SIG(Field → Atmosphere, Tending) — forgetting Beta/EW estimators
 // The credence estimators (source-trajectory spec §4).
 //
 // Two filters, both forgetting, both deterministic — no RNG, so a projection

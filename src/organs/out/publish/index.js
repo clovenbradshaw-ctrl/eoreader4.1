@@ -1,3 +1,4 @@
+// EO: SIG·NUL(Field → Void, Tending,Clearing) — barrel — archival publish family
 // organs/out/publish — the archival OUTPUT family: a doc or a claim → a durable,
 // self-verifying artifact. The mirror of the layout ingest adapters (organs/in): they
 // raise a civic source onto span-addressable spine; these lower a spine (or a claim)

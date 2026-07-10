@@ -1,3 +1,4 @@
+// EO: SYN·DEF·EVA(Field → Network,Lens, Composing,Dissecting,Tracing) — the conversation fold
 // conversation-fold.js — the Conversation Fold: a pure projection over the
 // conversation event log (a chat's turns), sibling to projectGraph. It carries
 // the STANCE forward so a turn inherits what it's doing instead of re-deciding

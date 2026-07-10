@@ -1,3 +1,4 @@
+// EO: INS·CON·DEF(Field → Entity,Link,Field, Making,Binding,Dissecting) — span assembler / shared spine
 // The document assembler — shared spine for every layout-bearing source.
 //
 // A native-text PDF, a scanned page OCR'd, a SmolDocling conversion, a scraped

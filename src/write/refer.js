@@ -1,3 +1,4 @@
+// EO: DEF·EVA·INS(Entity,Field → Field,Lens, Making,Binding) — referring generation; inverse coref + the self line
 // Writing is reading backwards — referring expression generation as inverse coref.
 //
 // The reader does not pick an antecedent for "he"; a pronoun induces a FIELD over the

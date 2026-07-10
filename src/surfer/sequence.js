@@ -1,3 +1,4 @@
+// EO: REC·EVA(Field,Network → Network,Field, Composing,Tracing) — learned-sequence reader (n-gram)
 // The learned-sequence reader — prediction from the signal's own regularities.
 //
 // `reading.js` predicts who-acts-next by γ-mass alone: the warmest figure, a

@@ -1,3 +1,4 @@
+// EO: SEG·EVA·SYN(Field → Field,Lens,Paradigm, Dissecting,Tracing,Composing) — the surfer core — surfFold
 // The surfer — a surfer with no pilot. (docs/surfing-the-fold.md)
 //
 // The fold used to read significance at one fixed cursor: the top retrieval hit.

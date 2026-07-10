@@ -1,3 +1,4 @@
+// EO: SEG·SYN(Field,Network → Network,Void, Dissecting,Composing) — surf → grounded basis
 // enactor/basis.js — surf → grounded basis (§4).
 //
 // The DEF the enactor's gate holds (modality-blind; add-on 3 §1). A thin adapter

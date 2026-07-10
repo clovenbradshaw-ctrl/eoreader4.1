@@ -1,3 +1,4 @@
+// EO: NUL·SIG(Network → Void, Clearing,Binding) — live panel re-projection
 // essay/live.js — the real-time projection: the workspace, not a percentage.
 //
 // Progress is not a bar. If the spine can revise, the denominator moves, so

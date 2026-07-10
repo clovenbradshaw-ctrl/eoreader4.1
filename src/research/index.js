@@ -1,3 +1,4 @@
+// EO: DEF·SYN·CON·EVA·REC·SIG·INS·NUL(Void,Field,Network → Entity,Network,Paradigm,Void,Atmosphere, Making,Clearing,Composing,Tracing,Tending) — barrel
 // research/index.js — deep research as a grounded projection over an
 // append-only log (docs/deep-research-log.md).
 //

@@ -1,3 +1,4 @@
+// EO: SYN·CON(Network,Field → Network,Entity, Composing,Binding) — runTurn — the pass composition
 // runTurn — the turn is a fold of its named stages.
 //
 // stages.reduce(...) over the pipeline list; each stage takes a context

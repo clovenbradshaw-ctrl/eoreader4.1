@@ -1,3 +1,4 @@
+// EO: SYN·NUL(Field,Entity → Network, Making) — naming-scene coref (vocative↔role)
 // The naming-scene discovery — coreference by direct address.
 //
 // A standing role epithet ("his sister") is a REFERENT that carries its owner's

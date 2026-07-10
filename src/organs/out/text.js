@@ -1,3 +1,4 @@
+// EO: NUL(Lens → Void, Clearing) — text output organ (bare renderer)
 // organs/out/text — the TEXT output organ, a bare renderer (props → prose).
 //
 // The mirror of organs/in/text (which raises sentences onto the spine): this lowers

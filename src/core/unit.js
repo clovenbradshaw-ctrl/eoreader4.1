@@ -1,3 +1,4 @@
+// EO: NUL·INS(Void → Void, Clearing,Cultivating) — the bare unit (ingestion floor)
 // The bare unit — the floor of INGESTION, the input membrane (reshape §1/§2/§8.0).
 //
 // Two floors, not one. The floor of MEANING is the proposition (the triadic

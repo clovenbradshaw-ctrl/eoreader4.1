@@ -1,3 +1,4 @@
+// EO: SEG·SIG(Field,Kind → Lens, Unraveling,Tending) — face marginals
 // The three faces as axis-marginals of the cube (docs/chorus.md, "The fold-voice").
 //
 // The primary measure is the distribution over the 27-cell cube (born.js). The

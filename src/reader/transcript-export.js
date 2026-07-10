@@ -1,3 +1,4 @@
+// EO: NUL·SEG(Field → Void, Clearing,Dissecting) — transcript export renderer
 // transcript-export.js — turn a heard transcript (the audio organ's doc) into the
 // files a listener actually wants to keep: captions (SRT/VTT), the plain prose, and
 // the timed structure (paragraphs, sentences, per-word). Plus one that shows the

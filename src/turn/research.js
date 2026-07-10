@@ -1,3 +1,4 @@
+// EO: EVA·SYN(Network,Field → Network, Tracing,Composing) — curiosity-guided multi-hop research
 // Curiosity-guided research — multi-hop web research that follows the engine's own surprise.
 // (docs/curiosity-research.md; the multi-hop sibling of the single-shot path in web.js.)
 //

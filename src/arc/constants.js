@@ -1,3 +1,4 @@
+// EO: NUL(Atmosphere → Atmosphere, Clearing) — arc thresholds and priors
 // The arc's constants. Length is emergent — these set the GRAIN at which
 // evidence is read (what counts as bindable, what counts as a cluster) and the
 // GUARDS that catch a runaway. None of them is a token target; the only genuine

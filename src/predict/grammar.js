@@ -1,3 +1,4 @@
+// EO: REC·SIG(Field,Paradigm → Paradigm,Atmosphere, Composing,Tending) — learned move-grammar
 // The small, learned-once move-grammar — the realization grammar for moves.
 //
 // The operator grammar has regularities of its own: the helix order, the triads,

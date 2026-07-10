@@ -1,3 +1,4 @@
+// EO: EVA·CON·DEF(Link,Field,Entity → Lens,Void, Binding,Tracing,Clearing) — rebind + source veto + type law (§7)
 // write/witness.js — the witness: rebind, source veto, type law. (SPEC §7)
 //
 // The witness is INDEPENDENT of the renderer (it never renders). It runs after each

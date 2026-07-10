@@ -1,3 +1,4 @@
+// EO: NUL(Void → Void, Clearing) — degenerate-line guard
 // The degenerate-structure guard.
 //
 // This is NOT chrome detection by a list of conventions — that is a semantic

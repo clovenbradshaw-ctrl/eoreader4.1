@@ -1,3 +1,4 @@
+// EO: EVA·DEF·REC(Network,Link → Lens, Binding,Tracing) — decideBind — the bind decision
 // frame/bind.js — decideBind: the one bind, generalized from frame-binding-route
 // Phase 3's single-frame couplings to the whole active path (docs/frame-holon.md).
 //

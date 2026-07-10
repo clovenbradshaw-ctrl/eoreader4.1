@@ -1,3 +1,4 @@
+// EO: SEG·SYN(Void → Network, Dissecting,Composing) — code adapter — source → EOT graph
 // The code adapter — source code as a traversable EO reading.
 //
 // Every other input organ turns its modality into the modality-neutral spine the core

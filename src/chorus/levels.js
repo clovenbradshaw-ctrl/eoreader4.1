@@ -1,3 +1,4 @@
+// EO: SEG·SIG(Field,Network → Network, Unraveling,Tracing) — level governor, sketch
 // Levels as rotated bases — the level governor (docs/chorus.md, "Levels as
 // rotated bases").
 //

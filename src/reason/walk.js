@@ -1,3 +1,4 @@
+// EO: SYN·CON·REC(Network,Link → Network,Link,Paradigm, Composing,Binding) — the reasoning walk
 // reason/walk.js — the reasoning walk: continuous, meaningful output as a loop over the log.
 //
 // think.js (the inner-speech loop) reorganises attention over structure the corpus ALREADY

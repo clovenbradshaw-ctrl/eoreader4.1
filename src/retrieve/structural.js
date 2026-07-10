@@ -1,3 +1,4 @@
+// EO: SEG·SIG·DEF(Field,Network → Field,Lens, Unraveling,Tracing) — skeleton + member retrieval
 // Structural retrieval — the document's own skeleton, for the Paradigm terrain.
 //
 // A PATTERN-GRAIN task on the Paradigm terrain (a `summary` — the whole read as one frame;

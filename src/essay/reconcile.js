@@ -1,3 +1,4 @@
+// EO: EVA(Network → Lens, Tracing,Binding) — global reconciliation pass
 // essay/reconcile.js — the global pass over the assembled draft.
 //
 // Each section was written with a small workspace, so cross-section drift is

@@ -1,3 +1,4 @@
+// EO: INS·SIG·REC(Network,Void → Void,Field, Cultivating,Tending,Composing) — inner speech turned inward; voids as fuel
 // write/think.js — thinking as impressionistic talking turned inward. (the inner-speech loop)
 //
 // The phraser→talker arc (brief.js) runs OUTWARD: an impression (the pre-verbal scene a

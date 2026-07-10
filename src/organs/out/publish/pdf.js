@@ -1,3 +1,4 @@
+// EO: SIG·NUL(Field → Void, Tending,Clearing) — PDF plan — embeds provenance/audit trail
 // Publish → PDF, with pdf-lib — a PDF that carries its own audit trail.
 //
 // jsPDF only lays glyphs out; the reason to publish through pdf-lib instead is that

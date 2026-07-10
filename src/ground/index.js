@@ -1,3 +1,4 @@
+// EO: CON·EVA(Field,Link,Network → Link,Lens, Binding,Tracing) — barrel
 // The ground holon: cite-or-veto. The integrity guarantee.
 
 export { bindCitations, renderBound } from './bind.js';

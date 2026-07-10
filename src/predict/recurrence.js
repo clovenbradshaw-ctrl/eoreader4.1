@@ -1,3 +1,4 @@
+// EO: SIG(Field → Atmosphere, Tracing) — recurrence prior, Phase 1
 // Phase 1 — the recurrence prior. An n-gram over the move alphabet, estimated
 // from the log up to the cursor and nothing else.
 //

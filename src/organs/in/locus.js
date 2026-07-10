@@ -1,3 +1,4 @@
+// EO: SEG·SIG·EVA(Void → Field, Dissecting,Tending,Tracing) — locus — DNA window → ρ columns (vₖ,wₖ,sₖ)
 // The locus adapter — a window of DNA → reading vectors (vₖ), weights (wₖ), and
 // stance signs (sₖ), the three columns the density operator ρ is built from
 // (docs/genome-rho.md). This is the one piece of real design the genome-ρ experiment

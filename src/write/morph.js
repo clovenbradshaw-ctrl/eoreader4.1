@@ -1,3 +1,4 @@
+// EO: DEF·NUL(Void → Void, Making,Clearing) — past-tense morphology (the productive rules)
 // Past-tense morphology for realization — turn a bare/gerund relation-verb into the
 // narrative past so a retelling reads as prose, not telegraphese ("accept"→"accepted",
 // "jump"→"jumped", "pushing"→"pushed", "make"→"made"). The parse often hands us a verb with

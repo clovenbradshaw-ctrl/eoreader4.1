@@ -1,3 +1,4 @@
+// EO: DEF·EVA(Entity,Paradigm → Lens, Dissecting,Binding) — cube reading of nodes (re-export)
 // tasks/grain.js — the task graph, read onto the EO cube.
 //
 // The reading is the interior frame holon's (frame/grain.js, docs/frame-holon.md),

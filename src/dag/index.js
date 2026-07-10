@@ -1,3 +1,4 @@
+// EO: CON·SYN·EVA(Link,Network → Network,Lens, Tracing,Composing) — asserted/corpus DAG, barrel
 // The DAG holon — extract a DAG from a corpus, with two cursors.
 //
 // (1) discourseDag — the flow of content WITHIN the document itself (discourse.js).

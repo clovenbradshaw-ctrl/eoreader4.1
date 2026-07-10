@@ -1,3 +1,4 @@
+// EO: DEF·EVA·REC(Field,Atmosphere → Lens,Paradigm, Dissecting,Binding,Composing) — enacted DEF-EVA-REC loop
 // The enacted DEF–EVA–REC loop — the significance engine.
 //
 // This is the ENACTED loop, not the depicted one. The depicted loop (classify/)

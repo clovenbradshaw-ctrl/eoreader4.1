@@ -1,3 +1,4 @@
+// EO: NUL·EVA(Link → Void,Lens, Clearing,Binding) — surface renderers + validator
 // essay/renderers.js — many surfaces, one commitment graph.
 //
 // Renderers are per-modality and all fold the SAME commitments, the way the

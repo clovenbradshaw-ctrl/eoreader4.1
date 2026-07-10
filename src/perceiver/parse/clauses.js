@@ -1,3 +1,4 @@
+// EO: SEG(Field → Field, Dissecting) — clause segmentation (§8)
 // Clause segmentation — the §8 carve-limit fix (the "SEG-first rework" relations.js
 // flags in its own comment). A sentence is cut into clause spans on coordinating /
 // subordinating boundaries, each carrying its offset back into the sentence.

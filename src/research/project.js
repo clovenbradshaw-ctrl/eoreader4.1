@@ -1,3 +1,4 @@
+// EO: SYN·EVA(Network → Network, Composing,Tracing) — projectReport — the pure fold
 // research/project.js — projectReport: a pure fold of the ResearchEvent log into
 // the sectioned report (docs/deep-research-log.md).
 //

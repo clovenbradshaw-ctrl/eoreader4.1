@@ -1,3 +1,4 @@
+// EO: DEF·SIG(Link → Lens, Dissecting,Binding) — holonic token confinement
 // confine — the projection from a cursor's holonic address to its token confinement
 // (docs/holonic-token-confinement.md). The GPS coordinate → the morphogen gradient.
 //

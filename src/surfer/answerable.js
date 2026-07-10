@@ -1,3 +1,4 @@
+// EO: EVA·DEF·NUL(Field,Entity → Void, Clearing,Tending) — answerability — is field void
 // Answerability — is there an answer to give, or is the field VOID here?
 //
 // (docs/answerability.md) The talker's worst failure is the invented answer: hand

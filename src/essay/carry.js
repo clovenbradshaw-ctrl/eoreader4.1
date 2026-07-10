@@ -1,3 +1,4 @@
+// EO: SYN·NUL·SEG(Field,Link → Field, Composing,Clearing) — the doorway carry / chunk
 // essay/carry.js — the compressed state that crosses each doorway.
 //
 // Small by law: the carry is a CHUNK — the prior sections consolidated into

@@ -1,3 +1,4 @@
+// EO: SEG·CON·INS(Field,Network → Network,Link, Dissecting,Binding,Making) — span->cell resolver (streaming answer §2)
 // write/plan.js — the span→cell resolver: a surfer stop becomes a cursor cell.
 // (The Streaming Answer §2, §7 Piece 1)
 //

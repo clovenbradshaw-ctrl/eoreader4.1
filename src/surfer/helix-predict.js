@@ -1,3 +1,4 @@
+// EO: EVA·REC·SYN(Field,Network → Paradigm,Field, Tracing,Composing) — helix-aware predictor
 // The helix-aware predictor — predict the move against the frame, and let a stale
 // basis be a REC, not endless surprise.
 //

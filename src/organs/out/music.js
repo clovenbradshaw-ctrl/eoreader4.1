@@ -1,3 +1,4 @@
+// EO: NUL(Lens → Void, Clearing) — music output organ (bare renderer)
 // organs/out/music — the MUSIC output organ, a bare renderer (a directive → a phrase).
 //
 // The mirror of organs/in/music (which raises a melody onto the spine as notes): this

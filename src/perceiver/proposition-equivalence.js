@@ -1,3 +1,4 @@
+// EO: EVA·SYN·REC(Link,Field → Network,Kind, Composing,Binding) — same-assertion attest
 // Proposition equivalence — "are these two clauses the SAME assertion?", attested.
 //
 // equivalence.js asks this of TONES and answers it from overtone overlap. asterisk.js

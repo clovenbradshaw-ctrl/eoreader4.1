@@ -1,3 +1,4 @@
+// EO: SEG·INS·CON·SYN·DEF(Void,Field → Network,Entity,Field, Composing) — barrel
 // The parse holon: text → events on a fresh log + a forward token index.
 //
 // Two entry points:

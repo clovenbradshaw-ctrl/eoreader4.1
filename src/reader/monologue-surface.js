@@ -1,3 +1,4 @@
+// EO: NUL·EVA(Atmosphere,Network → Void, Clearing,Tending) — inner-monologue surface
 // reader/monologue-surface.js — a surface to SEE the model's INNER MONOLOGUE, at rest.
 //
 // The chat posture is inert until prompted, but idleness is the suppression to justify, not the

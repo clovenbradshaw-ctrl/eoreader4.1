@@ -1,3 +1,4 @@
+// EO: SYN·CON·EVA(Network,Field → Field,Lens, Composing,Binding,Tracing) — phraser -> talker hand-off + propositional veto
 // The phraser → talker hand-off.
 //
 // This engine is the PHRASER: it determines WHAT to say — grounded propositions read off the

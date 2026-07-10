@@ -1,3 +1,4 @@
+// EO: SIG·INS·SEG·NUL(Void,Field,Network → Entity,Field,Network,Void, Binding,Making,Clearing) — barrel
 // The ingest holon: structured-data surface forms → canonical EO tuples.
 //
 // EOT (docs/eot-surface-syntax.md) is the producer-friendly front end — punctuation shapes a

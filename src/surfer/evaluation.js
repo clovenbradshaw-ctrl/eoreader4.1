@@ -1,3 +1,4 @@
+// EO: EVA·SIG(Field,Atmosphere → Lens, Tracing,Binding) — the modeler — narrator evaluation
 // Attributed evaluation — the MODELER, not the evaluator. Faculty #2 of the three that
 // the EVA label was carrying.
 //

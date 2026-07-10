@@ -1,3 +1,4 @@
+// EO: SYN·CON·EVA(Field,Network → Network, Composing,Binding,Tracing) — multi-paragraph walk
 // walk — the in-run multi-paragraph loop (docs/paragraph-at-a-time.md, the
 // multi-paragraph-walk spec). v1 writes the whole design in one call: given a
 // FOLD (ranked evidence spans), a DESIGN (ordered beats, or a { demand, outline }

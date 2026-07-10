@@ -1,3 +1,4 @@
+// EO: NUL(Network,Lens → Void, Clearing) — mountDagSurface renderer
 // mountDagSurface — the dag holon's own mountable surface (sibling to research's
 // mountResearchSurface and doc's mountDocSurface). The holon owns its rendering; the app
 // only hands it a container and the parsed sources. Pure DOM, browser-safe.

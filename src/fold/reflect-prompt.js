@@ -1,3 +1,4 @@
+// EO: DEF·SEG·EVA(Field,Void → Lens,Void, Dissecting,Binding) — the reflect prompt + output discipline
 // fold/reflect-prompt.js — the SIGNIFICANCE reflection prompt: elicit ONLY the one form
 // the generation fold wants, and enforce it on the way out.
 //

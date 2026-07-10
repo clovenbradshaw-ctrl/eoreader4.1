@@ -1,3 +1,4 @@
+// EO: NUL·SEG(Field → Field, Clearing,Dissecting) — what the model would be fed
 // buildFeed — what a message would hand the model, without sending it.
 //
 // The turn is a fold of named stages (pipeline.js). The model is touched at one

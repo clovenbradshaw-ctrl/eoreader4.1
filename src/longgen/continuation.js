@@ -1,3 +1,4 @@
+// EO: SYN·INS·EVA(Field,Atmosphere,Network → Network, Composing,Making,Tracing) — the closure run forward
 // runContinuation — long generation across messages, the closure run forward, with
 // the planner's faces wired in (docs/long-generation.md, docs/spec-planner.md).
 //

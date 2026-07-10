@@ -1,3 +1,4 @@
+// EO: SIG·EVA(Paradigm,Kind → Lens, Binding,Tracing) — stages spelled on three faces
 // The pipeline, spelled on all three faces — migration step 1 of
 // docs/spec-good-watchmaker.md ("Print the faces").
 //

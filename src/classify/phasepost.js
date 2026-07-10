@@ -1,3 +1,4 @@
+// EO: EVA·SIG(Field,Lens,Kind,Link → Lens, Binding,Tracing) — geometric phasepost classifier
 // The centroid measurement classifier — the geometric reader.
 //
 // Classification is measurement, not choice. A cell is an address, read off a

@@ -1,3 +1,4 @@
+// EO: SIG·REC(Void → Atmosphere,Paradigm, Tending) — front-matter metadata harvest
 // Front-matter metadata — the document's bibliographic header, read off its SHAPE.
 //
 // A human-language document conventionally opens with a block of LABELED FIELDS:

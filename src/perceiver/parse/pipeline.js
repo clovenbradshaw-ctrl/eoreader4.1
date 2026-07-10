@@ -1,3 +1,4 @@
+// EO: INS·CON·SYN(Void → Network,Field, Composing) — parse orchestrator (text→doc)
 // parseText / createParser — text → doc.
 //
 // The factory form is the engine reality: the parser instance owns its

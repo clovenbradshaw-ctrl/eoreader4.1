@@ -1,3 +1,4 @@
+// EO: SEG(Network,Kind → Field, Dissecting) — reconcile demand and supply
 // RECONCILE → the section plan (SEG, §5.3).
 //
 // Demand (scopeClass) and supply (clusters) meet here. The coverage policy

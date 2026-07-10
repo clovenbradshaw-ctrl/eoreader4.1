@@ -1,3 +1,4 @@
+// EO: NUL·SIG(Lens,Field → Void, Clearing,Tending) — barrel — output membrane (organs + publish)
 // organs/out — the OUTPUT membrane (reshape §3, docs/omnimodal-task-language.md).
 //
 // The mirror of organs/in. An input organ RAISES a modality onto the modality-neutral

@@ -1,3 +1,4 @@
+// EO: DEF·SEG·REC(Void,Field,Paradigm → Kind,Network,Paradigm, Dissecting,Unraveling,Composing) — task creator: request->spec->plan
 // tasks/spec.js — the TASK CREATOR: a request → an artifact spec → a decomposition.
 //
 // The tasks holon (runner.js) drives a goal down to leaves and generates each one,

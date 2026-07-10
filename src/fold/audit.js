@@ -1,3 +1,4 @@
+// EO: EVA·SIG(Network,Field → Lens, Tracing,Tending) — the monologue audit; is it helping?
 // fold/audit.js — IS THE INNER MONOLOGUE ACTUALLY HELPING?
 //
 // The deep reader (fold/deep-reading.js) reflects when the model is not otherwise busy — it

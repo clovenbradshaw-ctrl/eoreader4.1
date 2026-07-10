@@ -1,3 +1,4 @@
+// EO: NUL(Network → Void, Clearing) — Google-Docs page renderer
 // doc/render.js — the document as a Google-Docs-style page: a paper canvas of
 // grounded blocks, with pending edits shown as suggestions (Google Docs'
 // "Suggesting" mode) and a margin card per change to accept or reject.

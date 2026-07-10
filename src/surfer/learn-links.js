@@ -1,3 +1,4 @@
+// EO: REC·EVA(Link,Field → Kind,Paradigm, Composing,Binding) — grow link-types from labels
 // Growing specific link-types from the links the closed vocabulary leaves untyped —
 // label feedback (word → concept), the half the reading side never had.
 //

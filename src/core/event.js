@@ -1,3 +1,4 @@
+// EO: INS(Void → Entity, Making) — event constructor op(Site,Res)
 // core/event.js — the formal event op(Site, Resolution, Provenance, t). (SPEC §1, §3)
 //
 // Every entry in the append-only log is an EVENT. The reading side already speaks

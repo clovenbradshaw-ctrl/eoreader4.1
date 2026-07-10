@@ -1,3 +1,4 @@
+// EO: NUL·EVA(Kind → Kind,Lens, Clearing,Binding) — cube geometry + coherence guard
 // The cube, named in full — the third axis and the two faces that carry it.
 //
 // core/operators.js fixes each operator's (Mode, Domain) — the Act face. This

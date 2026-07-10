@@ -1,3 +1,4 @@
+// EO: EVA·SEG·DEF·NUL(Entity,Network,Lens → Link,Lens,Void, Binding,Dissecting,Clearing) — credence write side
 // createCredenceBook — the write side of the credence holon (spec §7).
 //
 // It mirrors createParser: the instance owns the write-time state (the per-

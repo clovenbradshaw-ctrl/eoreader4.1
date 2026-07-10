@@ -1,3 +1,4 @@
+// EO: NUL(Void → Void, Clearing) — runaway guards (depth/fanout/nodes)
 // frame/constants.js — the interior holon's runaway guards (docs/frame-holon.md).
 //
 // Factored out of tasks/constants.js (which re-exports them unchanged) so the

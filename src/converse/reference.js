@@ -1,3 +1,4 @@
+// EO: DEF·SIG·EVA(Entity,Field,Link → Entity,Atmosphere, Binding,Dissecting,Tracing) — reference by reading / referent resolver
 // Reference by reading — resolve a follow-up's referent by reading the conversation
 // as the tail of the reading line, not by matching its surface form.
 // (docs/reference-by-reading.md)

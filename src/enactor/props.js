@@ -1,3 +1,4 @@
+// EO: DEF·EVA(Field,Link → Link, Dissecting,Binding) — proposition unit + EVA measure
 // enactor/props.js — the proposition unit and the RELATIONAL correspondence
 // (the enactor's EVA measure, modality-blind; add-on 3 §1).
 //

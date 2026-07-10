@@ -1,3 +1,4 @@
+// EO: REC(Field → Kind, Composing) — corpus conventions as prior
 // Inheriting corpus conventions — the HOW a reader brings to a new document.
 //
 // data/conventions/corpus-relations.json holds the relation-predicate vocabulary harvested

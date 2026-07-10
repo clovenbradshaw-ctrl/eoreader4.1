@@ -1,3 +1,4 @@
+// EO: INS(Void → Entity, Making) — append-only edit-event log
 // doc/events.js — EO change tracking as an append-only log.
 //
 // A written document is not a mutable buffer; it is a fold of edit events, the

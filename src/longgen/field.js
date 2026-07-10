@@ -1,3 +1,4 @@
+// EO: SEG·DEF(Field,Atmosphere,Paradigm → Field, Unraveling,Clearing) — field read: turn boundaries
 // field — the turn (REC) as a BOUNDARY in the generated field (docs/generation-by-field-reading.md).
 //
 // essay-backwards.md hit a wall: the fine cadence — when to turn — is not coaxable out

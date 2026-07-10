@@ -1,3 +1,4 @@
+// EO: NUL(Void,Atmosphere → Void, Clearing) — EOT ledger terminal drawer (DOM)
 // The EOT terminal — the ledger, surfaced as a live feed in the running app.
 //
 // docs/eot-ledger.md. A classic terminal drawer: newest at the bottom, auto-

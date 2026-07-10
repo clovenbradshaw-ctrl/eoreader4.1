@@ -1,3 +1,4 @@
+// EO: SIG·EVA(Field,Atmosphere → Atmosphere, Tending,Tracing) — the Atmosphere pass
 // The Atmosphere pass — the Significance row's Ground terrain (cube.md #5, Track B).
 //
 // Beneath the Lens, at the Ground grain. The atmosphere is the ambient interpretive

@@ -1,3 +1,4 @@
+// EO: SIG·SEG·INS(Void → Field,Entity, Binding,Clearing,Making) — Project Gutenberg library — whole books
 // Project Gutenberg as a research source — WHOLE BOOKS, read entire.
 // (docs/web-search.md "The library sources")
 //

@@ -1,3 +1,4 @@
+// EO: INS·EVA(Network,Paradigm → Field,Lens, Making,Binding,Tracing) — fold prompt, best-of-n
 // fold — the prompt as a FOLD, and multi-response generation as variation + selection
 // (docs/multi-response-folds.md). The companion to render.js/compose.js: where those
 // hand the model a document to continue, this hands it the STRUCTURAL STATE the next

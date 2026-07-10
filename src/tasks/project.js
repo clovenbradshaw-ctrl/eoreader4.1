@@ -1,3 +1,4 @@
+// EO: SYN·CON(Field → Network, Composing,Tracing) — log->graph projection (re-export)
 // tasks/project.js — projectTaskGraph: a pure fold of the TaskEvent log into the
 // nested graph object.
 //

@@ -1,3 +1,4 @@
+// EO: SYN·SEG(Link → Network, Composing,Unraveling) — arc of an identity
 // Trajectory — the arc of one identity's relations across a sequence, segmented at the
 // frame-breaks, with the change read off as a delta. (the omnimodal "what changed")
 //

@@ -1,3 +1,4 @@
+// EO: NUL(Field → Void, Clearing) — SVG renderer (deterministic template)
 // organs/out/limner/render.js — stamp deterministic SVG from geometry.
 //
 // The last stage (docs/limner.md §9). No model involvement: a template maps the

@@ -1,3 +1,4 @@
+// EO: DEF·EVA(Field,Network → Lens, Dissecting) — site vs figure role
 // Site vs figure — chrome as a semantic role, not a list of conventions.
 //
 // A unit is a *site* (ground/furniture: a heading, a licence line, a credit)

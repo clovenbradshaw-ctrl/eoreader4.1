@@ -1,3 +1,4 @@
+// EO: INS·SEG·SIG(Entity → Field,Entity, Making,Dissecting,Binding) — the append-only log (write)
 // The append-only event log. Single source of truth.
 // Append is the only mutation. Retractions are written as SEG events —
 // nothing is unwritten. The graph and every projection are folds of this.

@@ -1,3 +1,4 @@
+// EO: NUL·SYN·CON·EVA·DEF·REC(Field,Network,Paradigm → Network,Lens,Field, Composing,Binding,Tracing) — barrel
 // The frame holon — ONE interior structure, instantiated per modality at the
 // membrane (docs/frame-holon.md).
 //

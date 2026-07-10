@@ -1,3 +1,4 @@
+// EO: NUL·DEF·SIG(Entity,Field → Void,Lens, Clearing,Making,Tending) — the membrane; identity collapses to surface (§5)
 // write/cursor.js — the membrane: the cursor contract. (SPEC §5)
 //
 // The substrate reasons over hashIds; the model sees only surface. The cursor is

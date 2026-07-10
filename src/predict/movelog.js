@@ -1,3 +1,4 @@
+// EO: SYN·INS(Network,Field → Field,Network, Composing,Making) — the move-log, Phase 0
 // Phase 0 — the move-log. The ordered sequence of moves the reader emits on a
 // text, indexable by cursor, the substrate the predictor runs over.
 //

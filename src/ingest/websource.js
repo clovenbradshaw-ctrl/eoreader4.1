@@ -1,3 +1,4 @@
+// EO: SIG·INS(Void → Entity,Atmosphere, Binding,Making) — admit web pages as groundable sources
 // External web pages as first-class groundable sources.
 // (docs/web-search.md; ported from eoreader3 docs/web-source-admission.md)
 //

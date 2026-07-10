@@ -1,3 +1,4 @@
+// EO: SYN·EVA(Field → Network,Entity, Composing,Tracing) — projectGraph — the read fold
 // projectGraph — pure fold over the event log producing the active graph.
 //
 // Pure on (log, frame). Everything the projection reads — including the

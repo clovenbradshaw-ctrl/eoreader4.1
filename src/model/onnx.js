@@ -1,3 +1,4 @@
+// EO: INS·SEG(Field → Entity, Making,Dissecting) — ONNX transformers.js talkers
 // ONNX talkers via transformers.js — the clean, browser-native small models.
 //
 // WHY a second local runtime. wllama (wllama.js) runs GGUF on CPU/WASM; webllm

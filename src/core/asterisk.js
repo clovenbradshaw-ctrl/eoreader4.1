@@ -1,3 +1,4 @@
+// EO: DEF·EVA·REC(Network,Link → Entity,Void, Dissecting,Binding,Composing) — the ontological asterisk (identity)
 // core/asterisk.js — the ontological asterisk: identity held open as a question.
 //
 // projectGraph has one identity primitive and it is binary: find() puts two ids in

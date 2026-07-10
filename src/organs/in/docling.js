@@ -1,3 +1,4 @@
+// EO: SEG(Void → Field, Dissecting) — SmolDocling adapter → assembleDocument
 // The SmolDocling adapter — a layout-aware VLM's conversion, onto the spine.
 //
 // SmolDocling is a document-conversion VLM (a 93M vision encoder + a 135M language

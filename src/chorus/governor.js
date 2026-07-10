@@ -1,3 +1,4 @@
+// EO: SEG(Field → Field, Clearing) — coverage governor
 // The governor — voice by cumulative mass to a coverage budget (docs/chorus.md,
 // "The governor").
 //

@@ -1,3 +1,4 @@
+// EO: SYN·EVA·REC(Field,Network → Network,Paradigm, Composing,Tracing) — runGroundedResearch — the writer
 // research/driver.js — the grounded research driver (docs/deep-research-log.md).
 //
 // Wires the machinery that already exists into ONE run that only appends

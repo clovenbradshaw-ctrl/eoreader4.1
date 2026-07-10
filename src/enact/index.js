@@ -1,3 +1,4 @@
+// EO: DEF·EVA·REC(Field,Entity,Network → Lens,Paradigm, Making,Tracing,Composing) — enacted DEF-EVA-REC loop; barrel
 // The enact holon — the enacted DEF–EVA–REC loop (the significance engine).
 //
 // Two loops, kept apart (§2, §10):

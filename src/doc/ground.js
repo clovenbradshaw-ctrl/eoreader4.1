@@ -1,3 +1,4 @@
+// EO: CON·EVA(Field,Link → Link,Lens, Binding) — the grounding check
 // doc/ground.js — the grounding check every edit passes through.
 //
 // A sentence entering a document must bind to something already in the Record —

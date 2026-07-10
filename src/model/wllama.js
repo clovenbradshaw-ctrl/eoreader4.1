@@ -1,3 +1,4 @@
+// EO: INS(Field → Entity, Making) — wllama CPU/WASM backend
 // wllama backend — CPU/WASM, SmolLM2-135M default.
 //
 // The runtime is fetched by URL on first load; the page-open cost is 0. This is

@@ -1,3 +1,4 @@
+// EO: INS·CON·SYN·DEF·EVA(Network,Field,Entity → Field,Lens,Network,Void, Making,Composing,Binding,Tracing) — barrel
 // write — the GENERATION faculty: the cursor turned forward. (SPEC, the Enacted Writer)
 //
 // The reading side already runs "the substrate reasons, the model renders"; this is

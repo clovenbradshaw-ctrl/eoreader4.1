@@ -1,3 +1,4 @@
+// EO: DEF·EVA(Field,Network → Lens, Making,Binding) — planner on/off toggle
 // generate — the settings toggle, planner on / planner off (spec-planner.md §11).
 //
 // The planner trades fluency for grounding, and whether the trade is worth it is

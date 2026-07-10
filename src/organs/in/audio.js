@@ -1,3 +1,4 @@
+// EO: INS·CON·EVA(Void → Entity,Link,Lens, Making,Binding,Tracing) — audio-transcription adapter (speech)
 // The audio-transcription adapter — a speech model's transcript, onto the spine.
 //
 // The image adapter ingests a vision model's *already-extracted* detections; this

@@ -1,3 +1,4 @@
+// EO: EVA·REC·DEF(Field → Paradigm, Composing) — boundary induction (meaning revises syntax)
 // Boundary induction — the DEF·EVA·REC loop that lets MEANING revise SYNTAX.
 //
 // Presence is bedrock: that these marks are here, in this order, is not up for

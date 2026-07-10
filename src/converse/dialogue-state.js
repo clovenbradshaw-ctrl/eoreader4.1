@@ -1,3 +1,4 @@
+// EO: EVA·DEF·SIG(Field,Entity → Lens,Paradigm, Dissecting,Binding,Tracing) — dialogue state / operator-addressed resolver
 // Dialogue state — the conversation read as a reading-line, addressed in the nine
 // operators (docs/operators.md). This is NOT a new ontology bolted onto the side: it is
 // the same genome the document reading already speaks, turned on the turns. A turn is an

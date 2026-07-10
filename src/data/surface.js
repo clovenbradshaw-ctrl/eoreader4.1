@@ -1,3 +1,4 @@
+// EO: NUL(Field → Void, Clearing) — data view mount
 // data/surface.js — mount a table into any element: the document-explorer's
 // data view. Table / Raw toggle; click a cell for its record; a chat answer can
 // light the cells it computed over. Framework-free, docked by the reader like the

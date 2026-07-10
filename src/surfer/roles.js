@@ -1,3 +1,4 @@
+// EO: EVA(Field → Lens, Binding) — element role by ablation
 // The role of an element, by ablation — the embedder-free version of "embed a proposition,
 // remove a word, and the difference is that word's role."
 //

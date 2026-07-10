@@ -1,3 +1,4 @@
+// EO: SIG(Network → Lens, Tending) — SIG — subgraph → ViewSpec
 // organs/out/limner/synthesize.js — SIG: read the subgraph into a ViewSpec.
 //
 // The model's only job in LIMNER is SELECTION and LABELING (docs/limner.md §1).

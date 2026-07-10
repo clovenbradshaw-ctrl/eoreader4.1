@@ -1,3 +1,4 @@
+// EO: INS·NUL(Field → Lens, Making,Clearing) — the enacted frame
 // A frame — the unit the enacted loop runs over.
 //
 // A frame is the set of terms the reading has established at a layer, at a point

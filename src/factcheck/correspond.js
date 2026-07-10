@@ -1,3 +1,4 @@
+// EO: CON·EVA(Field,Link,Network → Link,Lens, Binding,Tracing) — edge-grounding veto / fact-checker
 // The edge-grounding veto — the fact-checker. A correspondence between two
 // readings (§1), never a claim against truth.
 //

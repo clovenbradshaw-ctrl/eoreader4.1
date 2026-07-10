@@ -1,3 +1,4 @@
+// EO: INS·SIG·DEF(Field → Entity,Network, Making,Binding,Dissecting) — EOT ingester: surface -> tuples/log
 // EOT — Existential-Operator Triples: a conforming ingester. (docs/eot-surface-syntax.md)
 //
 // Surface → canonical EO tuples. The producer writes punctuation shapes it already knows

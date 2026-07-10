@@ -1,3 +1,4 @@
+// EO: NUL(Kind → Kind, Clearing) — irregular verb morphology
 // Packaged English verb morphology — the irregular base→past map, DERIVED from UniMorph
 // (scripts/build-morphology.mjs), the comprehensive language-agnostic morphology dataset.
 // The realizer's regular rules (write/morph.js) handle the productive cases (-ed, doubling,

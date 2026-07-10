@@ -1,3 +1,4 @@
+// EO: SEG·INS·SYN(Field,Network → Network,Entity,Field, Unraveling,Making,Composing) — runTaskGraph driver
 // tasks/runner.js — runTaskGraph: drive a goal down to leaves a small LLM can
 // generate, re-projecting the graph after every event.
 //

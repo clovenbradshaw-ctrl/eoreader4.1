@@ -1,3 +1,4 @@
+// EO: NUL·DEF(Field,Lens → Void, Clearing) — typed absence / void answer
 // The typed absence — the response when the field holds no answer.
 //
 // (docs/answerability.md) Realises eoreader3's void typology in eoreader4's

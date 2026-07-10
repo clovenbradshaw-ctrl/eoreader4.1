@@ -1,3 +1,4 @@
+// EO: SIG·SEG·EVA·DEF·NUL(Field,Entity,Network,Lens,Atmosphere → Link,Atmosphere,Lens,Void,Field, Tending,Binding,Tracing,Dissecting,Unraveling,Clearing) — barrel
 // The credence holon (source-trajectory spec §7): a second projection over the
 // one append-only log that tracks where a source moves on the (M, O) plane —
 // modelfulness and orientation — segmented into regimes, conditioned on domain.

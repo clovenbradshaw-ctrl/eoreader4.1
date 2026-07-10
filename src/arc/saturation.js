@@ -1,3 +1,4 @@
+// EO: EVA(Field,Network → Lens, Binding,Tracing) — saturation stop-gate
 // The SATURATION gate (EVA → NUL, §5.6) — the actual stop condition.
 //
 // This is what makes length emergent. Before generating each planned section,

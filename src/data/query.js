@@ -1,3 +1,4 @@
+// EO: EVA·SIG(Field → Lens, Binding) — table Q&A / answerTable
 // data/query.js — answering a quantitative question over a table by COMPUTING,
 // not reading. A CSV is not prose: "how many contracts did the audit flag?" is a
 // count, "what do they total?" is a sum — answers that must be computed over the

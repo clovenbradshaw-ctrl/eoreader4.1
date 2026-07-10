@@ -1,3 +1,4 @@
+// EO: CON·EVA(Field,Lens → Link,Lens, Binding,Tracing) — per-section bind+veto (bindAndVeto)
 // bindAndVeto — the per-section CON/EVA gate the arc reuses (spec-the-arc §5.5).
 //
 // A turn's `bind` and `veto` stages run over the whole-turn context; an arc

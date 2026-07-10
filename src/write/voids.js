@@ -1,3 +1,4 @@
+// EO: SIG·EVA(Entity,Network → Void, Tending,Binding) — open-Resolution ledger; idle fuel (§15,§16)
 // write/voids.js — the open-Resolution query: the fuel and the "Open" ledger. (SPEC §15, §16)
 //
 // The idle loop walks the OPEN RESOLUTIONS — the void-set: referents INS'd but not

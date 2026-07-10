@@ -1,3 +1,4 @@
+// EO: EVA·DEF(Field,Network → Lens, Tracing,Making) — piece-grain frame; the beat's site (streaming answer §8)
 // write/frame.js — the piece-grain frame: each beat's site, measured not declared.
 // (The Streaming Answer §8)
 //

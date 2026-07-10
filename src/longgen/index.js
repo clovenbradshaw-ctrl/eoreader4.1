@@ -1,3 +1,4 @@
+// EO: SYN·INS·EVA(Field,Network,Atmosphere → Network,Lens, Composing,Making,Tracing) — barrel
 // The longgen holon — long generation across messages (docs/long-generation.md),
 // the planner (docs/spec-planner.md).
 //

@@ -1,3 +1,4 @@
+// EO: NUL·SIG(Network,Entity → Void,Atmosphere, Clearing,Tending) — liveView — live process view
 // research/live.js — the live process view (docs/deep-research-log.md).
 //
 // The significance loop made visible, because it is the distinctive,

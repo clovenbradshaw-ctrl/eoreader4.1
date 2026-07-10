@@ -1,3 +1,4 @@
+// EO: NUL·INS·SEG(Kind → Kind,Entity, Clearing,Making) — coder catalog + registration
 // Local coding models — the 2026 small-to-mid open-weight coders, registered as
 // pickable backends so the chat surface can be driven by a model trained for code.
 //
