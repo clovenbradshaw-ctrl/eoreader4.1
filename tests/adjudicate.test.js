@@ -58,11 +58,13 @@ test('a confident contradiction is FLAGGED (libel-grade), and the model word rid
   assert.equal(fc.data.contradicted, 1);
 });
 
-test('a contradicting paraphrase: both the contradiction and the faint unbound-contact stay flags (no gate)', async () => {
-  // The denied relation in a draft that CITES nothing but makes lexical CONTACT (it restates
-  // "Grete waited" with extra material). Both readings are FLAG-only now: the confident
-  // `edge-contradicted` and the faint `unbound-contact` both ride beside the answer — the gate
-  // is off, so neither regenerates. The model word surfaces; the flags tell the user.
+test('a contradicting paraphrase: the referent binds it, the contradiction stays a flag (no gate)', async () => {
+  // The draft restates "Grete waited" and adds a denied relation (calls Grete his MOTHER). Under
+  // referent-born binding it CITES the passage it paraphrases — it shares the Grete referent — so
+  // it is no longer the "contact-but-uncitable" reading the old fixed 0.25 bar left it as (it had
+  // landed a hair under the bar). Provenance and truth are SEPARATE organs: the cite says which
+  // passage it draws on; the confident `edge-contradicted` says the relation is denied. Both ride
+  // — the gate is off, nothing regenerates. The model word surfaces; the flags tell the user.
   const doc = parseText(STORY, { docId: 'adj' });
   const audit = createAuditLog();
   const result = await runTurn({
@@ -72,9 +74,9 @@ test('a contradicting paraphrase: both the contradiction and the faint unbound-c
   });
   const ids = result.flags.map(f => f.id);
   assert.equal(result.turn.gated, false, 'the refuse-gate is off — nothing is gated');
-  assert.ok(ids.includes('unbound-contact'), 'the faint contact-but-uncitable reading stays a flag');
   assert.ok(!ids.includes('unbound'), 'the from-nowhere flag stays silent — the prose made contact');
-  assert.ok(ids.includes('edge-contradicted'), 'and the contradiction is flagged on its own organ');
+  assert.match(result.answer, /\[s\d+\]/, 'the paraphrase binds to the passage it shares a referent with');
+  assert.ok(ids.includes('edge-contradicted'), 'the contradiction is flagged on its own organ — truth is not the binder’s job');
   assert.match(result.answer, /mother/i, 'the model text rides — flagged, never gagged');
   const fc = result.turn.steps.find(s => s.name === 'factcheck');
   assert.equal(fc.data.contradicted, 1, 'the contradiction is still measured and recorded');
