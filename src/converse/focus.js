@@ -1,3 +1,4 @@
+// EO: EVA·SIG(Field → Lens, Binding,Tending) — conversation-aware retrieval (regex path)
 // Conversation-aware retrieval — resolve a follow-up against what has been asked.
 //
 // A grounded follow-up like "now?", "what about her?", or "answer my first question"

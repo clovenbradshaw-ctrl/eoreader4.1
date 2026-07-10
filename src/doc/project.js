@@ -1,3 +1,4 @@
+// EO: SYN(Field → Network, Composing) — document = fold of log
 // doc/project.js — the document as a fold of its edit log.
 //
 // projectDoc(log) replays the events into the current document: the committed

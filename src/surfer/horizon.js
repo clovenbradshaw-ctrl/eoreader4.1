@@ -1,3 +1,4 @@
+// EO: SYN·REC·EVA(Field,Lens → Network,Lens, Composing,Tracing) — persistent Horizon — ρ across turns
 // The persistent Horizon — memory that IS the moved density operator, not a replayed log.
 //
 // Every surf so far rebuilt ρ from scratch and threw it away: amnesiac. But the spec's

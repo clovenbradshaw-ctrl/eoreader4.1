@@ -1,3 +1,4 @@
+// EO: SEG·DEF(Kind → Field,Lens, Unraveling,Dissecting) — grain bands, cell partition
 // Grain bands — the three positions a phasepost fills, partitioned by operator.
 //
 // A complete SVO fills three positions at once: Ground, Figure, Pattern. The

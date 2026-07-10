@@ -1,3 +1,4 @@
+// EO: INS·CON(Void → Entity,Link,Field, Making,Binding) — frequency adapter (raw Hz)
 // The frequency adapter — meaning from raw Hz, with NO music theory at all.
 //
 // The music adapter still carried one prior: it keyed notes by pitch class

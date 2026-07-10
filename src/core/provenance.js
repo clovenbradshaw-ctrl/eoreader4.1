@@ -1,3 +1,4 @@
+// EO: DEF·INS(Entity → Lens,Entity, Dissecting,Making) — me-ness type law
 // core/provenance.js — me-ness as a type law, not a flag. (SPEC §8)
 //
 // Self-generated content is ontogenically different: it carries "me-ness." This

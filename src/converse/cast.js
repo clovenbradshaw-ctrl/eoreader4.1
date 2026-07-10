@@ -1,3 +1,4 @@
+// EO: DEF·EVA·REC(Entity,Field → Entity,Paradigm, Dissecting,Binding,Composing) — conversation cast (source-activation memory)
 // The conversation cast as a DEF→EVA→REC cycle (docs/operators.md, the Interpretation column;
 // docs/source-activation.md, "landing on the referent").
 //

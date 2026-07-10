@@ -1,3 +1,4 @@
+// EO: SIG·SEG(Field → Field, Tending,Dissecting) — embedding cosine retrieval
 // Semantic retrieval. Uses the embedder if warm; otherwise returns nothing.
 // The hot lexical path never blocks on this.
 //

@@ -1,3 +1,4 @@
+// EO: SEG·SYN·CON·EVA(Field,Network,Lens → Field,Network,Lens, Clearing,Composing,Binding,Tracing) — barrel
 // The fold holon: spans → notes. The unit of evidence the model sees.
 
 export { foldNote }        from './integral.js';

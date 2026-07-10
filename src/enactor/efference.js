@@ -1,3 +1,4 @@
+// EO: INS(Link → Entity, Making) — efference copy
 // enactor/efference.js — the efference copy (add-on 3 §3, §5).
 //
 // Output is not terminal. At the moment of COMMITMENT the core does two things:

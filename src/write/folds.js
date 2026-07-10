@@ -1,3 +1,4 @@
+// EO: EVA·DEF·NUL(Network,Field → Lens,Paradigm, Binding,Tracing,Tending) — Map<Holder,Fold>; beliefOf/modelOf (§3,§9,§20)
 // write/folds.js — Map<Holder, Fold>; beliefOf; modelOf. (SPEC §3, §9, §20)
 //
 // §1: the Given-Log is the only non-perspectival object. Everything else is a

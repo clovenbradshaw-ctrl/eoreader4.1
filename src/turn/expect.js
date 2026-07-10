@@ -1,3 +1,4 @@
+// EO: DEF·EVA(Field → Atmosphere,Lens, Clearing,Binding) — answer expectation
 // The answer expectation — the prompt read as a PREDICTION of its own answer.
 // (docs/answer-expectation.md)
 //

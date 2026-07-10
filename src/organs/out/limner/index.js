@@ -1,3 +1,4 @@
+// EO: SEG·SIG·INS(Network → Lens, Dissecting,Tending,Making) — barrel + LIMNER pipeline (limn)
 // organs/out/limner — LIMNER, the SVG output organ.
 //
 // A read-and-project faculty (docs/limner.md). It renders graph and reading

@@ -1,3 +1,4 @@
+// EO: EVA·DEF(Network → Void, Binding,Dissecting) — register firewall; single-register guard
 // The register firewall — the structural separation of the two loops (§2, §10).
 //
 // An enacted event is tagged `register: 'enacted'`; a depicted perception is

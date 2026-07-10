@@ -1,3 +1,4 @@
+// EO: CON·SYN·SIG(Entity,Field → Link,Network, Binding,Composing,Tending) — the bridge; concept->token map + entity trie (Track B)
 // concept-tokens.js — THE BRIDGE (spec-the-lens-port.md, Track B).
 //
 // The lens lives over figures, operators and eigen-lenses; logits live over BPE

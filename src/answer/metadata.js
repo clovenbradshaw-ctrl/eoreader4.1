@@ -1,3 +1,4 @@
+// EO: DEF(Entity → Lens, Dissecting) — front-matter / metadata answerer
 // The metadata answerer (docs/subjective-frame.md §3). A question about the document's
 // own front matter — "who wrote this?", "when was it written?", "what's the title?" — is
 // answered from doc.metadata as a DISTINCT FACT, mechanically, never warming the talker.

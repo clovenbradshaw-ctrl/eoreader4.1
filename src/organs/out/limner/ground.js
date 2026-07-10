@@ -1,3 +1,4 @@
+// EO: EVA·SEG(Lens,Network → Lens, Binding,Dissecting) — grounding guard — cite-or-veto
 // organs/out/limner/ground.js — the grounding guard, cite-or-veto for a view.
 //
 // LIMNER's invariant is the system's invariant: every drawn mark traces to an

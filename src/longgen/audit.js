@@ -1,3 +1,4 @@
+// EO: EVA·SIG(Network,Paradigm → Atmosphere,Lens, Tracing,Binding) — run audit + diagnose
 // audit — a self-contained, exportable record of a generation run, and a diagnosis of
 // whether it is working. `exportAudit(result)` turns a runContinuation result into a JSON
 // artifact carrying the full causal chain per atom (the address, the decision internals, the

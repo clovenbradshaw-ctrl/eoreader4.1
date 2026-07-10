@@ -1,3 +1,4 @@
+// EO: DEF·EVA·REC(Network,Link → Lens,Void,Entity, Binding,Making,Composing) — the collapse / gate
 // enactor/gate.js — the collapse (§5). DEF·EVA·REC over propositions.
 //
 // The enactor's COMMIT step, modality-blind (add-on 3 §1): the gate runs over

@@ -1,3 +1,4 @@
+// EO: INS·DEF(Void → Entity,Kind, Making,Dissecting) — EssayEvent constructors + kinds
 // essay/events.js — the append-only EssayEvent log (docs/longform-generation.md).
 //
 // Longform, made a projection: the essay is not accumulated in a prompt, it is

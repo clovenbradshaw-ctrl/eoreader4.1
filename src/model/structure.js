@@ -1,3 +1,4 @@
+// EO: SYN·INS(Field,Network → Entity, Composing,Making) — structure backend, graph retelling
 // The structure backend — generation from the engine's OWN structure, no LLM, no network.
 //
 // Every other backend draws the reply from a language model. This one does not: it reads

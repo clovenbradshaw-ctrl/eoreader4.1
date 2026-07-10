@@ -1,3 +1,4 @@
+// EO: NUL·SIG·EVA(Field → Lens,Void, Binding,Clearing) — barrel
 // data/index.js — the tabular surface: a CSV/spreadsheet as DATA, not prose.
 //
 // A table imports as columns + rows (organs/in/table.js already parses it); this

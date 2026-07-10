@@ -1,3 +1,4 @@
+// EO: NUL·EVA(Entity → Entity, Clearing,Tending) — speculative web prefetch quarantine
 // Speculative web prefetch — search the world WHILE the user is still typing, but
 // keep nothing unless the turn proves it useful (docs/web-search.md, the quarantine
 // discipline).

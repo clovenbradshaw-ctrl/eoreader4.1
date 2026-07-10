@@ -1,3 +1,4 @@
+// EO: SIG·INS(Void → Entity,Atmosphere, Making,Tending) — Florence-2 vision organ eye
 // The vision organ's eye — Florence-2 via Transformers.js, loaded by URL on demand.
 // (embed.js is the meaning organ's wiring; this is the seeing organ's. The pure half —
 // boxes → relations → narration — is src/organs/in/scene.js, model-free and CI-tested.)

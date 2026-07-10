@@ -1,3 +1,4 @@
+// EO: EVA·SIG(Field → Field,Atmosphere, Tracing,Tending) — the one surprise (KL)
 // THE ONE SURPRISE — the modality-agnostic core (Track A, docs/spec-one-surprise.md).
 //
 // There is exactly one surprise: D_KL(posterior ‖ prior) over a γ-decayed referent

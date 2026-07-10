@@ -1,3 +1,4 @@
+// EO: SIG·SEG·INS(Void,Field → Field,Entity, Binding,Clearing,Making) — live fetch/search client over CORS proxy
 // The web FETCH/SEARCH client — the live half that feeds the admission core (websource.js).
 // (docs/web-search.md)
 //

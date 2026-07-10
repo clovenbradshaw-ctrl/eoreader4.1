@@ -1,3 +1,4 @@
+// EO: SYN·EVA·DEF(Network,Field,Lens → Network,Entity,Lens, Composing,Binding,Dissecting) — barrel
 // The turn holon: the named-stage pipeline. Composes every other holon.
 
 export { runTurn } from './pipeline.js';

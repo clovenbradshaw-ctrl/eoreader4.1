@@ -1,3 +1,4 @@
+// EO: INS·NUL(Void,Entity → Entity, Making,Tending) — per-turn audit trail (ring)
 // Ring buffer of turns. Each turn is a structured trail of one user message
 // through the pipeline. Subscribers see updates live; export is JSONL.
 //

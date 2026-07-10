@@ -1,3 +1,4 @@
+// EO: EVA·SIG(Field,Kind → Lens, Binding,Tracing) — geometric cell classifier
 // === core.js ===
 // Minimal core shim for the standalone phasepost classifier used by the EOReader
 // profile panel. The full eoreader4 core/ is the engine's spine (log · project ·

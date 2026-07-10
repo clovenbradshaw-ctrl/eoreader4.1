@@ -1,3 +1,4 @@
+// EO: DEF·SEG·NUL(Field → Field,Void, Making,Dissecting,Clearing) — paragraph loop; one paragraph per model call
 // write/paragraphs.js — the paragraph loop: trust the model with the fold's content.
 //
 // The sentence-per-beat streamed answer (write/answer.js) collapsed one cursor per

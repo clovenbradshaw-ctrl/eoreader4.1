@@ -1,3 +1,4 @@
+// EO: SYN·CON·REC·SEG·EVA(Field,Network,Link → Network,Link,Paradigm,Lens, Composing,Binding,Tracing,Unraveling) — barrel
 // reason/index.js — the reasoning-walk holon entrance.
 //
 // The walk over the append-only log: continuous, meaningful output as ACCUMULATION over

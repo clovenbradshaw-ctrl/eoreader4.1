@@ -1,3 +1,4 @@
+// EO: EVA·INS(Field,Void → Paradigm, Binding,Making) — installed-prior resolver + loader
 // flow/select.js — resolve an INSTALLED flow prior by facets and load it.
 //
 // The missing weld between the facet-keyed registry (data/flow-priors/index.json,

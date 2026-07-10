@@ -1,3 +1,4 @@
+// EO: SEG·INS(Void → Entity,Network, Dissecting,Making) — holonic Site addressing
 // Holonic Site addressing — WHICH place an operation lands on (add-on 2 §B/§D).
 //
 // The Site face names WHERE an operation lands. The cube gives the KIND of place

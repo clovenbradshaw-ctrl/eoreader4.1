@@ -1,3 +1,4 @@
+// EO: DEF·EVA·REC(Field,Atmosphere → Lens,Paradigm, Dissecting,Binding,Composing) — recalibration as logged REC
 // The stance layer as a fold — recalibration as a REC in the log (prototype, flagged).
 //
 // THE SEAT this dissolves. The enacted loop rides a scale — "what counts as normal

@@ -1,3 +1,4 @@
+// EO: CON·EVA·SEG(Network → Network,Lens, Tracing,Binding,Dissecting) — the DAG + two gates + posture (§3,§4)
 // write/scheduler.js — the DAG, the two gates, the posture. (SPEC §3, §4)
 //
 // Generation is a sequence of CELLS, each an event to realize. Their dependency

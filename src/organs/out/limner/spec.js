@@ -1,3 +1,4 @@
+// EO: DEF·EVA(Void → Lens,Paradigm, Dissecting,Binding) — ViewSpec IR — constructors, schema, hash
 // organs/out/limner — the ViewSpec, LIMNER's intermediate representation.
 //
 // LIMNER renders graph and reading state as deterministic SVG without ever

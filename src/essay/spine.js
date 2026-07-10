@@ -1,3 +1,4 @@
+// EO: SYN·CON·SEG(Field,Network → Network, Composing,Tracing,Dissecting) — the spine DAG
 // essay/spine.js — the spine: a DAG of section intents, not a list.
 //
 // Order is for rendering; dependencies are for coherence. The spine is the

@@ -1,3 +1,4 @@
+// EO: SYN·CON·EVA·DEF(Field,Network,Link → Network,Link,Lens, Composing,Binding,Making) — barrel
 // essay — coherent longform as a projection over an append-only event log
 // (docs/longform-generation.md).
 //

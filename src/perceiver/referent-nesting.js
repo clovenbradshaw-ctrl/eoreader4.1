@@ -1,3 +1,4 @@
+// EO: CON·SYN(Network,Entity → Network, Tracing) — holonic containment address
 // referentNesting — the holonic containment address a referent EARNS from its span.
 //
 // The address system (core/holon.js) can descend containment level by level —

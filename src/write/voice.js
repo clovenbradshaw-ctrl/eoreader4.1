@@ -1,3 +1,4 @@
+// EO: SIG·SYN·EVA(Paradigm,Kind → Atmosphere,Lens, Tending,Composing,Binding) — personality + trained register (lens-port Track E)
 // voice.js — PERSONALITY and the trained register (spec-the-lens-port.md, Track E).
 //
 // Personality is the λ-term of the steering equation, and it is literally the Horizon's

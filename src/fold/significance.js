@@ -1,3 +1,4 @@
+// EO: CON·EVA(Field,Network → Link,Network, Binding,Tracing) — inferred significance edges
 // fold/significance.js — THE SIGNIFICANCE THE READER INFERS, promoted to the graph WITH its
 // provenance. The connections that are not explicitly in the text — "the significance of it all".
 //

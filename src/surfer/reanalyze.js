@@ -1,3 +1,4 @@
+// EO: REC(Link,Entity → Lens,Link, Making) — garden-path reanalysis
 // Bond-level reanalysis — the garden-path recovery, as the engine's own loop one level down.
 //
 // Reading runs under the arrow of time, so it commits a bond before the evidence is in. In

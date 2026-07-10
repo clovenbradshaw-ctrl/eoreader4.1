@@ -1,3 +1,4 @@
+// EO: INS·NUL(Field → Entity, Making,Clearing) — echo backend, verbatim excerpts
 // The echo backend. Always available, zero-latency, deterministic.
 // Useful for tests and for the cold-page experience: the pipeline runs
 // end-to-end before any real model is loaded.

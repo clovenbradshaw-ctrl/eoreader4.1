@@ -1,3 +1,4 @@
+// EO: NUL(Network → Network, Clearing) — runaway guards (re-export)
 // tasks/constants.js — the task graph's guards, shared with the interior frame
 // holon (frame/constants.js, docs/frame-holon.md) and re-exported unchanged.
 //

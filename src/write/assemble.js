@@ -1,3 +1,4 @@
+// EO: SYN·EVA·CON(Network,Field → Field,Network, Composing,Tracing,Binding) — assemble the full LLM payload in one call
 // Assemble what the LLM would be told — the whole reading pipeline in one place.
 //
 // Every piece we built converges here. Given a document and the activated conversation thread,

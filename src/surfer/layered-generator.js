@@ -1,3 +1,4 @@
+// EO: SYN·REC(Field,Paradigm → Network, Composing,Making) — layered generative stack
 // The layered generative stack — generate many layers of meaning at once.
 //
 // An LLM predicts one stream (tokens); its layers of meaning are entangled in a hidden

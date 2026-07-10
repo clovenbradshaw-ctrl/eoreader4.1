@@ -1,3 +1,4 @@
+// EO: NUL(Network → Void, Clearing) — third fold: assemble answer
 // The third fold (§4). The document is a fold of its event log; the turn is a
 // fold of its stage list; the ARC is a fold of its section events. The long
 // answer is not stored — it is PROJECTED from the appended SectionEvents,

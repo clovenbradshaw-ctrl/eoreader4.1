@@ -1,3 +1,4 @@
+// EO: NUL·DEF(Network → Lens, Dissecting,Clearing) — typed NUL for causal edge
 // Typed NUL for a causal edge — the three absences that must never collapse.
 //
 // "Is there evidence that X causes Y" has, when the answer is no, THREE different noes, and

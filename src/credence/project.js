@@ -1,3 +1,4 @@
+// EO: SIG·SEG·EVA(Field,Lens → Atmosphere,Lens, Tracing,Unraveling,Binding) — projectCredence, read side
 // projectCredence — the second projection over the one append-only log
 // (source-trajectory spec §7).
 //

@@ -1,3 +1,4 @@
+// EO: REC(Lens → Entity,Paradigm, Composing) — the spiral — REC climbs
 // The spiral — the three-fold closes on itself and climbs. This is REC.
 //
 // Interpretation at level n becomes Existence at level n+1. The machine's verdict, the moment it

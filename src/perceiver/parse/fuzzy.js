@@ -1,3 +1,4 @@
+// EO: SIG(Field → Link, Binding) — bounded edit distance
 // Bounded edit distance — the one fuzzy primitive the system speaks.
 //
 // A query term the document never spells exactly ("greta" for "Grete", a typo, a

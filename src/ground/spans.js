@@ -1,3 +1,4 @@
+// EO: EVA·CON(Field,Network → Link,Lens, Binding,Tracing) — per-span provenance + badge (groundSpans)
 // ground/spans.js — per-SPAN provenance, so every span of an answer is grounded.
 //
 // The requirement: every span the reader sees must carry a legible provenance — it is

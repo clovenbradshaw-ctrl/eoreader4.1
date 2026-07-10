@@ -1,3 +1,4 @@
+// EO: DEF·INS·EVA(Network,Field → Field,Lens, Making,Tracing,Binding) — streaming answer loop; beat per stop (§3,§4,§6)
 // write/answer.js — the streaming answer loop: the write loop on the answer path.
 // (The Streaming Answer §3, §4, §6)
 //

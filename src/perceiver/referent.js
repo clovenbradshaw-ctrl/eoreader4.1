@@ -1,3 +1,4 @@
+// EO: EVA(Field → Lens, Binding) — referential confidence
 // Referential confidence — the reader's own measure of WHO a passage concerns,
 // read off the γ-decayed coref posterior at the answer cursor.
 //

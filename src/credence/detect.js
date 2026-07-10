@@ -1,3 +1,4 @@
+// EO: SEG(Field → Link, Dissecting) — Page-Hinkley detector
 // The changepoint detector (source-trajectory spec §6).
 //
 // Forgetting gives the slow part of the trajectory — the estimate drifts as the

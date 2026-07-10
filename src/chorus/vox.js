@@ -1,3 +1,4 @@
+// EO: NUL(Entity → Void, Clearing) — vox leaf (out-organ)
 // The vox leaf — optional and terminal (docs/chorus.md, "The vox leaf").
 //
 // The vox turns ONE selected fold into ONE human sentence, under the

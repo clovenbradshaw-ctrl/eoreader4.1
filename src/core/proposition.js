@@ -1,3 +1,4 @@
+// EO: SYN(Void → Link, Making) — the proposition (floor of meaning)
 // The proposition — the floor of MEANING, the first emergent product (reshape §2/§8.0).
 //
 // A proposition is the triadic minimum: the least structure that is a coherent

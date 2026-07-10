@@ -1,3 +1,4 @@
+// EO: SIG·EVA(Field,Lens → Field,Lens, Tending,Tracing) — the Born measure
 // The Born measure — the reframe stated as arithmetic (docs/chorus.md, "The measure is Born").
 //
 // The geometric reader (src/classify/phasepost.js) scores a clause against the

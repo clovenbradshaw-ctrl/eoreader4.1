@@ -1,3 +1,4 @@
+// EO: INS·SYN·DEF(Field,Network → Entity,Lens, Making,Composing) — barrel: models + longgen
 // Chat models for the reader — the backends the chat surface can pick.
 // echo (instant, offline), webllm (Llama-3.2-3B over WebGPU, the old default),
 // and the Pleias family (Pico / RAG-1B, source-grounded talkers trained only on

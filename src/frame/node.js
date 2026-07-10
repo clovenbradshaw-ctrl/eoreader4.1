@@ -1,3 +1,4 @@
+// EO: SYN·EVA(Network → Network,Field, Composing,Tracing) — statuses, rollups, leaf folds
 // frame/node.js — the node's status and how a branch rolls up from its children.
 // Factored out of tasks/node.js (which re-exports it unchanged): nothing here is
 // a task or text fact — statuses, rollups, and the leaf folds read the tree only.

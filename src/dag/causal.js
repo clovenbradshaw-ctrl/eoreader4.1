@@ -1,3 +1,4 @@
+// EO: SEG·CON(Field → Link, Dissecting,Binding) — causal-clause reader / witness
 // The causal-clause reader — the witness layer under the asserted DAG.
 //
 // A causal edge in the DESCRIBED content does not live in the narrative entity graph

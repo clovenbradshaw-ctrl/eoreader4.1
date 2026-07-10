@@ -1,3 +1,4 @@
+// EO: EVA·SEG(Field,Link → Lens, Binding,Dissecting) — self-read weld
 // The self-read weld — re-read an accepted paragraph back through the grounder
 // before it becomes the prior the next paragraph opens on.
 //

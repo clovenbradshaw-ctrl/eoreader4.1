@@ -1,3 +1,4 @@
+// EO: SYN·EVA·NUL(Field,Network → Network,Void, Composing,Binding,Clearing) — the reading substrate (typed graph)
 // The reading substrate (docs rich-notes §2, P1·P2). The notes stop being an
 // ad-hoc verb-string format and become a real graph: a typed property, typed
 // endpoints, an rdfs:label on every individual. OWL is the floor — open-world,

@@ -1,3 +1,4 @@
+// EO: NUL(Kind → Kind, Clearing) — the nine operators (Act face)
 // The nine operators. The vocabulary the whole system speaks.
 //
 // ACT face: Identity (mode) × Space (domain)

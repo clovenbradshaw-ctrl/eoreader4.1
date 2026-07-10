@@ -1,3 +1,4 @@
+// EO: EVA(Link,Network → Lens, Binding,Tracing) — per-proposition provenance (classifyProvenance)
 // Per-proposition grounding provenance — veto on MEANING, not raw spans.
 //
 // A response is not one thing to accept or refuse whole. It is a sequence of PROPOSITIONS,

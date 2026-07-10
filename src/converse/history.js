@@ -1,3 +1,4 @@
+// EO: SEG·NUL(Field → Field, Clearing,Dissecting) — session-register fold
 // The session-register fold — feeding the conversation back. (docs/session-fold.md)
 //
 // The prompt contract always had conversation slots; nothing populated them, so the

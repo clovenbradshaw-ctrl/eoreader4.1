@@ -1,3 +1,4 @@
+// EO: EVA(Field,Network → Lens, Binding,Tending) — deep reading; the idle reflection
 // fold/deep-reading.js — DEEP READING: the reflection at the place of most interest.
 //
 // The chat posture is inert until prompted; idle.js already argued that idleness is the

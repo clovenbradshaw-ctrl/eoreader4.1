@@ -1,3 +1,4 @@
+// EO: EVA(Network → Link,Atmosphere, Tracing) — connectivity / bridge surprise
 // THE CONNECTIVITY SURPRISE — the modality-agnostic core for structural reveals.
 //
 // There are two backward objects a significance reading can move on. `surpriseAt`

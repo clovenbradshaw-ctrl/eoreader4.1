@@ -1,3 +1,4 @@
+// EO: DEF(Void → Kind, Dissecting) — demand: classify question scope
 // DEMAND — the question's inherent scope (§5.1).
 //
 // A cheap keyword read over the raw question, in the same spirit as the turn's

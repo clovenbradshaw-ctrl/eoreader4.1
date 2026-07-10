@@ -1,3 +1,4 @@
+// EO: EVA·CON(Network,Link → Lens, Tracing,Binding) — answer reflection (reflectAnswer)
 // reflectAnswer — read the model's OUTPUT back through the perceiver.
 //
 // The truth-seeking loop, closed: after the talker speaks, its prose is parsed into

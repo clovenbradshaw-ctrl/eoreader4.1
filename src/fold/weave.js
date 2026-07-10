@@ -1,3 +1,4 @@
+// EO: EVA·CON(Lens,Network → Paradigm,Link, Tracing,Binding) — metacognition + cross-connections
 // fold/weave.js — METACOGNITION and CROSS-CONNECTIONS: loops on loops of deep reading.
 //
 // deep-reading.js is loop 1: when not otherwise busy, the reading surfs to the place of most

@@ -1,3 +1,4 @@
+// EO: NUL(Paradigm,Void → Void,Paradigm, Tending) — templates store (JSON persist)
 // tasks/templates.js — the `templates/` store: a learned/installed shape, as JSON.
 //
 // The library (spec.js) holds shapes in memory; this is how a shape becomes durable —

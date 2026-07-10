@@ -1,3 +1,4 @@
+// EO: NUL(Network → Network, Tending) — back-compat face over walk
 // compose — the back-compat face over `walk` (walk.js). The multi-paragraph-walk
 // spec fixed the v1 contract: the loop is `walk`, its ground pool is the FOLD, its
 // carved shape the DESIGN, and its resumable statistic carries `design`. This file

@@ -1,3 +1,4 @@
+// EO: INS·DEF(Entity → Entity,Lens, Making,Dissecting) — holder root + nested belief
 // core/holder.js — the holder root and the nested-belief type. (SPEC §1, §9, §20)
 //
 // Update 4 finished the §1 move. §1 stopped eliding the READER root on a Site; this

@@ -1,3 +1,4 @@
+// EO: SIG·SEG(Field → Field, Tending,Clearing) — vague-query density fold
 // impressionQuery — embed the query, find the region of the document with
 // the highest field density, fold that region. Useful for vague questions
 // where lexical retrieval surfaces nothing crisp.

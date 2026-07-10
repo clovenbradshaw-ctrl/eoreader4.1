@@ -1,3 +1,4 @@
+// EO: INS(Void → Entity, Making) — TaskEvent constructors (re-export)
 // tasks/events.js — the append-only TaskEvent log (the generation side's spine,
 // one level deeper than the arc).
 //

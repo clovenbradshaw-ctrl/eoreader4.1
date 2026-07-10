@@ -1,3 +1,4 @@
+// EO: SEG·INS·SYN(Field,Network → Network,Entity, Unraveling,Making,Composing) — barrel
 // The tasks holon — nested task levels over an append-only TaskEvent log
 // (docs/nested-task-levels.md).
 //

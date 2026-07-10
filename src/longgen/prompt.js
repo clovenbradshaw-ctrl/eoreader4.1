@@ -1,3 +1,4 @@
+// EO: DEF·EVA(Field,Link → Field,Link, Dissecting,Tracing) — prompt contract (§6/§9)
 // prompt — the prompt contract and the two clocks (spec-planner.md §6, §9).
 //
 // One atom, one prompt. Each prompt is a STABLE PREFIX and a small VOLATILE SUFFIX,

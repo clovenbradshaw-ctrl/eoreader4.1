@@ -1,3 +1,4 @@
+// EO: DEF(Field → Lens, Dissecting) — reference-chrome filter
 // isReferenceChrome — is this span REFERENCE / NAVIGATION apparatus rather than answer content?
 //
 // A reader extracts a source into sentences, but a web page is not all prose: its reference list,

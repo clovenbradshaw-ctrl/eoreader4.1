@@ -1,3 +1,4 @@
+// EO: EVA·DEF(Atmosphere,Field → Lens,Paradigm, Tracing,Dissecting) — route off metacognition speech
 // meta-route — the route read off the metacognition's own speech (docs/discourse-routing.md).
 //
 // The route grain was the last decision still made by string-matching the USER's words

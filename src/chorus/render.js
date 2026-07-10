@@ -1,3 +1,4 @@
+// EO: CON·SEG(Field,Network → Network,Lens, Tracing,Binding,Dissecting) — the render (weighted map)
 // The render — a weighted map, mechanical, no generation (docs/chorus.md, "The
 // render").
 //

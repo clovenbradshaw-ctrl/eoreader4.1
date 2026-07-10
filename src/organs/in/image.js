@@ -1,3 +1,4 @@
+// EO: INS·CON·SIG(Void → Entity,Link, Making,Binding) — image adapter (vision detections)
 // The image adapter — proof the spine is modality-universal.
 //
 // `parse` is the text adapter; this is the image one. A vision model (any —

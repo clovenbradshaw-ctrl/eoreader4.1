@@ -1,3 +1,4 @@
+// EO: DEF·EVA·REC(Network,Link → Lens,Atmosphere, Binding,Making,Composing) — barrel
 // the enactor faculty — the ENACTOR's commit step (add-on 3 §1, §6).
 //
 // The judging-committing faculty is the enactor, and it is MODALITY-BLIND: the

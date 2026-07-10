@@ -1,3 +1,4 @@
+// EO: DEF·SEG(Field → Field, Dissecting,Clearing) — beat prompt as continuation
 // render — the load-bearing function: build ONE beat's prompt as a CONTINUATION of
 // a running document, never as an instruction (docs/paragraph-at-a-time.md,
 // "Condition the artifact, not the behavior"). The model is handed a document that

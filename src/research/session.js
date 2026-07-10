@@ -1,3 +1,4 @@
+// EO: NUL·SIG(Network → Void,Atmosphere, Clearing,Tending) — session state / chat reply
 // research/session.js — the LIVE research surface's state: one append-only log
 // across many chat asks (docs/deep-research-log.md).
 //

@@ -1,3 +1,4 @@
+// EO: DEF·EVA·REC(Field → Kind,Paradigm, Dissecting,Binding,Composing) — barrel
 // The conventions holon: the learned-rules ledger (REC) and the Pass 0
 // induction that fills it before the reading loop runs.
 

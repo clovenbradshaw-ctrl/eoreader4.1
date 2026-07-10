@@ -1,3 +1,4 @@
+// EO: INS·DEF(Void,Field → Entity,Void, Making,Clearing) — doc surface: mount + writer
 // doc/surface.js — mount the EO change-tracking document into any element.
 //
 // A Google-Docs-style page whose model is an append-only edit log. The reader

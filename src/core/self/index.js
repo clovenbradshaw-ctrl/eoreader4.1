@@ -1,3 +1,4 @@
+// EO: NUL·SIG(Entity → Entity, Clearing,Tending) — the self/world line
 // core/self/index.js — the self/world line + attenuation (add-on 3 §2/§3/§4/§6).
 //
 // The self is not a thing or a place in the system. It is the CLOSED LOOP where

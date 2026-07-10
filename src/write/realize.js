@@ -1,3 +1,4 @@
+// EO: SYN·EVA(Field → Field, Composing,Binding) — grammatical encoding; clause aggregation
 // realize.js — grammatical encoding: the surface step that joins clauses.
 //
 // The plan gives propositions; refer.js resolves each one's referring forms (pronoun vs

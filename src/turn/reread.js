@@ -1,3 +1,4 @@
+// EO: EVA·SIG(Field,Lens → Field, Binding,Tending) — active-inference re-read
 // The active-inference re-read, in-turn (surfing-next.md §3) — the not-knowing the surfer
 // MEASURED, run forward as the next retrieval.
 //

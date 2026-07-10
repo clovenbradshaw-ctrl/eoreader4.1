@@ -1,3 +1,4 @@
+// EO: SYN·DEF·SEG(Field → Field,Lens, Dissecting,Composing) — grounded prompt assembler + frame
 // The prompt-assembly contract — what the talker is handed.
 //
 // THE HONEST FRAME (docs/subjective-frame.md). The talker is not told "HERE IS YOUR

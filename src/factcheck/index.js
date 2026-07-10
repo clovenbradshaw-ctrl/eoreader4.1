@@ -1,3 +1,4 @@
+// EO: CON·EVA·SYN(Field,Link,Network → Lens,Link, Binding,Composing) — barrel
 // The factcheck holon: the edge-grounding veto — the fact-checker.
 //
 // Translate the talker's output into EO notation and compare it against the

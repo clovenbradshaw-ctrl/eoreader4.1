@@ -1,3 +1,4 @@
+// EO: DEF·INS·REC(Network,Field → Field,Void, Making,Composing) — the renderer + §6 spurt loop
 // write/spurt.js — the renderer and the spurt loop. (SPEC §6)
 //
 // The renderer is model.phrase. The loop writes in SPURTS and lets the model's own

@@ -1,3 +1,4 @@
+// EO: SYN·NUL·DEF(Field,Entity → Kind,Network, Composing) — emergent equivalence (MNN merge)
 // Emergent equivalence — note categories with no threshold, no a priori.
 //
 // The frequency reader MEASURES harmonic relatedness (overtone overlap) but

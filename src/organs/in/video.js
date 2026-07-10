@@ -1,3 +1,4 @@
+// EO: SEG·CON·INS(Void → Entity,Link, Dissecting,Binding,Making) — video adapter — contiguity + persistence
 // The video adapter — meaning from raw pixels across frames, no model.
 //
 // This is the honest answer to "detect a moving shape in the pixels". There is

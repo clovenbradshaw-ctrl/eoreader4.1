@@ -1,3 +1,4 @@
+// EO: SYN·DEF·EVA(Field,Lens → Lens,Paradigm, Composing,Dissecting,Tracing) — the density operator rho
 // The density operator — the one interpretive object the Significance column reads.
 //
 // docs/cube.md #5/#6 and the significance-column spec: there is ONE interpretive

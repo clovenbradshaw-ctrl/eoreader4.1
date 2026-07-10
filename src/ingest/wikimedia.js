@@ -1,3 +1,4 @@
+// EO: SIG·SEG(Void → Field, Binding,Dissecting) — Wikimedia reference shelf + Wikidata
 // The Wikimedia reference family as research sources — every sister project, one shape.
 // (docs/web-search.md "The library sources")
 //

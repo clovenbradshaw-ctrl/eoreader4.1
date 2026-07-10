@@ -1,3 +1,4 @@
+// EO: NUL(Lens → Void, Clearing) — receipt card (Satori element tree)
 // Publish → receipt card. A shareable image for a published NPJ claim.
 //
 // When a claim is published, it gets a "receipt" — a small card that states the

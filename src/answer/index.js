@@ -1,3 +1,4 @@
+// EO: EVA·DEF·NUL(Void,Field,Link,Network,Entity,Lens → Lens,Void, Binding,Dissecting,Clearing) — barrel
 // The answer holon: mechanical answerers that never warm the model.
 
 export { tryMechanical, answerConfirm, answerRelation, answerWho, answerMath, answerSmalltalk } from './mechanical.js';

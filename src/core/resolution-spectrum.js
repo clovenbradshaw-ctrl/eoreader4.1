@@ -1,3 +1,4 @@
+// EO: DEF·EVA(Network,Paradigm → Lens,Paradigm, Dissecting,Tracing) — witness axis of coref
 // resolution-spectrum.js — where a coreference/identity decision sits on the one
 // axis that actually matters: DOES RESOLVING IT NEED THE WITNESS CHANNEL TO READ
 // MEANING?

@@ -1,3 +1,4 @@
+// EO: SYN·SEG(Field → Network, Composing,Dissecting) — Markdown mdast + EVA node patch
 // Publish → Markdown, as an AST (mdast), not a string.
 //
 // The GitHub publishing pipeline emits Markdown, but string templating is the wrong

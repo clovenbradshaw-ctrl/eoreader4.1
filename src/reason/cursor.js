@@ -1,3 +1,4 @@
+// EO: SEG·EVA·REC(Field,Network → Network,Lens,Paradigm, Unraveling,Tracing,Composing) — CURSOR_REV, the generalized fold
 // reason/cursor.js — CURSOR_REV: the one generalization of the walk's fold.
 //
 // walk.js's readGraph(log) folded the flat whole on every step. This module owns the

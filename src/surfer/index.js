@@ -1,3 +1,4 @@
+// EO: SEG·SYN·EVA·REC·DEF(Field,Link,Network → Field,Network,Lens,Paradigm, Dissecting,Composing,Tracing,Clearing) — barrel
 // surfer — the SURFER faculty, the middle of the cognition triad (add-on 2 §A).
 //
 // Structure · navigate/find. The surfer is the relating function: it moves through

@@ -1,3 +1,4 @@
+// EO: EVA(Lens,Field → Atmosphere, Tending) — structural prior, Phase 2
 // Phase 2 — the structural prior, from the fold. The active frame shapes which
 // move is licensed and likely next, computed from the log state at the cursor.
 //

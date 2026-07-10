@@ -1,3 +1,4 @@
+// EO: INS(Field,Lens → Entity, Making) — fold-voice minter
 // The fold-voice — a voice is a fold, not a generation (docs/chorus.md, "The
 // fold-voice").
 //

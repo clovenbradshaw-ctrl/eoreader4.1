@@ -1,3 +1,4 @@
+// EO: INS·SIG·CON(Void,Field → Entity,Link, Making,Binding) — archive-pin: source permanence
 // archive/pin.js — permanence: archive-pinned sources, evidence embedded
 // (docs/deep-research-log.md).
 //

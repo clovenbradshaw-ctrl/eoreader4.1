@@ -1,3 +1,4 @@
+// EO: NUL·SIG·INS·SEG·CON·SYN·DEF·EVA·REC(Void,Field,Network,Lens → Entity,Network,Lens,Paradigm, Clearing,Making,Composing) — barrel
 // The core holon: the genome. Everything depends on it; it depends on nothing.
 // The evo allowlist boundary from eoreader3 — "MAY NOT touch: projectGraph,
 // the nine-operator vocabulary, the append-only log" — is this module.

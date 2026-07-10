@@ -1,3 +1,4 @@
+// EO: SEG(Void → Field, Dissecting) — OCR adapter (Tesseract) → assembleDocument
 // The OCR adapter — Tesseract's word boxes, the deterministic fallback tier.
 //
 // When a VLM is overkill or the record must be reproducible (an OCR you can diff

@@ -1,3 +1,4 @@
+// EO: SYN·CON·EVA·NUL(Field,Network → Network,Void, Composing,Binding,Tracing,Clearing) — runArc: fold section plan
 // runArc — the arc is a fold of its section plan.
 //
 // Same spine, three levels:

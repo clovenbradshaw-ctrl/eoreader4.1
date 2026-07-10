@@ -1,3 +1,4 @@
+// EO: INS·CON(Void → Entity,Link, Making,Binding) — music adapter (melody)
 // The music adapter — a third modality, to test the engine honestly.
 //
 // The image adapter ingests a vision model's *already-extracted* detections:

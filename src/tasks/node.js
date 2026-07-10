@@ -1,3 +1,4 @@
+// EO: SYN·NUL(Network → Field,Network, Composing,Clearing) — status rollup + output fold (re-export)
 // tasks/node.js — the node's status and how a branch rolls up from its children.
 //
 // The vocabulary is the interior frame holon's (frame/node.js,

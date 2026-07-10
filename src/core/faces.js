@@ -1,3 +1,4 @@
+// EO: SIG·NUL(Entity → Lens, Binding,Clearing) — the three faces of a cell
 // The three faces of the cell — Act, Site, Stance (add-on 2 §B).
 //
 // A cell is (Mode, Domain, Object). It casts three shadows, and each is a face:

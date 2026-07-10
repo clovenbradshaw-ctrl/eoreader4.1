@@ -1,3 +1,4 @@
+// EO: INS·NUL(Void → Entity, Making,Clearing) — ResearchEvent constructors / log
 // research/events.js — the append-only ResearchEvent log (docs/deep-research-log.md).
 //
 // Deep research, made a projection: the report is not written, it is projected.

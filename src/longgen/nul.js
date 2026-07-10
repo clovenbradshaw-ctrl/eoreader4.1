@@ -1,3 +1,4 @@
+// EO: NUL(Field → Void, Clearing) — hold the uncohered
 // nul — hold the uncohered, at the generation grain (docs/nul-hold-the-uncohered.md).
 //
 // The dolphin failure: a reading whose material was PRESENT but did not COHERE (a

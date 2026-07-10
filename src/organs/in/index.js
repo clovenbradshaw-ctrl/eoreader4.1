@@ -1,3 +1,4 @@
+// EO: INS·CON·SEG(Void,Field → Entity,Link,Network, Making,Binding,Dissecting) — barrel — sense organs
 // organs/in — the sense organs (reshape §3). A modality → a doc on the universal
 // contract. An organ INGESTS its modality; it does not understand it. Each adapter
 // turns a source into the modality-neutral spine the core reads:

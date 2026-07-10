@@ -1,3 +1,4 @@
+// EO: SEG·EVA(Void,Network → Field,Lens, Dissecting,Binding) — speech output organ (SEG murmur → enactor gate)
 // organs/out/speech — the speech output organ, a BARE RENDERER (add-on 3 §1):
 // props → language. The judging (the gate, DEF·EVA·REC) is NOT here; it moved to
 // the enactor faculty as the enactor's modality-blind commit step. This organ only

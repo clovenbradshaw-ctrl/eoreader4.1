@@ -1,3 +1,4 @@
+// EO: EVA(Field,Link → Lens, Binding,Tracing) — five coherence gates
 // essay/gates.js — the coherence gates a consolidated section must pass.
 //
 // A section is not accepted on grounding alone. After consolidation the

@@ -1,3 +1,4 @@
+// EO: CON·SYN(Field,Link → Network, Tracing,Composing) — cursor 1 — discourse DAG
 // Cursor (1) — the discourse DAG: the flow of content WITHIN THE DOCUMENT ITSELF.
 //
 // This is the first of the two cursors. It reads how the DOCUMENT moves — its own argument,

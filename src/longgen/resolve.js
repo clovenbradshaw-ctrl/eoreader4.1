@@ -1,3 +1,4 @@
+// EO: CON·SEG(Field,Network → Link, Binding,Dissecting) — plan->proposition resolver (§4.2)
 // resolve — the Site face: plan→proposition, the operator HONORED (spec-planner.md §4.2).
 //
 // The predictor draws a move-TYPE ("next is an EVA"); a move-type with no content

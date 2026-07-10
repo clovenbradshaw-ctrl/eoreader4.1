@@ -1,3 +1,4 @@
+// EO: SYN·CON(Field,Network → Network, Composing,Tracing) — projectEssay — the log fold
 // essay/project.js — projectEssay: a pure fold of the EssayEvent log into the
 // assembled essay and its workspace state (docs/longform-generation.md).
 //

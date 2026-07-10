@@ -1,3 +1,4 @@
+// EO: NUL(Network → Void, Clearing) — report → HTML renderer
 // research/render.js — the report projector's output: projectReport → HTML
 // (the deep-research template, now real; docs/deep-research-log.md).
 //

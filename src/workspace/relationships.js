@@ -1,3 +1,4 @@
+// EO: SYN·CON·INS(Field,Network → Network,Link,Field, Composing,Tracing,Making) — typed-edge db from log
 // workspace/relationships.js — typed-edge databases, folded from an event log.
 //
 // Two (or more) small databases — tables of records — linked by TYPED EDGES. A

@@ -1,3 +1,4 @@
+// EO: NUL·SEG(Field → Void,Field, Clearing,Dissecting) — streaming surfacer wrapper
 // model/stream.js — phrase's streaming sibling, as a capability wrapper.
 // (The Streaming Answer §3a, §5)
 //

@@ -1,3 +1,4 @@
+// EO: SEG·EVA(Field → Field,Lens, Dissecting,Tracing) — the SEG cut
 // predict/segment.js — the SEG cut, learned from the note grain's own surprise.
 //
 // The grain-nested predictor (grained.js) took phrase boundaries as INPUT. Finding

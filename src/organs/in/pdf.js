@@ -1,3 +1,4 @@
+// EO: SEG(Void → Field, Dissecting) — native-text PDF adapter → assembleDocument
 // The native-text PDF adapter — for civic PDFs that carry a real text layer.
 //
 // The naive path is `page.getTextContent()` → join every `str` into one blob. That

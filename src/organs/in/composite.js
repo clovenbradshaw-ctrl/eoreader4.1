@@ -1,3 +1,4 @@
+// EO: SYN·SEG(Network,Entity → Network,Link, Composing,Unraveling) — composite document (multi-doc)
 // Composite document — several parsed docs presented as ONE doc on the universal
 // contract, so the turn pipeline grounds across a selected SET of documents without
 // any stage knowing there is more than one (organs/in/index.js: "docs → a doc").

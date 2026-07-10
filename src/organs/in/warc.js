@@ -1,3 +1,4 @@
+// EO: NUL·SIG(Void → Entity, Clearing,Tending) — WARC adapter — frozen archived source
 // The WARC adapter — the archived record as the addressable source.
 //
 // This is the ingest most aligned with the archive.org chain architecture: rather

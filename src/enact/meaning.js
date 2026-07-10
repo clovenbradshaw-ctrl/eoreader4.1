@@ -1,3 +1,4 @@
+// EO: SIG(Field → Atmosphere, Tracing) — meaning reader; 1-cos surprise
 // The meaning reader — the richer `read` the skeleton was built to receive (§11).
 //
 // The enacted loop (loop.js) is unchanged. The skeleton fed it the cheap γ-mass

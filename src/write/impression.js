@@ -1,3 +1,4 @@
+// EO: NUL·DEF(Entity,Field → Void, Clearing,Making) — model-free fold impression; a preview
 // write/impression.js — the fold's impression, rendered model-free. (docs/streaming-answer.md)
 //
 // The talker is slow to speak — a local 3B model spends seconds on prompt-processing

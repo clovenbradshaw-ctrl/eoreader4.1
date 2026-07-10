@@ -1,3 +1,4 @@
+// EO: NUL(Void → Void, Tending) — raw web-content store (OPFS binary)
 // The raw web-content store — keep it ALL, as binary, in the Origin Private File System.
 // (the user's directive: "save it all as binary into opfs, but we also must READ it on ingestion")
 //

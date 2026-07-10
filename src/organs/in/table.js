@@ -1,3 +1,4 @@
+// EO: INS·DEF·CON(Void → Entity,Link,Field, Making,Binding,Dissecting) — tabular adapter (CSV/xlsx)
 // The tabular adapter — CSV and spreadsheet exports, as records on the spine.
 //
 // Court dockets and campaign-finance exports arrive as CSV (Papaparse, streamed for

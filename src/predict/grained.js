@@ -1,3 +1,4 @@
+// EO: SYN·CON·EVA(Field,Network → Network,Lens, Composing,Binding,Tracing) — grain-nested predictor
 // predict/grained.js — the grain-nested predictor.
 //
 // The flat sequence reader (surfer/sequence.js) predicts the next unit from ONE

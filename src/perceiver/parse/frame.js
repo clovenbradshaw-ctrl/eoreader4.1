@@ -1,3 +1,4 @@
+// EO: SEG(Field → Field, Clearing) — structural frame (banner bracket)
 // Structural frame detection — the document's own shape, read embedder-free.
 //
 // A framed document — a licence header, a title block, credits, a boilerplate footer —

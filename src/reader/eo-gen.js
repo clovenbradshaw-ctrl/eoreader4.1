@@ -1,3 +1,4 @@
+// EO: EVA·DEF(Lens,Link → Lens,Atmosphere, Tracing,Making) — browser grounding seam
 // eo-gen — the generation-side seam the chat app still uses (browser).
 //
 // The ESSAY pipeline that used to live here is GONE (docs/deep-research-log.md):

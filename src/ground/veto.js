@@ -1,3 +1,4 @@
+// EO: EVA(Link,Lens → Lens, Binding,Tracing) — the veto battery (runVetoes)
 // The veto battery. Each veto is a pure predicate over
 // (draft, bound, spans, question). Vetoes flag; they don't substitute.
 //

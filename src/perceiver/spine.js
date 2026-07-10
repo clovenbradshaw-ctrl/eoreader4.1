@@ -1,3 +1,4 @@
+// EO: EVA·SEG(Network,Field → Field, Tracing) — significance spine / turning points
 // The significance spine — the document read at document scale (surfing-next.md §1).
 //
 // surfFold reasons over a LOCAL reach (±16 around one anchor). That is right for a

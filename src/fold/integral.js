@@ -1,3 +1,4 @@
+// EO: SEG·NUL(Field → Field, Clearing) — foldNote; the integral fold
 // foldNote — the integral fold. The unit of evidence the talker reads beside
 // the verbatim spans.
 //

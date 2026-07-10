@@ -1,3 +1,4 @@
+// EO: INS·SIG·SYN(Void → Entity,Network, Making) — entity admission by gravity
 // Entity admission — the ceiling the low places on what the high may claim.
 //
 // A capitalised span is admitted when it shows the SEMANTIC GRAVITY of a referent

@@ -1,3 +1,4 @@
+// EO: SIG·INS(Field → Atmosphere,Entity, Tending,Making) — MiniLM semantic embedder
 // MiniLM embedder via @xenova/transformers, loaded by URL on demand.
 // Cold consumers (the hot lexical retrieval path) no-op when it isn't warm.
 //

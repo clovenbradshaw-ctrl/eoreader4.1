@@ -1,3 +1,4 @@
+// EO: NUL·SEG·EVA(Network → Void, Clearing,Dissecting) — the membrane; talker-facing notes
 // The membrane — what the talker sees (docs rich-notes §3, P3). The talker reads the
 // three-group plain notes and NOTHING of the graph. This pulls the labels off the
 // substrate by band and by node type, drops every graph token, and renders the three

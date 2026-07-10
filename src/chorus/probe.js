@@ -1,3 +1,4 @@
+// EO: EVA·SIG(Field,Network → Lens, Tracing,Binding) — gate-zero probes
 // Gate zero — measure before building (docs/chorus.md, "Gate zero").
 //
 // Three read-only probes over the corpus we already have. Each can come back

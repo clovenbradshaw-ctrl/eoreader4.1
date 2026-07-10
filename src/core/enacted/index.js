@@ -1,3 +1,4 @@
+// EO: DEF·EVA·REC(Field,Atmosphere → Lens,Paradigm, Dissecting,Binding,Composing) — barrel
 // core/enacted — the enacted DEF·EVA·REC loop, the significance engine (the
 // pure-engine half of the helix).
 //

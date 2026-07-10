@@ -1,3 +1,4 @@
+// EO: REC·EVA(Field,Lens → Paradigm,Lens, Composing,Binding) — answer-form predictor (learned shapes)
 // The FORM predictor — what a good answer LOOKS LIKE, learned from sample answers.
 // (docs/answer-expectation.md; ported from eoreader3 shape.js)
 //

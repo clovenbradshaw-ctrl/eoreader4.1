@@ -1,3 +1,4 @@
+// EO: SEG·EVA(Network → Lens,Paradigm, Unraveling,Tracing) — the fold; frames + loop stats
 // The fold — replay the enacted events to a cursor and reconstitute the reader's
 // frames as of that cursor.
 //

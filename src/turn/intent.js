@@ -1,3 +1,4 @@
+// EO: EVA·DEF·REC(Field,Kind → Kind,Paradigm, Tracing,Dissecting,Composing) — task register (DEF·EVA·REC)
 // The task register — the turn's task, read off the question as PHYSICS, governed
 // by a DEF·EVA·REC loop. (docs/task-register.md)
 //

@@ -1,3 +1,4 @@
+// EO: DEF·EVA(Field,Network → Lens, Dissecting,Binding) — answerability gate (§3)
 // answerable — the answerability gate, in FRONT of the navigate face (spec-planner.md §3).
 //
 // A grounded system can still lie, and the lie is not a false fact — it is a false

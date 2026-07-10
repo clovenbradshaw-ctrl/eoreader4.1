@@ -1,3 +1,4 @@
+// EO: NUL·SIG(Void → Lens, Clearing,Tending) — centroid loader / instrument
 // Centroid loader — the measurement instrument, installed and cached.
 //
 // The 27 cell centroids are the geometric reader's instrument. They were built

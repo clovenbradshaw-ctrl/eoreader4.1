@@ -1,3 +1,4 @@
+// EO: EVA·REC(Field,Lens → Lens,Field, Binding,Tracing,Composing) — the reader — ρ-side surprise
 // The reader — the ρ-side self that FEELS surprise. The interpretation level's live number.
 //
 // Two Born measures against two priors, the distinction that's run through this whole build:

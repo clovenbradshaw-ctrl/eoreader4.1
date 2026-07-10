@@ -1,3 +1,4 @@
+// EO: SIG·EVA·DEF(Field,Lens → Field,Void, Tending,Binding,Clearing) — the port; logit-bias lens steering (Tracks A,C,D)
 // lens-port.js — THE PORT (spec-the-lens-port.md, Tracks A, C, D; the E/F hooks).
 //
 // The Significance column READS the field through the lens by the Born rule; this writes

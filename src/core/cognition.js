@@ -1,3 +1,4 @@
+// EO: NUL·SIG(Kind → Kind,Paradigm, Clearing,Tending) — the cognition triad
 // The cognition triad — the system helix one turn inward (add-on 2 §A).
 //
 // The system helix is organs / core / outputs = Existence / Structure /

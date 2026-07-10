@@ -1,3 +1,4 @@
+// EO: INS·EVA(Field,Atmosphere → Entity, Making,Tending) — webllm WebGPU backend
 // webllm backend — WebGPU, Llama-3.2-3B default.
 //
 // Heavier than wllama; loads only when explicitly chosen. Same shape

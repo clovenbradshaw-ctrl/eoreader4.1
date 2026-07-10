@@ -1,3 +1,4 @@
+// EO: SYN·EVA·DEF(Network,Field,Lens → Network,Lens, Composing,Binding,Dissecting) — web-search turn orchestration
 // runTurnWithWeb — the orchestration that lets "search the internet to respond" actually fire.
 // (docs/web-search.md)
 //

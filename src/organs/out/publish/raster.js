@@ -1,3 +1,4 @@
+// EO: NUL·EVA(Void → Void, Clearing,Binding) — SVG→PNG raster + static-subset guard
 // Publish → raster. The SVG→PNG seam for LIMNER, on resvg-wasm.
 //
 // LIMNER draws SVG. When that SVG is itself an ARCHIVED ARTIFACT — a figure a claim

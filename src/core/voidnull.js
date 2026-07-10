@@ -1,3 +1,4 @@
+// EO: DEF·SEG(Field → Void,Field, Clearing,Dissecting,Unraveling) — derived void null (Born)
 // The VOID boundary — a derived, online noise null.
 //
 // The abstention readers (equivalence.js, motion.js) used to take a CONSTANT

@@ -1,3 +1,4 @@
+// EO: SIG·SEG·CON·DEF(Field,Network → Field,Lens, Tending,Dissecting,Tracing) — barrel
 // The retrieve holon: query → candidate spans.
 
 export { retrieveLexical }  from './lexical.js';

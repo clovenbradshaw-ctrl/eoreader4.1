@@ -1,3 +1,4 @@
+// EO: EVA(Field → Lens, Tracing) — predictive-coding surprise
 // Significance as predictive coding — the LLM-in-the-loop surprise.
 //
 // The mechanical surprisal in `reading.js` is the instant baseline. This is the

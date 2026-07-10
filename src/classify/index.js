@@ -1,3 +1,4 @@
+// EO: SYN·EVA·SEG·DEF·NUL·SIG(Lens,Field,Kind,Void,Link → Field,Lens, Composing,Tracing,Unraveling,Dissecting,Clearing,Tending,Binding) — barrel
 // The classify holon: the geometric reader — centroid measurement of a
 // proposition into its three-position phasepost (Ground, Figure, Pattern).
 //

@@ -1,3 +1,4 @@
+// EO: EVA·SIG(Field,Paradigm → Paradigm, Tracing) — chorus Born-measure reader
 // The chorus reader — the browser entry that wires the chorus holon
 // (src/chorus/) to the EO Reader app (docs/chorus.md).
 //

@@ -1,3 +1,4 @@
+// EO: SIG·SYN·EVA(Field → Network,Lens, Composing,Tracing) — structural significance basis
 // The structural significance basis — ρ built from operations, not embeddings.
 //
 // The significance column first built ρ over the 27-cell COSINE projection of a MiniLM

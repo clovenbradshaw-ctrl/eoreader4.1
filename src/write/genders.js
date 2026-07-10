@@ -1,3 +1,4 @@
+// EO: SIG·EVA(Entity,Network → Kind, Binding,Tending) — gender inferred by reading, not a table
 // Inferring gender by reading, not by table — teach it to fish.
 //
 // The parser resolves coreference WITHOUT a gender channel (by role + recency + distinctness,

@@ -1,3 +1,4 @@
+// EO: SIG(Entity → Lens, Binding) — event to cube address
 // eoAddressOfEvent — derive the three-fold address from an event at read time.
 //
 // Nothing is stamped on the event; the log stays the single source of truth.

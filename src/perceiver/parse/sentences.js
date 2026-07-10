@@ -1,3 +1,4 @@
+// EO: SEG·EVA(Void → Field, Clearing) — sentence segmentation
 // Sentence segmentation. Honours paragraph breaks.
 // Drop-in replacement: any function (text) → string[].
 //

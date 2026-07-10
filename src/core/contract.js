@@ -1,3 +1,4 @@
+// EO: DEF·EVA(Kind → Paradigm,Lens, Dissecting,Binding) — EO contract factory + validation
 // EO face contracts — the conformance layer (docs/spec-good-watchmaker.md §4,
 // docs/eo-for-coders.md Law 1). The canonical contract shape is THREE fields:
 //

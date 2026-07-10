@@ -1,3 +1,4 @@
+// EO: REC·EVA(Network → Lens, Tracing) — L3 significance (predict/surprise)
 // The reading holon — reading mode as a predict / evaluate / surprise loop,
 // formatted in the EO operator vocabulary.
 //

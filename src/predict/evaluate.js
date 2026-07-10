@@ -1,3 +1,4 @@
+// EO: EVA·SEG(Network → Lens,Network, Tracing,Unraveling) — controls / falsification
 // The controls — falsify the predictor, the same discipline as the music shuffle.
 //
 //   persistence    is the predictor better than "next move = last move"?

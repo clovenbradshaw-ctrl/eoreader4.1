@@ -1,3 +1,4 @@
+// EO: SEG(Network → Network, Unraveling) — SEG — select renderable subgraph
 // organs/out/limner/scope.js — SEG: segment the graph into a renderable subgraph.
 //
 // The first stage of the pipeline (docs/limner.md §2, §3). A full projected

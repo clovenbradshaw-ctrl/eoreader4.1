@@ -1,3 +1,4 @@
+// EO: EVA(Lens → Lens, Binding,Tending) — a grammar rule held & tested (the write-side EVA)
 // A grammar rule, held and tested — the write-side twin of the conventions ledger's EVA.
 //
 // Every grammar rule is a CONVENTION, not a hard transform: it is applied speculatively, its

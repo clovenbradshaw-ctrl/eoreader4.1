@@ -1,3 +1,4 @@
+// EO: CON·INS·SIG(Field → Link,Entity, Binding,Making) — LLM SVO bond reader
 // svo-llm.js — an LLM-backed subject·verb·object reader for the eoreader4 engine.
 //
 // The core pipeline (pipeline.js → parseRelations) reads SVO with the regex

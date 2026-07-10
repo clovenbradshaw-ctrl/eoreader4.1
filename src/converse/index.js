@@ -1,3 +1,4 @@
+// EO: EVA·SIG·DEF·SEG·REC·NUL(Field,Entity,Atmosphere,Link → Lens,Entity,Atmosphere,Paradigm,Field, Binding,Tending,Dissecting,Tracing,Composing,Clearing) — barrel
 // The converse holon: conversational provenance — the talker's output entering
 // the fold as a deposition, never an injection.
 //

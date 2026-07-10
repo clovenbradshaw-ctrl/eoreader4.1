@@ -1,3 +1,4 @@
+// EO: SEG(Void → Field, Dissecting) — web-page adapter → assembleDocument
 // The web-page adapter — scraped civic pages, stripped to their content.
 //
 // Civic sources (EasyVote, ArcGIS wrappers, Metro sites) bury the record under

@@ -1,3 +1,4 @@
+// EO: EVA·NUL·DEF(Field,Entity → Entity,Void, Tracing,Clearing) — moving-shape reader (video)
 // Reading a moving shape — the three levels, over a video's tracks.
 //
 //   L1 existence    which track is a real moving SHAPE. Persistence (γ-mass) is

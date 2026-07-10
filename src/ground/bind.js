@@ -1,3 +1,4 @@
+// EO: CON(Field,Entity → Link, Binding) — citation binder (bindCitations)
 // bindCitations — re-cite the model's draft mechanically against the
 // spans it was given. The model never writes [sN] tags; we do.
 //

@@ -1,3 +1,4 @@
+// EO: INS·DEF·CON(Void → Entity,Link,Field, Making,Binding,Dissecting) — JSON tree adapter
 // The JSON adapter — a config / record TREE, as addressable key-paths on the spine.
 //
 // A `.json` file is neither prose nor a flat sheet: it is a nesting of objects, arrays and

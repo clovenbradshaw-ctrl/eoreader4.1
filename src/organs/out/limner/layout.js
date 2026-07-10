@@ -1,3 +1,4 @@
+// EO: SYN(Lens → Field, Composing) — deterministic layout engine
 // organs/out/limner/layout.js — the deterministic layout engine.
 //
 // The whole point of LIMNER (docs/limner.md §1, §8): the model never sees a

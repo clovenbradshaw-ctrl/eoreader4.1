@@ -1,3 +1,4 @@
+// EO: REC·EVA(Paradigm,Void → Paradigm, Composing,Cultivating) — the growing basis
 // The growing basis — the cells themselves learned, not shipped.
 //
 // The 27 cells are an external prior: a fixed frame the document is read through. An

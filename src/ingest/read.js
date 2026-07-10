@@ -1,3 +1,4 @@
+// EO: EVA·SYN(Network → Network,Lens, Tracing,Composing) — read a doc into layered EoT
 // ingest/read.js — read an ingested document INTO EoT, layered with what the reading thinks.
 //
 // Ingestion admits a modality onto the spine (organs/in): a doc, a log, a graph. But

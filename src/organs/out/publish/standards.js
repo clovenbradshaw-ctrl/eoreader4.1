@@ -1,3 +1,4 @@
+// EO: NUL(Atmosphere → Atmosphere, Clearing) — provenance standards — capability toggles (config)
 // Provenance standards — capability toggles, one per corner, all OFF by default.
 //
 // A nanopub bundles four concerns (docs/nanopublications.md): a minimal assertion unit,

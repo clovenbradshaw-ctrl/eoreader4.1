@@ -1,3 +1,4 @@
+// EO: SEG(Field,Network → Network, Unraveling) — output skeleton (SEG)
 // skeleton — SEG: the shape of the proper output, two levels (docs/paragraph-at-a-
 // time.md). Message 1: for longform to cohere across messages the loop must know
 // what the whole output should be — and that shape is SECTIONS, each an ordered run

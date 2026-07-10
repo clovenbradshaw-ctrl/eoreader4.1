@@ -1,3 +1,4 @@
+// EO: DEF(Field,Link → Lens, Dissecting) — site typing by operators
 // Site typing — which of the 9 terrains a locus IS. (the omnimodal Site face)
 //
 // The cube's Site face is Domain × grain → 9 TERRAINS (core/cube.js):

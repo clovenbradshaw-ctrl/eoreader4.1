@@ -1,3 +1,4 @@
+// EO: EVA·SIG(Network → Lens, Tracing,Binding) — predict next move (navigate)
 // Direction — "a sense of where we're going", as p(next) over the SELF.
 //
 // The arc plans its sections from retrieved evidence; a continuation has no
